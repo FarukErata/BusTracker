@@ -75,6 +75,10 @@ Per bus:
 6. **Alternate variants** (not `D0`) whose nearest stop isn't on the main list are shown as "alternate route" and never counted for alerts in v1.
 7. Position ≤ 0.2 on its direction = **waiting at the terminal**, not departed.
 
+**Implemented (2026-10-14)** in `src/BusTracker.Api/Tracking/`: `RouteGeometry` (projection in metres), `RouteTrack`/`LineTracks` (stops placed on each variant's road line), `LineTracker` (state across polls: passed stops, trip id, observed speed), and `Arrivals` (stops away, distance and ETA per stop). Exposed as `GET /api/lines/{code}/live` and `GET /api/lines/{code}/arrivals?stop=&dir=`.
+
+**ETA v1:** remaining road distance ÷ (60% observed speed over the last ~6 min + 40% scheduled speed from the variant's `UZUNLUK`/`SURE`), with a minimum of 2 m/s. Buses waiting at the first stop get no ETA ("not departed").
+
 Optional for v1.1: **ETA** from the median speed between snapshots along the route, falling back to `SEFER_SURESI / stop count`.
 
 ## Data model (SQLite)
@@ -181,6 +185,9 @@ One API project + one test project. The engine stays free of I/O, so it can move
 ## Later optimizations
 
 Parked until the core features are settled:
+
+- **ETA for buses not yet departed.** İETT's own site appears to use the timetable here (e.g. "(14:41) 13 dk" for a stop near the terminal). Use the next scheduled departure (GTFS `stop_times`) plus travel time.
+- **İETT's own estimate as a second opinion.** `https://iett.istanbul/tr/RouteStation/GetStationInfo?dcode={stop}&langid=1` returns an HTML snippet with "N dk" per line. It's undocumented, has no bus ID, and is not a public API. Fetch it at most once a minute for watched stops, show it next to ours, and use it to calibrate our estimate.
 
 - **Lower position lag (currently ~30–90 s, worst ~2.5 min).** Time each line's once-a-minute İBB call to land a few seconds after İBB's own refresh, which happens at about the same second each minute for all buses. Let clients poll our cache every 10–15 s, which costs no extra İBB calls. Expected typical lag: ~15–40 s.
 - **Smooth marker movement** in the UI: buses glide to their new positions instead of jumping once a minute.

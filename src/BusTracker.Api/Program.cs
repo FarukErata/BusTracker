@@ -60,6 +60,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapHealthEndpoints();
 app.MapLineEndpoints();
+app.MapLiveEndpoints();
 
 app.Run();
 

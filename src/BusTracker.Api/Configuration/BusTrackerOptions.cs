@@ -44,10 +44,13 @@ public sealed class TrackingOptions
     public int StaleAfterSeconds { get; init; } = 180;
 
     [Range(50, 5000)]
-    public int OffRouteMeters { get; init; } = 500;
+    public int OffRouteMeters { get; init; } = 200;
 
-    [Range(0.0, 1.0)]
-    public double TerminalWaitFraction { get; init; } = 0.2;
+    [Range(10, 200)]
+    public int StopOnRouteMeters { get; init; } = 40;
+
+    [Range(20, 1000)]
+    public int TerminalMeters { get; init; } = 150;
 }
 
 public sealed class StaticDataOptions

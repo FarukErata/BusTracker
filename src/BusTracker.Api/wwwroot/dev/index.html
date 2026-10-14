@@ -32,7 +32,9 @@
   .chips { display:flex; gap:4px; flex-wrap:wrap; margin-top:2px; }
   .chip { font-size:11px; padding:1px 6px; border-radius:10px; color:#fff; }
   .s-ok { background:var(--ok); } .s-at-terminal { background:var(--terminal); } .s-stale { background:var(--stale); }
-  .s-off-route { background:var(--off); } .s-alternate-route { background:var(--alt); }
+  .s-off-route { background:var(--off); } .s-arrived { background:#24292f; } .s-no-route { background:var(--alt); }
+  .alt { outline:2px dashed var(--alt); outline-offset:1px; }
+  #target .eta { font-weight:600; }
   .bus-icon { font-size:11px; font-weight:600; color:#fff; padding:2px 5px; border-radius:6px; white-space:nowrap; box-shadow:0 1px 3px #0005; }
   #legend { padding:8px 12px; font-size:12px; display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid var(--line); }
   @media (max-width: 800px) { main { grid-template-columns:1fr; grid-template-rows:45vh 1fr; } aside { order:2; border-right:none; } }
@@ -51,7 +53,7 @@
   <aside>
     <div id="legend">
       <span class="chip s-ok">ok</span><span class="chip s-at-terminal">at terminal</span><span class="chip s-stale">stale</span>
-      <span class="chip s-off-route">off route</span><span class="chip s-alternate-route">alternate</span>
+      <span class="chip s-off-route">off route</span><span class="chip s-arrived">arrived</span><span class="chip s-ok alt">alternate route</span>
     </div>
     <div id="target" hidden></div>
     <ol id="stops"></ol>
@@ -61,7 +63,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const REFRESH_MS = 30000;
-const state = { line: null, stops: null, shapes: [], direction: null, live: null, targetCode: null, timer: null };
+const state = { line: null, stops: null, shapes: [], direction: null, live: null, arrivals: null, targetCode: null, timer: null };
 const $ = (id) => document.getElementById(id);
 
 const map = L.map("map").setView([41.015, 28.979], 11);
@@ -69,6 +71,17 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, att
 const routeLayer = L.layerGroup().addTo(map);
 const busLayer = L.layerGroup().addTo(map);
 const variantLayer = L.layerGroup().addTo(map);
+let pendingFit = null;
+
+function fitRoute(bounds) {
+  map.invalidateSize();
+  const size = map.getSize();
+  if (!size.x || !size.y) { pendingFit = bounds; return; }
+  pendingFit = null;
+  map.fitBounds(bounds, { padding: [20, 20], animate: false });
+}
+
+new ResizeObserver(() => { map.invalidateSize(); if (pendingFit) fitRoute(pendingFit); }).observe($("map"));
 
 const save = () => { try { localStorage.setItem("bt-dev", JSON.stringify({ line: state.line, direction: state.direction, targetCode: state.targetCode })); } catch {} };
 const restore = () => { try { return JSON.parse(localStorage.getItem("bt-dev")) ?? {}; } catch { return {}; } };
@@ -111,11 +124,20 @@ async function refreshLive() {
   if (!state.line) return;
   try {
     state.live = await api(`/api/lines/${encodeURIComponent(state.line)}/live`);
-    const s = state.live;
-    const text = `${s.buses.length} buses · data ${s.ageSeconds}s old · fetched ${new Date(s.fetchedAt).toLocaleTimeString()}`;
-    s.stale ? setStatus(`${text} · STALE (${s.staleReason})`, "stale") : setStatus(text);
+    const d = state.live.data;
+    const text = `${state.live.buses.length} buses · data ${d.ageSeconds}s old · fetched ${new Date(d.fetchedAt).toLocaleTimeString()}`;
+    d.stale ? setStatus(`${text} · STALE (${d.staleReason})`, "stale") : setStatus(text);
   } catch (e) { setStatus(e.message, "error"); }
+  await loadArrivals();
   renderAll();
+}
+
+async function loadArrivals() {
+  state.arrivals = null;
+  if (!state.line || !state.targetCode) return;
+  try {
+    state.arrivals = await api(`/api/lines/${encodeURIComponent(state.line)}/arrivals?stop=${encodeURIComponent(state.targetCode)}&dir=${state.direction}`);
+  } catch (e) { state.arrivals = { error: e.message }; }
 }
 
 const directionLabel = (d) => `${d.stops[0]?.name ?? "?"} → ${d.stops.at(-1)?.name ?? d.name}`;
@@ -138,6 +160,7 @@ function toggleDirection() {
   const i = dirs.findIndex(d => d.direction === state.direction);
   state.direction = dirs[(i + 1) % dirs.length].direction;
   state.targetCode = null;
+  state.arrivals = null;
   renderDirections(); renderRoute(true); renderAll(); save();
 }
 
@@ -156,24 +179,28 @@ function renderRoute(fit) {
     L.circleMarker([s.lat, s.lng], { radius: isTarget ? 9 : 4, color: isTarget ? "#0969da" : "#57606a", fillOpacity: isTarget ? 0.9 : 0.6, weight: isTarget ? 3 : 1 })
       .bindTooltip(`${s.seq}. ${esc(s.name)}`).on("click", () => selectTarget(s.code)).addTo(routeLayer);
   }
-  if (fit) map.fitBounds(line.getBounds(), { padding: [20, 20], animate: false });
+  if (fit) fitRoute(line.getBounds());
 }
 
 function renderAll() { renderBuses(); renderStops(); renderTarget(); }
 
 function renderBuses() {
   busLayer.clearLayers();
-  const stops = currentStops();
+  const bySeq = new Map(currentStops().map(st => [st.seq, st]));
   for (const b of directionBuses()) {
-    const near = b.nearestStopIndex != null ? stops[b.nearestStopIndex] : null;
-    const icon = L.divIcon({ className: "", html: `<span class="bus-icon s-${b.status}">${esc(b.doorNo)}</span>`, iconAnchor: [20, 10] });
+    const last = bySeq.get(b.lastStopSeq), next = bySeq.get(b.nextStopSeq);
+    const icon = L.divIcon({ className: "", html: `<span class="bus-icon s-${b.status}${b.variant !== "D0" ? " alt" : ""}">${esc(b.doorNo)}</span>`, iconAnchor: [20, 10] });
     L.marker([b.lat, b.lng], { icon }).bindPopup(
-      `<b>${esc(b.doorNo)}</b> · ${esc(b.routeCode)}<br>→ ${esc(b.destination)}<br>` +
-      `near: ${near ? `${near.seq}. ${esc(near.name)} (${b.distanceToNearestMeters} m)` : esc(b.nearestStopCode)}<br>` +
-      `status: ${b.status} · GPS ${b.ageSeconds}s old`)
+      `<b>${esc(b.doorNo)}</b> · ${esc(b.routeCode)}${b.onOwnVariant ? "" : " <i>(drawn on main route)</i>"}<br>→ ${esc(b.destination)}<br>` +
+      `${last ? `after ${last.seq}. ${esc(last.name)}` : "before first stop"}${next ? ` → ${next.seq}. ${esc(next.name)} (${Math.round((b.progressToNext ?? 0) * 100)}%)` : ""}<br>` +
+      `${km(b.alongMeters)} of ${km(b.routeLengthMeters)} · ${b.offsetMeters} m off road<br>` +
+      `speed ${b.speedKmh ?? "?"} km/h · status ${b.status} · GPS ${b.ageSeconds}s old`)
       .on("popupopen", () => showVariant(b.routeCode)).on("popupclose", () => variantLayer.clearLayers()).addTo(busLayer);
   }
 }
+
+const km = (m) => m == null ? "?" : `${(m / 1000).toFixed(1)} km`;
+const mins = (s) => s == null ? null : s < 60 ? "< 1 min" : `≈ ${Math.round(s / 60)} min`;
 
 function showVariant(routeCode) {
   variantLayer.clearLayers();
@@ -182,10 +209,11 @@ function showVariant(routeCode) {
 }
 
 function renderStops() {
-  const byIndex = new Map();
-  for (const b of directionBuses()) if (b.nearestStopIndex != null) (byIndex.get(b.nearestStopIndex) ?? byIndex.set(b.nearestStopIndex, []).get(b.nearestStopIndex)).push(b);
-  $("stops").innerHTML = currentStops().map((s, i) => {
-    const chips = (byIndex.get(i) ?? []).map(b => `<span class="chip s-${b.status}" title="${esc(b.routeCode)} · ${b.distanceToNearestMeters} m">${esc(b.doorNo)}</span>`).join("");
+  const bySeq = new Map();
+  for (const b of directionBuses()) if (b.lastStopSeq != null) (bySeq.get(b.lastStopSeq) ?? bySeq.set(b.lastStopSeq, []).get(b.lastStopSeq)).push(b);
+  $("stops").innerHTML = currentStops().map(s => {
+    const chips = (bySeq.get(s.seq) ?? []).map(b =>
+      `<span class="chip s-${b.status}${b.variant !== "D0" ? " alt" : ""}" title="${esc(b.routeCode)} · ${Math.round((b.progressToNext ?? 0) * 100)}% to next stop">${esc(b.doorNo)} ↓</span>`).join("");
     return `<li class="stop${s.code === state.targetCode ? " selected" : ""}" data-code="${esc(s.code)}">
       <span class="seq">${s.seq}</span><span class="name">${esc(s.name)} <span class="muted">${esc(s.district)}</span>${chips ? `<div class="chips">${chips}</div>` : ""}</span></li>`;
   }).join("");
@@ -194,26 +222,24 @@ function renderStops() {
 
 function renderTarget() {
   const el = $("target");
-  const stops = currentStops();
-  const t = stops.findIndex(s => s.code === state.targetCode);
-  if (t < 0) { el.hidden = true; return; }
-  const rows = directionBuses()
-    .filter(b => b.nearestStopIndex != null && b.status !== "off-route")
-    .map(b => ({ b, away: t - b.nearestStopIndex }))
-    .sort((x, y) => (x.away < 0) - (y.away < 0) || Math.abs(x.away) - Math.abs(y.away));
-  const coming = rows.filter(r => r.away >= 0);
-  const passed = rows.filter(r => r.away < 0).slice(0, 3);
-  const row = (r) => `<div class="row"><span><span class="chip s-${r.b.status}">${esc(r.b.doorNo)}</span> ${r.b.status === "at-terminal" ? "<span class=muted>waiting at first stop</span>" : ""}</span>
-    <span>${r.away >= 0 ? `${r.away === 0 ? "at your stop" : `${r.away} stops away`}` : `passed ${-r.away} stops ago`} <span class="muted">(±1)</span></span></div>`;
+  const a = state.arrivals;
+  if (!state.targetCode || !a) { el.hidden = true; return; }
   el.hidden = false;
-  el.innerHTML = `<h3>${stops[t].seq}. ${esc(stops[t].name)}</h3>
-    ${coming.length ? coming.map(row).join("") : `<div class="muted">No bus approaching in this direction.</div>`}
-    ${passed.length ? `<div class="muted" style="margin-top:6px">Recently passed</div>${passed.map(row).join("")}` : ""}`;
+  if (a.error) { el.innerHTML = `<div class="muted">${esc(a.error)}</div>`; return; }
+  const chip = (x) => `<span class="chip s-${x.notDeparted ? "at-terminal" : "ok"}${x.variant !== "D0" ? " alt" : ""}" title="${esc(x.routeCode)}">${esc(x.doorNo)}</span>`;
+  const coming = a.approaching.map(x => `<div class="row"><span>${chip(x)} ${x.notDeparted ? "<span class=muted>waiting at first stop</span>" : ""}</span>
+    <span>${x.stopsAway === 0 ? "at your stop" : `${x.stopsAway} stops · ${km(x.distanceMeters)}`} ${x.etaSeconds != null ? `<span class="eta">${mins(x.etaSeconds)}</span>` : ""}</span></div>`).join("");
+  const passed = a.recentlyPassed.slice(0, 3).map(x => `<div class="row"><span>${chip(x)}</span><span class="muted">passed, ${km(x.metersPast)} ago</span></div>`).join("");
+  el.innerHTML = `<h3>${a.stop.seq}. ${esc(a.stop.name)}</h3>
+    ${coming || `<div class="muted">No bus approaching in this direction.</div>`}
+    ${passed ? `<div class="muted" style="margin-top:6px">Recently passed</div>${passed}` : ""}`;
 }
 
-function selectTarget(code) {
+async function selectTarget(code) {
   state.targetCode = state.targetCode === code ? null : code;
-  renderRoute(false); renderAll(); save();
+  renderRoute(false); save();
+  await loadArrivals();
+  renderAll();
 }
 
 $("load").onclick = () => loadLine($("line").value);
