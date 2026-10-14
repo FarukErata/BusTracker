@@ -1,0 +1,176 @@
+# BusTracker server — design (v1 draft)
+
+Based on the tested API behaviour in [api-endpoints.md](api-endpoints.md).
+
+## Goals and constraints
+
+- Tell me, for my favourite line + stop pairs, **how many stops away** the next buses are, and **notify** me when one is close or has passed.
+- Runs on a small shared server, so it has to stay light: low idle memory and near-zero CPU.
+- Must stay well inside İBB's rate limit on the fleet service (tripped at ~80 calls / ~4 min from one IP).
+- Each bus position updates about **once every 60 s**. Polling faster gets nothing.
+- Notification channel is still open; the server has to support it being swapped later.
+
+## Stack
+
+| Choice | Why |
+|---|---|
+| **.NET 10 (LTS), ASP.NET Core minimal API** | One process for the API and the background poller. LTS until Nov 2028 |
+| **SQLite** via `Microsoft.Data.Sqlite` + **Dapper** | No DB server to run, one file to back up. Dapper is far lighter than EF Core for ~6 tables |
+| `HttpClient` + hand-written SOAP envelopes | Four methods, fixed shapes. No WCF / connected-service code (IBB.Api not used) |
+| `BackgroundService` + `PeriodicTimer` | The poller and the daily static-data refresh, without a job library |
+| Workstation GC, non-concurrent | `<ServerGarbageCollector>false</ServerGarbageCollector>`, `<ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>` → much lower idle memory than the server GC |
+| xUnit tests on the tracking engine | Fed from the saved samples in `docs/api-samples/`, so tests never hit İBB |
+
+Native AOT is not planned for v1. It would save some memory but complicates Dapper and reflection-based JSON; we can revisit it if memory turns out tight.
+
+## Architecture
+
+```
+                 ┌──────────────────────── BusTracker.Api (one process) ─────────────────────────┐
+ phone / web ──► │ Minimal API endpoints ──► LiveCache (in-memory, per line) ◄── LinePoller       │
+                 │        │                       ▲                              (BackgroundService)
+                 │        ▼                       │                                   │           │
+                 │   SQLite (favourites,     TrackingEngine ──► AlertEvaluator ──► INotifier     │──► ntfy / FCM / Web Push / Telegram
+                 │   watches, alerts, cache)  (pure, tested)                         (pluggable)  │
+                 │        ▲                                                          │           │
+                 │   StaticDataRefresher (daily) ──────────► İBB ibb.asmx / HatDurakGuzergah     │
+                 └──────────────────────────────────────────────────────────────────┼───────────┘
+                                                                                    ▼
+                                                               İBB SeferGerceklesme.asmx (rate-limited)
+```
+
+| Component | Responsibility |
+|---|---|
+| `IbbClient` | One method per SOAP call. Parses the JSON-in-XML and DataSet answers into typed records, converts the string numbers and the `+03:00` timestamps. Turns `Rate limit exceeded` into a typed `IbbRateLimitedException` |
+| `StaticDataRefresher` | Once a day (and on startup if the cache is older than 24 h) loads all lines (`HatServisi_GYY`, 186 KB), all stops (`GetDurak_json`, 3.7 MB) and the stop order **for lines in use only** (`DurakDetay_GYY_wYonAdi` per line). The all-lines stop-order call is 28.5 MB / 15 s, so we skip it |
+| `LinePoller` | Decides which lines are "hot", polls each at most once per 60 s, and respects a global call budget (see below) |
+| `TrackingEngine` | Pure functions: given a line's stop list and two consecutive snapshots, compute each bus's position along the route, stops away from a target stop, and "passed" events |
+| `AlertEvaluator` | Matches engine output against active watches, de-duplicates, and hands messages to `INotifier` |
+| `LiveCache` | Latest computed state per hot line, served to clients without any İBB call |
+
+## Polling: rate-limit-safe scheduling
+
+A line is **hot** when either:
+1. a watch on it is inside its time window right now, or
+2. a client requested its live view in the last 5 minutes.
+
+Rules:
+- Each hot line is polled **once per 60 s**. Calls are spread evenly across the minute (line *i* of *n* at second `i × 60 / n`) instead of bursting.
+- **Global budget: 10 calls/min** to `SeferGerceklesme.asmx` (≈ half the rate that tripped the limit). With more than 10 hot lines, the interval stretches (12 lines → every 72 s), and watched lines take priority over viewed-only lines.
+- On `Rate limit exceeded` → pause all fleet calls for 2 min, then 4, then 8 (max 15). Reset after 10 clean calls. The current backoff state shows up in `/health`.
+- No hot lines → no calls at all.
+- On `IbbRateLimitedException` or network error, `LiveCache` keeps the last snapshot and marks it stale, so clients can show "last updated 3 min ago".
+
+## Tracking engine
+
+Input per line: the stop list for each direction (from the cache) and the latest `GetHatOtoKonum_json` snapshot.
+
+Per bus:
+1. **Direction** from `guzergahkodu` (`500T_G_D0` → `G`). **Variant** = the last part. `D0` is the main route.
+2. **Discard** if `son_konum_zamani` is older than 3 min (stale), or the bus is more than 500 m from every stop on its direction (garage run / GPS fault).
+3. **Position along the route**: project the GPS point onto the stop-to-stop polyline (straight segments between consecutive stops), searching around `yakinDurakKodu` ± 2 stops. Result: a fractional index like `13.4` = 40% of the way from stop 13 to stop 14. This fixes the ±1 error of "nearest stop", and it's how we know the bus has *passed* a stop, not just "is near" it.
+4. **Stops away** from target stop *t*: `ceil(t − position)`. Negative = already passed.
+5. **Trip continuity**: a bus whose position jumps backwards by > 3 stops, or changes direction, has started a new trip. It gets a new trip key `(kapino, direction, start time)`, which keeps alerts from repeating.
+6. **Alternate variants** (not `D0`) whose nearest stop isn't on the main list are shown as "alternate route" and never counted for alerts in v1.
+7. Position ≤ 0.2 on its direction = **waiting at the terminal**, not departed.
+
+Optional for v1.1: **ETA** from the median speed between snapshots along the route, falling back to `SEFER_SURESI / stop count`.
+
+## Data model (SQLite)
+
+```sql
+users           (id, name, api_key_hash, created_at)                                -- me + maybe 1–2 friends
+favourites      (id, user_id → users, line_code, direction, stop_code, label, sort_order, created_at)
+watches         (id, favourite_id → favourites, days_mask, start_time, end_time,      -- e.g. Mon–Fri 07:30–08:15
+                 notify_stops_before INTEGER,                                         -- e.g. 3
+                 notify_on_passed BOOLEAN, enabled, created_at)
+notify_targets  (id, user_id → users, channel, address, enabled, created_at)                           -- channel: ntfy | fcm | webpush | telegram
+alerts_sent     (id, watch_id, trip_key, stage, sent_at)                              -- stage: approaching | passed; unique(watch_id, trip_key, stage)
+
+lines_cache     (line_code PK, name, full_name, status, region, trip_minutes, fetched_at)
+stops_cache     (stop_code PK, name, lat, lng, district, direction_label, fetched_at)
+route_stops     (line_code, direction, seq, stop_code, PRIMARY KEY (line_code, direction, seq), fetched_at)
+```
+
+Personal, with room for 1–2 friends: a tiny `users` table from day one. Each user has one API key (stored hashed, created with a CLI command, no sign-up flow). Favourites, watches and notify targets belong to a user. Live data and the poller are shared, so two people watching the same line cost one İBB call.
+
+## HTTP API (v1)
+
+All under `/api`, header `Authorization: Bearer <key>` (the user's key) except `/health`. The web client is developed separately (own chat/tests) and consumes this API; the server can host its built files from `wwwroot` so everything is same-origin and needs no CORS.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /lines?q=50` | Search the cached line list (code or name, Turkish-aware case folding) |
+| `GET /lines/{code}` | Line info + both directions with their destination names |
+| `GET /lines/{code}/stops?dir=G` | Ordered stops for a direction |
+| `GET /lines/{code}/live` | Buses with position, stops away to each favourite stop on that line, and data age. Marks the line hot for 5 min |
+| `GET /stops?q=` / `GET /stops/near?lat=&lng=` | Stop search by name / nearest stops (for adding a favourite) |
+| `GET /board` | **Home screen in one call**: every favourite with its next 2–3 buses (stops away, ETA when available, stale flag) |
+| `GET/POST/PUT/DELETE /favourites` | Favourites CRUD |
+| `GET/POST/PUT/DELETE /watches` | Watches CRUD |
+| `GET/POST/DELETE /notify-targets`, `POST /notify-targets/{id}/test` | Notification destinations + test message |
+| `GET /health` | Uptime, hot lines, calls in the last minute, backoff state, cache ages |
+
+Clients poll `/board` or `/live` every 30 s. That's cheap, because it reads from `LiveCache` and never triggers an İBB call by itself. Server-Sent Events can come later if needed.
+
+## Notifications (pluggable, decided later)
+
+```csharp
+public interface INotifier
+{
+    string Channel { get; }
+    Task SendAsync(NotifyTarget target, Alert alert, CancellationToken ct);
+}
+```
+
+Candidates, all reachable from the same interface:
+
+| Channel | Fit for Android + this server |
+|---|---|
+| **ntfy** (self-hosted or ntfy.sh) | One HTTP POST, no Firebase, an Android app with priority/sound settings. The ntfy server itself is ~20 MB. Easiest to start with |
+| FCM direct (HTTP v1 API) | Needs our own Android app; the most native result |
+| Web Push (VAPID) | If the client becomes a PWA; works well on Android Chrome |
+| Telegram bot | Zero client work, but it's a chat message rather than a real notification |
+
+Alert stages per watch and trip: **approaching** (stops away ≤ N, once), **passed** (optional, once). The message carries the line, the bus door number, stops away, and the data age.
+
+## Project layout
+
+```
+src/BusTracker.Api/
+  Program.cs                 composition, endpoints mapping
+  Ibb/                       IbbClient, SOAP parsing, DTOs
+  Tracking/                  TrackingEngine, geometry, trip continuity (no I/O)
+  Polling/                   LinePoller, StaticDataRefresher, CallBudget, LiveCache
+  Alerts/                    AlertEvaluator, INotifier + implementations
+  Data/                      SQLite schema/migrations, repositories (Dapper)
+  Endpoints/                 one file per resource group
+tests/BusTracker.Tests/      engine + parser tests using docs/api-samples
+```
+
+One API project + one test project. The engine stays free of I/O, so it can move to its own library if a native app ever needs it.
+
+## Deployment
+
+- `dotnet publish -c Release -r linux-x64 --self-contained` → one folder, nothing to install on the server.
+- systemd unit with a memory cap, `Restart=on-failure`, environment file for the API key and DB path.
+- Ubuntu + nginx. The app listens on `127.0.0.1:5080` only; nginx terminates HTTPS and proxies:
+  ```nginx
+  location / {
+      proxy_pass         http://127.0.0.1:5080;
+      proxy_set_header   Host $host;
+      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header   X-Forwarded-Proto $scheme;
+  }
+  ```
+  The app enables `UseForwardedHeaders` so it sees the real scheme and client IP.
+- Add a user: `BusTracker.Api add-user <name>` prints the new API key once.
+- Backup = copy one SQLite file.
+
+## Decisions so far
+
+- Server: Ubuntu + nginx, systemd service (2026-10-14).
+- Client: web, designed and built separately, consuming this API.
+- Users: personal, possibly 1–2 friends → per-user API keys, shared polling.
+- Alerts: "N stops before" and "passed my stop" for now; the watch shape may still change.
+- Notification channel: still open (ntfy suggested to start).
