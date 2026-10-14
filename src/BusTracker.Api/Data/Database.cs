@@ -1,0 +1,78 @@
+using BusTracker.Api.Configuration;
+using Dapper;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Options;
+
+namespace BusTracker.Api.Data;
+
+public sealed class Database
+{
+    private readonly string _connectionString;
+
+    public Database(IOptions<BusTrackerOptions> options, IHostEnvironment environment)
+    {
+        var path = Path.IsPathRooted(options.Value.DatabasePath)
+            ? options.Value.DatabasePath
+            : Path.Combine(environment.ContentRootPath, options.Value.DatabasePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        FilePath = path;
+        _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Pooling = true }.ToString();
+    }
+
+    public string FilePath { get; }
+
+    public async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    {
+        var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync(ct);
+        await connection.ExecuteAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+        return connection;
+    }
+}
+
+public sealed class DatabaseInitializer(Database database, ILogger<DatabaseInitializer> logger) : IHostedService
+{
+    private static readonly string[] Migrations =
+    [
+        """
+        CREATE TABLE route_shapes (
+            route_code   TEXT PRIMARY KEY,
+            line_code    TEXT NOT NULL,
+            direction    TEXT NOT NULL,
+            variant      TEXT NOT NULL,
+            length_m     REAL NOT NULL,
+            duration_s   REAL NOT NULL,
+            point_count  INTEGER NOT NULL,
+            polyline     TEXT NOT NULL
+        );
+        CREATE INDEX ix_route_shapes_line ON route_shapes (line_code);
+
+        CREATE TABLE data_sources (
+            name           TEXT PRIMARY KEY,
+            etag           TEXT,
+            last_modified  TEXT,
+            size           INTEGER,
+            checked_at     TEXT NOT NULL,
+            imported_at    TEXT,
+            item_count     INTEGER
+        );
+        """,
+    ];
+
+    public async Task StartAsync(CancellationToken ct)
+    {
+        await using var connection = await database.OpenAsync(ct);
+        var version = await connection.ExecuteScalarAsync<int>("PRAGMA user_version;");
+
+        for (var i = version; i < Migrations.Length; i++)
+        {
+            await using var transaction = await connection.BeginTransactionAsync(ct);
+            await connection.ExecuteAsync(Migrations[i], transaction: transaction);
+            await connection.ExecuteAsync($"PRAGMA user_version = {i + 1};", transaction: transaction);
+            await transaction.CommitAsync(ct);
+            logger.LogInformation("Applied database migration {Version}", i + 1);
+        }
+    }
+
+    public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
+}

@@ -482,7 +482,7 @@ $RECYCLE.BIN/
 *.swp
 
 # BusTracker local data
-data/
+App_Data/
 *.db
 *.db-shm
 *.db-wal

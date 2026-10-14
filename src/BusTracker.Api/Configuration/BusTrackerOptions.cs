@@ -7,7 +7,7 @@ public sealed class BusTrackerOptions
     public const string SectionName = "BusTracker";
 
     [Required]
-    public string DatabasePath { get; init; } = "data/bustracker.db";
+    public string DatabasePath { get; init; } = "App_Data/bustracker.db";
 
     public IbbOptions Ibb { get; init; } = new();
     public PollingOptions Polling { get; init; } = new();
@@ -54,4 +54,16 @@ public sealed class StaticDataOptions
 {
     [Range(1, 168)]
     public int RefreshHours { get; init; } = 24;
+
+    public bool SyncEnabled { get; init; } = true;
+
+    [Required, Url]
+    public string RouteShapesUrl { get; init; } =
+        "https://data.ibb.gov.tr/dataset/b48d2095-851c-413c-8d36-87d2310a22b5/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/download/iett-hat-guzergahlar-verisi.geojson";
+
+    [Range(0.0, 50.0)]
+    public double SimplifyToleranceMeters { get; init; } = 5;
+
+    [Range(1, 60)]
+    public int DownloadTimeoutMinutes { get; init; } = 15;
 }

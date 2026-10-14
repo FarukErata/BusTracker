@@ -91,6 +91,18 @@ The only place to get **speed and plate**. No line code. One call per minute at 
 `GetStopLines_json`, `IETTPlakaServisi_Json` and `GetKaraKutu_json` are declared in the WSDL types but aren't real operations. They answer `Policy Falsified`.
 Lines serving a stop are still available from metkm's `/v1/stop/{code}`, or from GTFS.
 
+## Route geometry (open data file)
+
+İBB publishes the real road geometry of every route variant as one GeoJSON file. The SOAP services and the GTFS feed don't have it (the İETT GTFS has no `shapes.txt`).
+
+- Dataset `iett-hat-guzergahlari` ("İETT Hat Güzergahları Verisi"):
+  `https://data.ibb.gov.tr/dataset/b48d2095-851c-413c-8d36-87d2310a22b5/resource/4ccb4d29-c2b6-414a-b324-d2c9962b18e2/download/iett-hat-guzergahlar-verisi.geojson`
+- **257 MB**, downloaded in ~31 s. `Last-Modified: 18 Mar 2026`, so check that header before downloading again.
+- 7,401 features (one per route variant), 801 lines, 5.9 M points, all `LineString` in WGS84 (`[lng, lat]`). Each feature sits on one line of the file.
+- Properties: `GUZERGAH_KODU` (= the live feed's `guzergahkodu`, e.g. `131Y_D_D0`), `HAT_KODU`, `YON` (`GİDİŞ`/`DÖNÜŞ`), `UZUNLUK` (metres, comma decimal), `SURE` (scheduled seconds, comma decimal), `DURUM` (1 = active), `DEPAR_NO` (variant number). `HAT_BASI`/`HAT_SONU` are line-level, not per direction.
+- Checked on 131Y `D0` in both directions: the geometry runs in travel order, and all 114 stops project onto it in sequence within 18 m (median 4–5 m).
+- Covers every variant, including the alternate ones missing from `DurakDetay_GYY` (e.g. `19F_G_D6536`).
+
 ## metkm backend (third-party, optional)
 
 `https://otobusum.metkm.win`, add `?city=istanbul`. JSON with real numbers. CORS only allows `otobusumweb.metkm.win`.

@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BusTracker dev</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --ok:#1a7f37; --terminal:#6e7781; --stale:#bf8700; --off:#cf222e; --alt:#8250df; --target:#0969da; --line:#d0d7de; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.4 system-ui, sans-serif; color:#1f2328; background:#fff; height:100vh; display:flex; flex-direction:column; }
+  header { display:flex; gap:8px; align-items:center; padding:8px 12px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header input { width:90px; padding:6px 8px; font:inherit; text-transform:uppercase; }
+  button { padding:6px 10px; font:inherit; cursor:pointer; border:1px solid var(--line); background:#f6f8fa; border-radius:6px; }
+  button.active { background:var(--target); color:#fff; border-color:var(--target); }
+  #status { margin-left:auto; color:#57606a; font-size:12px; }
+  #status.stale { color:var(--stale); font-weight:600; }
+  #status.error { color:var(--off); font-weight:600; }
+  main { flex:1; display:grid; grid-template-columns:380px 1fr; min-height:0; }
+  aside { overflow:auto; border-right:1px solid var(--line); }
+  #map { height:100%; }
+  #target { padding:10px 12px; border-bottom:1px solid var(--line); background:#f6f8fa; }
+  #target h3 { margin:0 0 6px; font-size:14px; }
+  #target .row { display:flex; justify-content:space-between; padding:2px 0; }
+  .muted { color:#57606a; }
+  ol { list-style:none; margin:0; padding:0; }
+  li.stop { padding:6px 12px; border-bottom:1px solid #f0f2f4; cursor:pointer; display:flex; gap:8px; align-items:flex-start; }
+  li.stop:hover { background:#f6f8fa; }
+  li.stop.selected { background:#ddf4ff; }
+  li.stop .seq { width:24px; color:#57606a; text-align:right; flex:none; }
+  li.stop .name { flex:1; }
+  .chips { display:flex; gap:4px; flex-wrap:wrap; margin-top:2px; }
+  .chip { font-size:11px; padding:1px 6px; border-radius:10px; color:#fff; }
+  .s-ok { background:var(--ok); } .s-at-terminal { background:var(--terminal); } .s-stale { background:var(--stale); }
+  .s-off-route { background:var(--off); } .s-alternate-route { background:var(--alt); }
+  .bus-icon { font-size:11px; font-weight:600; color:#fff; padding:2px 5px; border-radius:6px; white-space:nowrap; box-shadow:0 1px 3px #0005; }
+  #legend { padding:8px 12px; font-size:12px; display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid var(--line); }
+  @media (max-width: 800px) { main { grid-template-columns:1fr; grid-template-rows:45vh 1fr; } aside { order:2; border-right:none; } }
+</style>
+</head>
+<body>
+<header>
+  <strong>BusTracker dev</strong>
+  <input id="line" placeholder="500T" maxlength="12">
+  <button id="load">Load</button>
+  <span id="dirs"></span>
+  <button id="refresh" title="Server caches each line for 60 s">Refresh</button>
+  <span id="status">Enter a line code</span>
+</header>
+<main>
+  <aside>
+    <div id="legend">
+      <span class="chip s-ok">ok</span><span class="chip s-at-terminal">at terminal</span><span class="chip s-stale">stale</span>
+      <span class="chip s-off-route">off route</span><span class="chip s-alternate-route">alternate</span>
+    </div>
+    <div id="target" hidden></div>
+    <ol id="stops"></ol>
+  </aside>
+  <div id="map"></div>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const REFRESH_MS = 30000;
+const state = { line: null, stops: null, shapes: [], direction: null, live: null, targetCode: null, timer: null };
+const $ = (id) => document.getElementById(id);
+
+const map = L.map("map").setView([41.015, 28.979], 11);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
+const routeLayer = L.layerGroup().addTo(map);
+const busLayer = L.layerGroup().addTo(map);
+const variantLayer = L.layerGroup().addTo(map);
+
+const save = () => { try { localStorage.setItem("bt-dev", JSON.stringify({ line: state.line, direction: state.direction, targetCode: state.targetCode })); } catch {} };
+const restore = () => { try { return JSON.parse(localStorage.getItem("bt-dev")) ?? {}; } catch { return {}; } };
+
+async function api(path) {
+  const res = await fetch(path);
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(body?.detail ?? `HTTP ${res.status}`);
+  return body;
+}
+
+function setStatus(text, kind = "") { const el = $("status"); el.textContent = text; el.className = kind; }
+
+const currentStops = () => state.stops?.directions.find(d => d.direction === state.direction)?.stops ?? [];
+const directionBuses = () => (state.live?.buses ?? []).filter(b => b.direction === state.direction);
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function loadLine(code, saved = {}) {
+  code = code.trim().toUpperCase();
+  if (!code) return;
+  setStatus(`Loading ${code}…`);
+  try {
+    state.stops = await api(`/api/lines/${encodeURIComponent(code)}/stops`);
+  } catch (e) { setStatus(e.message, "error"); return; }
+  state.line = state.stops.line;
+  state.shapes = await api(`/api/lines/${encodeURIComponent(code)}/shapes?all=true`).then(r => r.shapes).catch(() => []);
+  const dirs = state.stops.directions.map(d => d.direction);
+  state.direction = dirs.includes(saved.direction) ? saved.direction : dirs[0];
+  state.targetCode = saved.line === state.line ? saved.targetCode ?? null : null;
+  $("line").value = state.line;
+  renderDirections();
+  renderRoute(true);
+  await refreshLive();
+  clearInterval(state.timer);
+  state.timer = setInterval(refreshLive, REFRESH_MS);
+  save();
+}
+
+async function refreshLive() {
+  if (!state.line) return;
+  try {
+    state.live = await api(`/api/lines/${encodeURIComponent(state.line)}/live`);
+    const s = state.live;
+    const text = `${s.buses.length} buses · data ${s.ageSeconds}s old · fetched ${new Date(s.fetchedAt).toLocaleTimeString()}`;
+    s.stale ? setStatus(`${text} · STALE (${s.staleReason})`, "stale") : setStatus(text);
+  } catch (e) { setStatus(e.message, "error"); }
+  renderAll();
+}
+
+const directionLabel = (d) => `${d.stops[0]?.name ?? "?"} → ${d.stops.at(-1)?.name ?? d.name}`;
+const directionTitle = (d) => `${d.direction === "G" ? "Gidiş" : d.direction === "D" ? "Dönüş" : d.direction} (${d.direction})`;
+
+function renderDirections() {
+  const dirs = state.stops.directions;
+  const current = dirs.find(d => d.direction === state.direction) ?? dirs[0];
+  const b = document.createElement("button");
+  b.className = "active";
+  b.textContent = dirs.length > 1 ? `${directionLabel(current)}  ⇄` : directionLabel(current);
+  b.title = dirs.length > 1 ? `${directionTitle(current)} · click to reverse` : directionTitle(current);
+  b.disabled = dirs.length < 2;
+  b.onclick = toggleDirection;
+  $("dirs").replaceChildren(b);
+}
+
+function toggleDirection() {
+  const dirs = state.stops.directions;
+  const i = dirs.findIndex(d => d.direction === state.direction);
+  state.direction = dirs[(i + 1) % dirs.length].direction;
+  state.targetCode = null;
+  renderDirections(); renderRoute(true); renderAll(); save();
+}
+
+function renderRoute(fit) {
+  routeLayer.clearLayers();
+  const stops = currentStops();
+  if (!stops.length) return;
+  variantLayer.clearLayers();
+  const shape = state.shapes.find(x => x.direction === state.direction && x.variant === "D0");
+  const line = shape
+    ? L.polyline(shape.points, { color: "#0969da", weight: 4, opacity: 0.6 }).addTo(routeLayer)
+    : L.polyline(stops.map(s => [s.lat, s.lng]), { color: "#cf222e", weight: 2, opacity: 0.5, dashArray: "4 6" })
+        .bindTooltip("No route geometry imported yet, so this joins stops with straight lines").addTo(routeLayer);
+  for (const s of stops) {
+    const isTarget = s.code === state.targetCode;
+    L.circleMarker([s.lat, s.lng], { radius: isTarget ? 9 : 4, color: isTarget ? "#0969da" : "#57606a", fillOpacity: isTarget ? 0.9 : 0.6, weight: isTarget ? 3 : 1 })
+      .bindTooltip(`${s.seq}. ${esc(s.name)}`).on("click", () => selectTarget(s.code)).addTo(routeLayer);
+  }
+  if (fit) map.fitBounds(line.getBounds(), { padding: [20, 20], animate: false });
+}
+
+function renderAll() { renderBuses(); renderStops(); renderTarget(); }
+
+function renderBuses() {
+  busLayer.clearLayers();
+  const stops = currentStops();
+  for (const b of directionBuses()) {
+    const near = b.nearestStopIndex != null ? stops[b.nearestStopIndex] : null;
+    const icon = L.divIcon({ className: "", html: `<span class="bus-icon s-${b.status}">${esc(b.doorNo)}</span>`, iconAnchor: [20, 10] });
+    L.marker([b.lat, b.lng], { icon }).bindPopup(
+      `<b>${esc(b.doorNo)}</b> · ${esc(b.routeCode)}<br>→ ${esc(b.destination)}<br>` +
+      `near: ${near ? `${near.seq}. ${esc(near.name)} (${b.distanceToNearestMeters} m)` : esc(b.nearestStopCode)}<br>` +
+      `status: ${b.status} · GPS ${b.ageSeconds}s old`)
+      .on("popupopen", () => showVariant(b.routeCode)).on("popupclose", () => variantLayer.clearLayers()).addTo(busLayer);
+  }
+}
+
+function showVariant(routeCode) {
+  variantLayer.clearLayers();
+  const shape = state.shapes.find(x => x.routeCode === routeCode);
+  if (shape && shape.variant !== "D0") L.polyline(shape.points, { color: "#8250df", weight: 4, opacity: 0.8, dashArray: "8 6" }).addTo(variantLayer);
+}
+
+function renderStops() {
+  const byIndex = new Map();
+  for (const b of directionBuses()) if (b.nearestStopIndex != null) (byIndex.get(b.nearestStopIndex) ?? byIndex.set(b.nearestStopIndex, []).get(b.nearestStopIndex)).push(b);
+  $("stops").innerHTML = currentStops().map((s, i) => {
+    const chips = (byIndex.get(i) ?? []).map(b => `<span class="chip s-${b.status}" title="${esc(b.routeCode)} · ${b.distanceToNearestMeters} m">${esc(b.doorNo)}</span>`).join("");
+    return `<li class="stop${s.code === state.targetCode ? " selected" : ""}" data-code="${esc(s.code)}">
+      <span class="seq">${s.seq}</span><span class="name">${esc(s.name)} <span class="muted">${esc(s.district)}</span>${chips ? `<div class="chips">${chips}</div>` : ""}</span></li>`;
+  }).join("");
+  for (const li of $("stops").children) li.onclick = () => selectTarget(li.dataset.code);
+}
+
+function renderTarget() {
+  const el = $("target");
+  const stops = currentStops();
+  const t = stops.findIndex(s => s.code === state.targetCode);
+  if (t < 0) { el.hidden = true; return; }
+  const rows = directionBuses()
+    .filter(b => b.nearestStopIndex != null && b.status !== "off-route")
+    .map(b => ({ b, away: t - b.nearestStopIndex }))
+    .sort((x, y) => (x.away < 0) - (y.away < 0) || Math.abs(x.away) - Math.abs(y.away));
+  const coming = rows.filter(r => r.away >= 0);
+  const passed = rows.filter(r => r.away < 0).slice(0, 3);
+  const row = (r) => `<div class="row"><span><span class="chip s-${r.b.status}">${esc(r.b.doorNo)}</span> ${r.b.status === "at-terminal" ? "<span class=muted>waiting at first stop</span>" : ""}</span>
+    <span>${r.away >= 0 ? `${r.away === 0 ? "at your stop" : `${r.away} stops away`}` : `passed ${-r.away} stops ago`} <span class="muted">(±1)</span></span></div>`;
+  el.hidden = false;
+  el.innerHTML = `<h3>${stops[t].seq}. ${esc(stops[t].name)}</h3>
+    ${coming.length ? coming.map(row).join("") : `<div class="muted">No bus approaching in this direction.</div>`}
+    ${passed.length ? `<div class="muted" style="margin-top:6px">Recently passed</div>${passed.map(row).join("")}` : ""}`;
+}
+
+function selectTarget(code) {
+  state.targetCode = state.targetCode === code ? null : code;
+  renderRoute(false); renderAll(); save();
+}
+
+$("load").onclick = () => loadLine($("line").value);
+$("line").onkeydown = (e) => { if (e.key === "Enter") loadLine($("line").value); };
+$("refresh").onclick = refreshLive;
+
+const saved = restore();
+if (saved.line) loadLine(saved.line, saved);
+</script>
+</body>
+</html>

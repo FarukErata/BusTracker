@@ -42,6 +42,7 @@ Native AOT is not planned for v1. It would save some memory but complicates Dapp
 | Component | Responsibility |
 |---|---|
 | `IbbClient` | One method per SOAP call. Parses the JSON-in-XML and DataSet answers into typed records, converts the string numbers and the `+03:00` timestamps. Turns `Rate limit exceeded` into a typed `IbbRateLimitedException` |
+| `RouteShapeSync` | Real road geometry for every route variant, from İBB's open-data GeoJSON (257 MB). Once a day a `HEAD` request compares the file's `ETag` with the stored one; the server downloads only when it changed or the database is empty (the portal has no version number and ignores conditional GET). It reads the file one feature at a time, simplifies each line to within 5 m (5.9 M → 1.2 M points), and stores it in SQLite as an encoded polyline (4.3 MB). A truncated download, or a file with fewer than half the previous shapes, is rejected and the old shapes stay |
 | `StaticDataRefresher` | Once a day (and on startup if the cache is older than 24 h) loads all lines (`HatServisi_GYY`, 186 KB), all stops (`GetDurak_json`, 3.7 MB) and the stop order **for lines in use only** (`DurakDetay_GYY_wYonAdi` per line). The all-lines stop-order call is 28.5 MB / 15 s, so we skip it |
 | `LinePoller` | Decides which lines are "hot", polls each at most once per 60 s, and respects a global call budget (see below) |
 | `TrackingEngine` | Pure functions: given a line's stop list and two consecutive snapshots, compute each bus's position along the route, stops away from a target stop, and "passed" events |
@@ -68,7 +69,7 @@ Input per line: the stop list for each direction (from the cache) and the latest
 Per bus:
 1. **Direction** from `guzergahkodu` (`500T_G_D0` → `G`). **Variant** = the last part. `D0` is the main route.
 2. **Discard** if `son_konum_zamani` is older than 3 min (stale), or the bus is more than 500 m from every stop on its direction (garage run / GPS fault).
-3. **Position along the route**: project the GPS point onto the stop-to-stop polyline (straight segments between consecutive stops), searching around `yakinDurakKodu` ± 2 stops. Result: a fractional index like `13.4` = 40% of the way from stop 13 to stop 14. This fixes the ±1 error of "nearest stop", and it's how we know the bus has *passed* a stop, not just "is near" it.
+3. **Position along the route**: project the GPS point onto the real road geometry of the bus's own variant (`route_shapes`, keyed by `guzergahkodu`), and project the stops onto the same line once. Fall back to straight stop-to-stop segments only if a variant has no geometry. Result: a fractional index like `13.4` = 40% of the way from stop 13 to stop 14. This fixes the ±1 error of "nearest stop", and it's how we know the bus has *passed* a stop, not just "is near" it.
 4. **Stops away** from target stop *t*: `ceil(t − position)`. Negative = already passed.
 5. **Trip continuity**: a bus whose position jumps backwards by > 3 stops, or changes direction, has started a new trip. It gets a new trip key `(kapino, direction, start time)`, which keeps alerts from repeating.
 6. **Alternate variants** (not `D0`) whose nearest stop isn't on the main list are shown as "alternate route" and never counted for alerts in v1.
@@ -87,6 +88,8 @@ watches         (id, favourite_id → favourites, days_mask, start_time, end_tim
 notify_targets  (id, user_id → users, channel, address, enabled, created_at)                           -- channel: ntfy | fcm | webpush | telegram
 alerts_sent     (id, watch_id, trip_key, stage, sent_at)                              -- stage: approaching | passed; unique(watch_id, trip_key, stage)
 
+route_shapes    (route_code PK, line_code, direction, variant, length_m, duration_s, point_count, polyline)
+data_sources    (name PK, etag, last_modified, size, checked_at, imported_at, item_count)        -- change detection per source
 lines_cache     (line_code PK, name, full_name, status, region, trip_minutes, fetched_at)
 stops_cache     (stop_code PK, name, lat, lng, district, direction_label, fetched_at)
 route_stops     (line_code, direction, seq, stop_code, PRIMARY KEY (line_code, direction, seq), fetched_at)
@@ -174,3 +177,10 @@ One API project + one test project. The engine stays free of I/O, so it can move
 - Users: personal, possibly 1–2 friends → per-user API keys, shared polling.
 - Alerts: "N stops before" and "passed my stop" for now; the watch shape may still change.
 - Notification channel: still open (ntfy suggested to start).
+
+## Later optimizations
+
+Parked until the core features are settled:
+
+- **Lower position lag (currently ~30–90 s, worst ~2.5 min).** Time each line's once-a-minute İBB call to land a few seconds after İBB's own refresh, which happens at about the same second each minute for all buses. Let clients poll our cache every 10–15 s, which costs no extra İBB calls. Expected typical lag: ~15–40 s.
+- **Smooth marker movement** in the UI: buses glide to their new positions instead of jumping once a minute.
