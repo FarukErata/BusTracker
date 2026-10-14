@@ -11,6 +11,7 @@ public static class LiveEndpoints
         var lines = app.MapGroup("/api/lines/{code}");
         lines.MapGet("/live", GetLive);
         lines.MapGet("/arrivals", GetArrivals);
+        lines.MapGet("/path", GetBusPath);
         return app;
     }
 
@@ -44,6 +45,34 @@ public static class LiveEndpoints
         });
     }
 
+    private static async Task<IResult> GetBusPath(
+        string code, string bus, string stop, LineDataService data, TimeProvider clock, CancellationToken ct)
+    {
+        if (LineCode.Normalize(code) is not { } line) return LineCode.Invalid();
+        if (await LineCode.LoadStopsAsync(line, data, ct) is null) return LineCode.Unknown(line);
+
+        var tracks = await data.GetTracksAsync(line, ct);
+        return await WithLiveAsync(line, data, clock, ct, live =>
+        {
+            var (path, problem) = BusPaths.Between(bus.Trim(), stop.Trim(), live.Snapshot.Buses, tracks);
+            return problem switch
+            {
+                BusPathProblem.BusNotFound => Results.Problem($"Bus {bus} isn't on line {line} right now.", statusCode: StatusCodes.Status404NotFound),
+                BusPathProblem.StopNotOnRoute => Results.Problem($"This bus's route doesn't stop at {stop}.", statusCode: StatusCodes.Status404NotFound),
+                _ => Results.Ok(ToView(line, path!, Freshness.From(live, clock))),
+            };
+        });
+    }
+
+    private static BusPathView ToView(string line, BusPath path, Freshness data) =>
+        new(line, path.Track.RouteCode, path.Track.Variant, path.Track.HasRoadGeometry,
+            ToView(path.Bus),
+            new PathStopView(path.Stop.Seq, path.Stop.StopCode, path.Stop.Name, path.Stop.Lat, path.Stop.Lng),
+            path.Passed, Math.Round(path.DistanceMeters),
+            path.Points.Select(p => new[] { p.Lat, p.Lng }).ToList(),
+            path.RemainingStops.Select(s => new PathStopView(s.Seq, s.StopCode, s.Name, s.Lat, s.Lng)).ToList(),
+            data);
+
     private static async Task<IResult> WithLiveAsync(
         string line, LineDataService data, TimeProvider clock, CancellationToken ct, Func<LiveResult, IResult> respond)
     {
@@ -72,7 +101,7 @@ public static class LiveEndpoints
 
     internal static ArrivalView ToArrivalView(Arrival a) =>
         new(a.Bus.Bus.DoorNo, a.Bus.Bus.RouteCode, a.Bus.Bus.Variant, a.StopsAway, Math.Round(a.DistanceMeters),
-            a.EtaSeconds, a.NotDeparted, a.Bus.AgeSeconds, a.Bus.LastStop?.Seq);
+            a.EtaSeconds, a.NotDeparted, a.Bus.AgeSeconds, a.Bus.LastStop?.Seq, a.Bus.LastStop?.Name);
 
     private static PassedView ToView(PassedBus p) =>
         new(p.Bus.Bus.DoorNo, p.Bus.Bus.RouteCode, p.Bus.Bus.Variant, Math.Round(p.MetersPast), p.Bus.LastStop?.Seq);
@@ -106,10 +135,16 @@ public sealed record StopRef(string Code, int Seq, string Name);
 
 public sealed record ArrivalView(
     string DoorNo, string RouteCode, string Variant, int StopsAway, double DistanceMeters, int? EtaSeconds,
-    bool NotDeparted, int AgeSeconds, int? LastStopSeq);
+    bool NotDeparted, int AgeSeconds, int? LastStopSeq, string? LastStopName);
 
 public sealed record PassedView(string DoorNo, string RouteCode, string Variant, double MetersPast, int? LastStopSeq);
 
 public sealed record StopArrivalsResponse(
     string Line, string Direction, StopRef Stop, Freshness Data,
     IReadOnlyList<ArrivalView> Approaching, IReadOnlyList<PassedView> RecentlyPassed);
+
+public sealed record PathStopView(int Seq, string Code, string Name, double Lat, double Lng);
+
+public sealed record BusPathView(
+    string Line, string RouteCode, string Variant, bool OnRoadGeometry, TrackedBusView Bus, PathStopView Stop,
+    bool Passed, double DistanceMeters, IReadOnlyList<double[]> Path, IReadOnlyList<PathStopView> RemainingStops, Freshness Data);

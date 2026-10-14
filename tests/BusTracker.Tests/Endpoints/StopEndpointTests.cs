@@ -54,6 +54,7 @@ public sealed class StopEndpointTests(TestAppFactory factory) : IClassFixture<Te
         Assert.NotEmpty(view!.Arrivals);
         Assert.All(view.Arrivals, a => Assert.Equal(("131Y", "G"), (a.Line, a.Direction)));
         Assert.Contains(view.Arrivals, a => a.Bus.DoorNo == "C-114");
+        Assert.All(view.Arrivals.Where(a => !a.Bus.NotDeparted), a => Assert.False(string.IsNullOrWhiteSpace(a.Bus.LastStopName)));
         Assert.Equal(view.Arrivals.OrderBy(a => a.Bus.EtaSeconds ?? int.MaxValue).ThenBy(a => a.Bus.DistanceMeters), view.Arrivals);
         var withData = Assert.Single(view.Lines, l => l.Data is not null);
         Assert.Equal("131Y", withData.Line);
@@ -90,5 +91,74 @@ public sealed class SearchTextTests
     public void Normalize_FoldsCaseAndTurkishLetters(string input, string expected)
     {
         Assert.Equal(expected, SearchText.Normalize(input));
+    }
+}
+
+public sealed class LineSearchAndTowardsTests(TestAppFactory factory) : IClassFixture<TestAppFactory>
+{
+    [Fact]
+    public async Task Stops_KnowWhichWayTheyFace()
+    {
+        var client = await factory.CreateUserClientAsync();
+
+        var details = await client.GetFromJsonAsync<StopDetails>("/api/stops/402011");
+
+        Assert.False(string.IsNullOrWhiteSpace(details!.Stop.Towards));
+        Assert.NotEqual(details.Stop.Name, details.Stop.Towards);
+    }
+
+    [Theory]
+    [InlineData("131", "131Y")]
+    [InlineData("14ş", "14ŞB")]
+    [InlineData("çm", "ÇM42")]
+    public async Task LineSearch_MatchesByPrefixWithBothEnds(string query, string expected)
+    {
+        var client = await factory.CreateUserClientAsync();
+
+        var lines = await client.GetFromJsonAsync<List<LineSummary>>($"/api/lines?q={Uri.EscapeDataString(query)}");
+
+        var line = Assert.Single(lines!, l => l.LineCode == expected);
+        Assert.NotEmpty(line.Directions);
+        Assert.All(line.Directions, d => Assert.False(string.IsNullOrWhiteSpace(d.From + d.To)));
+    }
+
+    [Fact]
+    public async Task LineSearch_EndsOfEachDirectionAreTheFirstAndLastStops()
+    {
+        var client = await factory.CreateUserClientAsync();
+
+        var line = (await client.GetFromJsonAsync<List<LineSummary>>("/api/lines?q=131Y"))!.Single();
+
+        var outbound = line.Directions.Single(d => d.Direction == "G");
+        Assert.Equal(("YEŞİLTEPE SON DURAK", "KARTAL"), (outbound.From, outbound.To));
+    }
+}
+
+public sealed class BusPathEndpointTests(TestAppFactory factory) : IClassFixture<TestAppFactory>
+{
+    [Fact]
+    public async Task Path_FromABusToItsNextStops()
+    {
+        var client = await factory.CreateUserClientAsync();
+        var stops = await client.GetFromJsonAsync<LineStopsResponse>("/api/lines/131Y/stops");
+        var target = stops!.Directions.Single(d => d.Direction == "D").Stops.Single(s => s.Seq == 45).Code;
+
+        var path = await client.GetFromJsonAsync<BusPathView>($"/api/lines/131Y/path?bus=O1025&stop={target}");
+
+        Assert.Equal("O1025", path!.Bus.DoorNo);
+        Assert.False(path.Passed);
+        Assert.True(path.Path.Count >= 2);
+        Assert.Equal(target, path.RemainingStops[^1].Code);
+        Assert.Equal(target, path.Stop.Code);
+    }
+
+    [Theory]
+    [InlineData("NOPE", "402011")]
+    [InlineData("O1025", "999999")]
+    public async Task Path_UnknownBusOrStop_IsNotFound(string bus, string stop)
+    {
+        var client = await factory.CreateUserClientAsync();
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/lines/131Y/path?bus={bus}&stop={stop}")).StatusCode);
     }
 }

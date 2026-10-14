@@ -1,0 +1,131 @@
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from './client'
+import type {
+  BusPathResponse,
+  FavoritesResponse,
+  LineArrivalsResponse,
+  LineLiveResponse,
+  LineShapesResponse,
+  LineStopsResponse,
+  LineSummary,
+  StopArrivalsView,
+  StopDetails,
+  StopSearchResult,
+} from './types'
+
+const LIVE_REFRESH_MS = 30_000
+const STATIC_STALE_MS = 60 * 60_000
+const enc = encodeURIComponent
+
+export function useFavorites() {
+  return useQuery({ queryKey: ['favorites'], queryFn: () => api<FavoritesResponse>('/api/favorites') })
+}
+
+export function useStopSearch(query: string) {
+  const q = query.trim()
+  return useQuery({
+    queryKey: ['search', 'stops', q],
+    queryFn: () => api<StopSearchResult[]>(`/api/stops?q=${enc(q)}`),
+    enabled: q.length >= 2,
+    placeholderData: keepPreviousData,
+    staleTime: STATIC_STALE_MS,
+  })
+}
+
+export function useLineSearch(query: string) {
+  const q = query.trim()
+  return useQuery({
+    queryKey: ['search', 'lines', q],
+    queryFn: () => api<LineSummary[]>(`/api/lines?q=${enc(q)}`),
+    enabled: q.length >= 1,
+    placeholderData: keepPreviousData,
+    staleTime: STATIC_STALE_MS,
+  })
+}
+
+export function useStop(code: string) {
+  return useQuery({
+    queryKey: ['stop', code],
+    queryFn: () => api<StopDetails>(`/api/stops/${enc(code)}`),
+    staleTime: STATIC_STALE_MS,
+  })
+}
+
+export function useStopArrivals(code: string) {
+  return useQuery({
+    queryKey: ['stop', code, 'arrivals'],
+    queryFn: () => api<StopArrivalsView>(`/api/stops/${enc(code)}/arrivals`),
+    refetchInterval: LIVE_REFRESH_MS,
+  })
+}
+
+export function useLineStops(line: string, enabled = true) {
+  return useQuery({
+    queryKey: ['line', line, 'stops'],
+    queryFn: () => api<LineStopsResponse>(`/api/lines/${enc(line)}/stops`),
+    enabled: enabled && !!line,
+    staleTime: STATIC_STALE_MS,
+  })
+}
+
+export function useLineShapes(line: string, enabled = true) {
+  return useQuery({
+    queryKey: ['line', line, 'shapes'],
+    queryFn: () => api<LineShapesResponse>(`/api/lines/${enc(line)}/shapes?all=true`),
+    enabled: enabled && !!line,
+    staleTime: STATIC_STALE_MS,
+  })
+}
+
+export function useLineLive(line: string, enabled = true) {
+  return useQuery({
+    queryKey: ['line', line, 'live'],
+    queryFn: () => api<LineLiveResponse>(`/api/lines/${enc(line)}/live`),
+    enabled: enabled && !!line,
+    refetchInterval: LIVE_REFRESH_MS,
+  })
+}
+
+export function useLineArrivals(line: string, stop: string | null, direction: string | null) {
+  return useQuery({
+    queryKey: ['line', line, 'arrivals', stop, direction],
+    queryFn: () => api<LineArrivalsResponse>(`/api/lines/${enc(line)}/arrivals?stop=${enc(stop!)}&dir=${enc(direction!)}`),
+    enabled: !!stop && !!direction,
+    refetchInterval: LIVE_REFRESH_MS,
+  })
+}
+
+export function useBusPath(line: string | null, bus: string | null, stop: string | null) {
+  return useQuery({
+    queryKey: ['line', line, 'path', bus, stop],
+    queryFn: () => api<BusPathResponse>(`/api/lines/${enc(line!)}/path?bus=${enc(bus!)}&stop=${enc(stop!)}`),
+    enabled: !!line && !!bus && !!stop,
+    refetchInterval: LIVE_REFRESH_MS,
+    placeholderData: keepPreviousData,
+  })
+}
+
+function useFavoriteMutation<TArgs>(request: (args: TArgs) => Promise<unknown>) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: request,
+    onSettled: () => client.invalidateQueries({ queryKey: ['favorites'] }),
+  })
+}
+
+export function useAddFavoriteStop() {
+  return useFavoriteMutation((stop: string) => api('/api/favorites/stops', { method: 'POST', body: JSON.stringify({ stop }) }))
+}
+
+export function useRemoveFavoriteStop() {
+  return useFavoriteMutation((id: number) => api(`/api/favorites/stops/${id}`, { method: 'DELETE' }))
+}
+
+export function useAddFavoriteLine() {
+  return useFavoriteMutation((args: { line: string; direction: string | null }) =>
+    api('/api/favorites/lines', { method: 'POST', body: JSON.stringify(args) }))
+}
+
+export function useRemoveFavoriteLine() {
+  return useFavoriteMutation((id: number) => api(`/api/favorites/lines/${id}`, { method: 'DELETE' }))
+}

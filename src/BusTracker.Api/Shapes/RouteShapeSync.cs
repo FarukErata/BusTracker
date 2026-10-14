@@ -45,8 +45,9 @@ public sealed class RouteShapeSync(
         logger.LogInformation("Route shapes changed ({Old} → {New}); downloading {Size} bytes",
             stored?.ETag ?? "none", remote.ETag, remote.Size);
         await using var stream = await openData.OpenAsync(_options.RouteShapesUrl, ct);
+        var shapes = await ParseAsync(stream, ct).ToListAsync(ct);
         var minimumCount = Math.Max(1, (stored?.ItemCount ?? 0) / 2);
-        return await repository.ReplaceAllAsync(ParseAsync(stream, ct), minimumCount, ct);
+        return await repository.ReplaceAllAsync(shapes.ToAsyncEnumerable(), minimumCount, ct);
     }
 
     private async IAsyncEnumerable<RouteShape> ParseAsync(Stream stream, [EnumeratorCancellation] CancellationToken ct)

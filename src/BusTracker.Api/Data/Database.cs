@@ -63,7 +63,8 @@ public sealed class DatabaseInitializer(Database database, ILogger<DatabaseIniti
             search_name TEXT NOT NULL,
             district    TEXT NOT NULL,
             lat         REAL NOT NULL,
-            lng         REAL NOT NULL
+            lng         REAL NOT NULL,
+            towards     TEXT
         );
 
         CREATE TABLE stop_lines (

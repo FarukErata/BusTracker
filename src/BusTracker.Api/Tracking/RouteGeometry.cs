@@ -47,6 +47,14 @@ public sealed class RouteGeometry
             _points[start].Lng + t * (_points[end].Lng - _points[start].Lng));
     }
 
+    public IReadOnlyList<LatLng> Slice(double fromAlong, double toAlong)
+    {
+        var from = Math.Clamp(Math.Min(fromAlong, toAlong), 0, LengthMeters);
+        var to = Math.Clamp(Math.Max(fromAlong, toAlong), 0, LengthMeters);
+        var inner = Enumerable.Range(0, _points.Length).Where(i => _cumulative[i] > from && _cumulative[i] < to).Select(i => _points[i]);
+        return [PointAt(from), .. inner, PointAt(to)];
+    }
+
     private Projection? ProjectWithin(LatLng point, double minAlong, double maxAlong)
     {
         Projection? best = null;

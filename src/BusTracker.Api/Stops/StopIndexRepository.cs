@@ -4,7 +4,11 @@ using Dapper;
 
 namespace BusTracker.Api.Stops;
 
-public sealed record StopInfo(string Code, string Name, string District, double Lat, double Lng);
+public sealed record StopInfo(string Code, string Name, string District, double Lat, double Lng, string? Towards);
+
+public sealed record LineSummary(string LineCode, IReadOnlyList<LineEnds> Directions);
+
+public sealed record LineEnds(string Direction, string From, string To);
 
 public sealed record StopLine(string LineCode, string Direction, string DirectionName, int Seq);
 
@@ -39,6 +43,8 @@ public sealed class StopIndexRepository(Database database)
 
         if (count < minimumCount)
             throw new InvalidDataException($"Only {count} stop rows in the new index, expected at least {minimumCount}");
+
+        await connection.ExecuteAsync(FillTowardsSql, transaction: transaction);
 
         await connection.ExecuteAsync(
             """
@@ -117,8 +123,44 @@ public sealed class StopIndexRepository(Database database)
         return result;
     }
 
+    public async Task<IReadOnlyList<LineSummary>> SearchLinesAsync(string query, int limit, CancellationToken ct)
+    {
+        var prefix = query.Trim().ToUpperInvariant();
+        if (prefix.Length == 0) return [];
+
+        await using var connection = await database.OpenAsync(ct);
+        var rows = await connection.QueryAsync<LineEndsRow>(
+            """
+            SELECT l.line_code AS LineCode, l.direction AS Direction,
+                   (SELECT s.name FROM stop_lines f JOIN stops s ON s.stop_code = f.stop_code
+                    WHERE f.line_code = l.line_code AND f.direction = l.direction ORDER BY f.seq LIMIT 1) AS FromStop,
+                   (SELECT s.name FROM stop_lines t JOIN stops s ON s.stop_code = t.stop_code
+                    WHERE t.line_code = l.line_code AND t.direction = l.direction ORDER BY t.seq DESC LIMIT 1) AS ToStop
+            FROM (SELECT DISTINCT line_code, direction FROM stop_lines
+                  WHERE line_code IN (SELECT DISTINCT line_code FROM stop_lines WHERE line_code LIKE @Prefix ESCAPE '\'
+                                      ORDER BY LENGTH(line_code), line_code LIMIT @limit)) l
+            ORDER BY LENGTH(l.line_code), l.line_code, l.direction;
+            """,
+            new { Prefix = $"{EscapeLike(prefix)}%", limit });
+        return rows.GroupBy(r => r.LineCode)
+            .Select(g => new LineSummary(g.Key, g.Select(r => new LineEnds(r.Direction, r.FromStop, r.ToStop)).ToList()))
+            .ToList();
+    }
+
+    private const string FillTowardsSql =
+        """
+        UPDATE stops SET towards = (
+            SELECT s2.name FROM stop_lines l
+            JOIN stop_lines n ON n.line_code = l.line_code AND n.direction = l.direction AND n.seq = l.seq + 1
+            JOIN stops s2 ON s2.stop_code = n.stop_code
+            WHERE l.stop_code = stops.stop_code
+            GROUP BY s2.name ORDER BY COUNT(*) DESC, s2.name LIMIT 1);
+        """;
+
     private const string SelectStop =
-        "SELECT stop_code AS Code, name AS Name, district AS District, lat AS Lat, lng AS Lng FROM stops";
+        "SELECT stop_code AS Code, name AS Name, district AS District, lat AS Lat, lng AS Lng, towards AS Towards FROM stops";
+
+    private sealed record LineEndsRow(string LineCode, string Direction, string FromStop, string ToStop);
 
     private sealed record StopLineRow(string LineCode, string Direction, string DirectionName, long Seq);
 

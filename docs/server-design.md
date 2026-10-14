@@ -212,3 +212,18 @@ Parked until the core features are settled:
 
 - **Lower position lag (currently ~30–90 s, worst ~2.5 min).** Time each line's once-a-minute İBB call to land a few seconds after İBB's own refresh, which happens at about the same second each minute for all buses. Let clients poll our cache every 10–15 s, which costs no extra İBB calls. Expected typical lag: ~15–40 s.
 - **Smooth marker movement** in the UI: buses glide to their new positions instead of jumping once a minute.
+- **Steadier ETA** (parked 2026-10-14). Trust the measured speed only after at least 3 positions (~2 min) and use the schedule until then. Limit how much an ETA can change per update unless the bus passes a stop. Assume the bus kept moving for the age of its GPS position. Log predicted against actual arrival times on one line first to measure which change helps.
+
+## İBB rate limit strategy (2026-10-14)
+
+We were rate-limited twice today while staying under our own 10 calls/min budget (dev page, client and test scripts sharing one IP). İBB's lockout lasted more than 2 minutes, and the first call after our 2-minute backoff was blocked again.
+
+Not an option: getting around the limit (rotating IPs or proxies, hiding the client). It breaks İBB's terms and risks a permanent block.
+
+What we will do instead, most effective first:
+
+1. **Whole-fleet polling.** \`GetFiloAracKonum_json\` returns every bus in the city in one call (~1.1 MB, ~1.3 s). Poll it once a minute for positions, and learn each door number's line from per-line calls (\`GetHatOtoKonum_json\`), refreshed slowly in rotation (e.g. one line every few minutes, only lines in use). Cost: about 1 call/min regardless of how many stops, lines or users.
+2. **Tune the current budget:** about 6 calls/min instead of 10, and backoff steps of 5, 10 and 15 minutes instead of 2, 4, 8 and 15.
+3. **Ask İBB for an official key or a higher quota** (open data portal, data.ibb.gov.tr) for a personal, non-commercial project. Also ask whether a GTFS-Realtime feed exists, which would remove polling altogether.
+4. **İETT website stop estimate** (\`/tr/RouteStation/GetStationInfo\`): a separate, unofficial service. Use it only as an occasional second opinion, never as a main source.
+5. **metkm backend:** it forwards the same İBB data, so it moves the load rather than reducing it. Not used.

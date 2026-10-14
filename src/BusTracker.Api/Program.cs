@@ -15,6 +15,13 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var webRoot = builder.Configuration[WebHostDefaults.WebRootKey] is { Length: > 0 } configuredRoot
+    ? configuredRoot
+    : Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+Directory.CreateDirectory(webRoot);
+builder.Environment.WebRootPath = webRoot;
+builder.Environment.WebRootFileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(webRoot);
+
 builder.Services
     .AddOptions<BusTrackerOptions>()
     .Bind(builder.Configuration.GetSection(BusTrackerOptions.SectionName))
@@ -82,10 +89,13 @@ app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseDefaultFiles();
-    app.UseStaticFiles();
-    app.MapGet("/", () => Results.Redirect("/dev/")).AllowAnonymous();
+    var devPage = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(Path.Combine(app.Environment.ContentRootPath, "DevPage"));
+    app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = devPage, RequestPath = "/dev" });
+    app.UseStaticFiles(new StaticFileOptions { FileProvider = devPage, RequestPath = "/dev" });
 }
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -97,6 +107,7 @@ app.MapFavoriteEndpoints();
 app.MapStopEndpoints();
 app.MapLineEndpoints();
 app.MapLiveEndpoints();
+app.MapFallbackToFile("{*path:regex(^(?!api/|dev/|health).*$)}", "index.html").AllowAnonymous();
 
 if (!app.Environment.IsDevelopment() && !app.Services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Access.RequiresInvite)
     app.Logger.LogWarning("No invite codes configured: anyone who can reach this server can create a user");

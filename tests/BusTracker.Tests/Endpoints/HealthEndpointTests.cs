@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using BusTracker.Api.Endpoints;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BusTracker.Tests.Endpoints;
 
@@ -26,5 +27,34 @@ public sealed class HealthEndpointTests(TestAppFactory factory) : IClassFixture<
 
         Assert.Equal("131Y", body!.Line);
         Assert.Empty(body.Shapes);
+    }
+}
+
+public sealed class FallbackTests(TestAppFactory factory) : IClassFixture<TestAppFactory>
+{
+    [Fact]
+    public async Task UnknownApiPath_IsNotServedTheAppPage()
+    {
+        var client = await factory.CreateUserClientAsync();
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, (await client.GetAsync("/api/does-not-exist")).StatusCode);
+    }
+}
+
+public sealed class AppShellTests(TestAppFactory factory) : IClassFixture<TestAppFactory>
+{
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/stops/402011")]
+    [InlineData("/lines/131Y")]
+    public async Task AppRoutes_AreServedWithoutAKey(string path)
+    {
+        var webRoot = factory.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>().WebRootPath;
+        await File.WriteAllTextAsync(Path.Combine(webRoot, "index.html"), "<!doctype html><title>Buses</title>");
+
+        var response = await factory.CreateClient().GetAsync(path);
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("<title>Buses</title>", await response.Content.ReadAsStringAsync());
     }
 }

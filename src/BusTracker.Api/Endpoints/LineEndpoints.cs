@@ -1,17 +1,24 @@
 using BusTracker.Api.Lines;
 using BusTracker.Api.Shapes;
+using BusTracker.Api.Stops;
 
 namespace BusTracker.Api.Endpoints;
 
 public static class LineEndpoints
 {
+    private const int SearchLimit = 10;
+
     public static IEndpointRouteBuilder MapLineEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapGet("/api/lines", Search);
         var lines = app.MapGroup("/api/lines/{code}");
         lines.MapGet("/stops", GetStops);
         lines.MapGet("/shapes", GetShapes);
         return app;
     }
+
+    private static async Task<IReadOnlyList<LineSummary>> Search(string? q, StopIndexRepository index, CancellationToken ct) =>
+        await index.SearchLinesAsync(q ?? "", SearchLimit, ct);
 
     private static async Task<IResult> GetStops(string code, LineDataService data, CancellationToken ct)
     {

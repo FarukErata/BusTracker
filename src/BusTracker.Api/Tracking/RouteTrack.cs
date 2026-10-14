@@ -3,7 +3,7 @@ using BusTracker.Api.Shapes;
 
 namespace BusTracker.Api.Tracking;
 
-public sealed record PlacedStop(int Index, string StopCode, int Seq, string Name, double AlongMeters, double OffsetMeters);
+public sealed record PlacedStop(int Index, string StopCode, int Seq, string Name, double AlongMeters, double OffsetMeters, double Lat, double Lng);
 
 public sealed class RouteTrack
 {
@@ -72,7 +72,7 @@ public sealed class RouteTrack
             var projection = geometry.Project(new LatLng(stop.Lat, stop.Lng), minAlong);
             if (projection.OffsetMeters > maxOffset) continue;
 
-            placed.Add(new PlacedStop(placed.Count, stop.StopCode, stop.Seq, stop.Name, projection.AlongMeters, projection.OffsetMeters));
+            placed.Add(new PlacedStop(placed.Count, stop.StopCode, stop.Seq, stop.Name, projection.AlongMeters, projection.OffsetMeters, stop.Lat, stop.Lng));
             minAlong = projection.AlongMeters - StopReachedMeters;
         }
         return placed;

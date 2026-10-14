@@ -1,0 +1,75 @@
+const KEY_STORAGE = 'bt-device-key'
+const INVITE_STORAGE = 'bt-invite'
+
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+function read(name: string): string | null {
+  try {
+    return localStorage.getItem(name)
+  } catch {
+    return null
+  }
+}
+
+function write(name: string, value: string | null) {
+  try {
+    if (value) localStorage.setItem(name, value)
+    else localStorage.removeItem(name)
+  } catch {
+    return
+  }
+}
+
+export function rememberInviteFromUrl() {
+  const invite = new URLSearchParams(location.search).get('invite')
+  if (invite) write(INVITE_STORAGE, invite)
+}
+
+let registering: Promise<void> | null = null
+
+async function register() {
+  const response = await fetch('/api/devices', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ platform: 'web', name: navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser', invite: read(INVITE_STORAGE) }),
+  })
+  const body = await response.json().catch(() => null)
+  if (!response.ok) throw new ApiError(response.status, body?.detail ?? 'You need an invite link to use this app.')
+  write(KEY_STORAGE, body.key)
+}
+
+function ensureDevice(): Promise<void> {
+  if (read(KEY_STORAGE)) return Promise.resolve()
+  registering ??= register().finally(() => {
+    registering = null
+  })
+  return registering
+}
+
+async function parse<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T
+  const body = await response.json().catch(() => null)
+  if (!response.ok) throw new ApiError(response.status, body?.detail ?? `Request failed (${response.status})`)
+  return body as T
+}
+
+export async function api<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
+  await ensureDevice()
+  const headers = new Headers(init.headers)
+  headers.set('Authorization', `Bearer ${read(KEY_STORAGE)}`)
+  if (init.body) headers.set('Content-Type', 'application/json')
+
+  const response = await fetch(path, { ...init, headers })
+  if (response.status === 401 && !retried) {
+    write(KEY_STORAGE, null)
+    return api<T>(path, init, true)
+  }
+  return parse<T>(response)
+}

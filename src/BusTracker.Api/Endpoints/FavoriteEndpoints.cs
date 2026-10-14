@@ -31,7 +31,8 @@ public static class FavoriteEndpoints
 
         var stops = new List<FavoriteStopView>();
         foreach (var stop in await favorites.GetStopsAsync(user.UserId(), ct))
-            stops.Add(new FavoriteStopView(stop, (await stopIndex.GetLinesAtStopAsync(stop.StopCode, ct)).Select(l => l.LineCode).Distinct().ToList()));
+            stops.Add(new FavoriteStopView(stop, await stopIndex.GetStopAsync(stop.StopCode, ct),
+                (await stopIndex.GetLinesAtStopAsync(stop.StopCode, ct)).Select(l => l.LineCode).Distinct().ToList()));
 
         return new FavoritesResponse(lines, stops);
     }
@@ -92,6 +93,6 @@ public sealed record AddFavoriteStopRequest(string? Stop, string? Label);
 
 public sealed record FavoriteLineView(FavoriteLine Favorite, IReadOnlyDictionary<string, string> Directions);
 
-public sealed record FavoriteStopView(FavoriteStop Favorite, IReadOnlyList<string> Lines);
+public sealed record FavoriteStopView(FavoriteStop Favorite, StopInfo? Stop, IReadOnlyList<string> Lines);
 
 public sealed record FavoritesResponse(IReadOnlyList<FavoriteLineView> Lines, IReadOnlyList<FavoriteStopView> Stops);

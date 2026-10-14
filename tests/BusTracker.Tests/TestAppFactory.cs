@@ -29,6 +29,7 @@ public class TestAppFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("BusTracker:DatabasePath", Path.Combine(_directory, "app.db"));
+        builder.UseSetting(WebHostDefaults.WebRootKey, Path.Combine(_directory, "wwwroot"));
         builder.UseSetting("BusTracker:StaticData:SyncEnabled", "false");
         builder.UseSetting("BusTracker:Access:RegistrationsPerIpPer10Minutes", RegistrationsPerIp.ToString());
         for (var i = 0; i < InviteCodes.Length; i++)

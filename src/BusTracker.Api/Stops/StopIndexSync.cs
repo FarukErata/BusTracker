@@ -20,7 +20,8 @@ public sealed class StopIndexSync(
             return SyncOutcome.Unchanged;
 
         logger.LogInformation("Downloading the stop order of every line");
-        var imported = await repository.ReplaceAllAsync(ibb.StreamAllRouteStopsAsync(ct), Math.Max(1, (count ?? 0) / 2), now, ct);
+        var rows = await ibb.StreamAllRouteStopsAsync(ct).ToListAsync(ct);
+        var imported = await repository.ReplaceAllAsync(rows.ToAsyncEnumerable(), Math.Max(1, (count ?? 0) / 2), now, ct);
         logger.LogInformation("Imported {Count} line stops into the stop index", imported);
         return SyncOutcome.Imported;
     }

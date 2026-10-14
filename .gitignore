@@ -486,3 +486,6 @@ App_Data/
 *.db
 *.db-shm
 *.db-wal
+
+# Built web client (produced by client/ npm run build)
+src/BusTracker.Api/wwwroot/
