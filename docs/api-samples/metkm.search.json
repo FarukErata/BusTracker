@@ -1,0 +1,26 @@
+{
+  "request": {
+    "url": "https://otobusum.metkm.win/v1/search?q=131Y&city=istanbul"
+  },
+  "status": 200,
+  "ms": 405,
+  "bytes": 211,
+  "count": 1,
+  "response": {
+    "stops": [],
+    "lines": [
+      {
+        "id": 23991,
+        "code": "131Y",
+        "name": "ÇEKMEKÖY/SAMANDIRA-KARTAL  ",
+        "city": "istanbul"
+      },
+      {
+        "id": 23961,
+        "code": "131YS",
+        "name": "SULTANBEYLİ DEVLET HASTANESİ - YENİDOĞAN - ÜMRANİYE",
+        "city": "istanbul"
+      }
+    ]
+  }
+}

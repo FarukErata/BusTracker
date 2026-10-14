@@ -1,0 +1,50 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/UlasimDinamikVeri/Duyurular.asmx",
+    "soapAction": "GetDuyurular_json",
+    "params": {}
+  },
+  "status": 200,
+  "ms": 327,
+  "bytes": 111897,
+  "kind": "json-in-xml",
+  "count": 474,
+  "response": [
+    {
+      "HATKODU": "10B",
+      "HAT": "BOSTANCI - KADIKÖY",
+      "TIP": "Günlük",
+      "GUNCELLEME_SAATI": "Kayit Saati: 16:07",
+      "MESAJ": "MAÇ NEDENIYLE RECEP PEKER CADDESI KAPALIDIR. ARAÇLARIMIZ BOSTANCI YÖNÜNDE KADIKÖY DURAGINDAN GÜZERGAH DISINA ÇIKARAK IHLAMUR DURAGINDAN GÜZERGAHA GIRECEKTIR."
+    },
+    {
+      "HATKODU": "10EK",
+      "HAT": "ESATPASA / ATASEHIR - KOZYATAGI METRO",
+      "TIP": "Sefer",
+      "GUNCELLEME_SAATI": "Kayit Saati: 11:21",
+      "MESAJ": "ESATPASA dan Saat 12:29 de hareket etmesi planlanan seferimiz  çesitli nedenlerle yapilamayacaktir."
+    },
+    {
+      "HATKODU": "10EK",
+      "HAT": "ESATPASA / ATASEHIR - KOZYATAGI METRO",
+      "TIP": "Sefer",
+      "GUNCELLEME_SAATI": "Kayit Saati: 11:21",
+      "MESAJ": "KOZYATAGI METRO dan Saat 13:15 de hareket etmesi planlanan seferimiz  çesitli nedenlerle yapilamayacaktir."
+    },
+    {
+      "HATKODU": "11ÜS",
+      "HAT": "SULTANBEYLI - ÜSKÜDAR ",
+      "TIP": "Günlük",
+      "GUNCELLEME_SAATI": "Kayit Saati: 15:35",
+      "MESAJ": "YOGUN TRAFIK NEDENIYLE FATIH BULVARI KAPALIDIR. ARAÇLARIMIZ SULTANBEYLI PERONLARA DÖNÜSLERDE 52.HASANPASA DURAGINDAN GÜZERGAHTAN ÇIKIP 55.ÇIFTLIK DURAGINDAN GÜZERGAHA GIRECEKTIR."
+    },
+    {
+      "HATKODU": "129L",
+      "HAT": "KOZYATAGI - 4.LEVENT METRO",
+      "TIP": "Sefer",
+      "GUNCELLEME_SAATI": "Kayit Saati: 04:04",
+      "MESAJ": "KOZYATAGI METRO dan Saat 11:30 de hareket etmesi planlanan seferimiz  çesitli nedenlerle yapilamayacaktir."
+    },
+    "… 469 more"
+  ]
+}

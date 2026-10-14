@@ -1,0 +1,15 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/FiloDurum/SeferGerceklesme.asmx",
+    "soapAction": "GetHatOtoKonum_json",
+    "params": {
+      "HatKodu": "NOSUCHLINE"
+    }
+  },
+  "status": 500,
+  "ms": 41,
+  "bytes": 443,
+  "kind": "fault",
+  "count": 1,
+  "response": "Server was unable to process request. ---> The remote server returned an error: (400) Bad Request."
+}

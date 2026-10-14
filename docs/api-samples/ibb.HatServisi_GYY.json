@@ -1,0 +1,24 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/ibb/ibb.asmx",
+    "soapAction": "HatServisi_GYY",
+    "params": {
+      "hat_kodu": "131Y"
+    }
+  },
+  "status": 200,
+  "ms": 40,
+  "bytes": 629,
+  "kind": "xml-dataset",
+  "count": 1,
+  "response": [
+    {
+      "HAT_KODU": "131Y",
+      "HAT_ADI": "ÇEKMEKÖY/SAMANDIRA-KARTAL  ",
+      "TAM_HAT_ADI": "131Y/ÇEKMEKÖY/SAMANDIRA-KARTAL",
+      "HAT_DURUMU": "1",
+      "BOLGE": "Anadolu2",
+      "SEFER_SURESI": "131.76"
+    }
+  ]
+}

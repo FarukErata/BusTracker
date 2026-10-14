@@ -1,0 +1,27 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/UlasimAnaVeri/HatDurakGuzergah.asmx",
+    "soapAction": "GetDurak_json",
+    "params": {
+      "DurakKodu": "113334"
+    }
+  },
+  "status": 200,
+  "ms": 41,
+  "bytes": 591,
+  "kind": "json-in-xml",
+  "count": 1,
+  "response": [
+    {
+      "SDURAKKODU": 113334,
+      "SDURAKADI": "FABRİKALAR",
+      "KOORDINAT": "POINT (29.0113309999896 41.0800130005666)",
+      "ILCEADI": "Sisli",
+      "SYON": "MASLAK",
+      "AKILLI": "YOK",
+      "FIZIKI": "AÇIK",
+      "DURAK_TIPI": "İETTBAYRAK",
+      "ENGELLIKULLANIM": "Uygun Degil"
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "request": {
+    "url": "https://otobusum.metkm.win/v1/route-stops/131Y?direction=G&city=istanbul"
+  },
+  "status": 200,
+  "ms": 203,
+  "bytes": 13819,
+  "count": 60,
+  "response": [
+    {
+      "id": 9165,
+      "code": 284731,
+      "name": "YEŞİLTEPE SON DURAK",
+      "lng": 29.1870607179681,
+      "lat": 41.039982472778,
+      "province": "Çekmeköy",
+      "smart": "YOK",
+      "stop_type": "İETTCAMLI",
+      "disabled_can_use": "Uygun Degil",
+      "physical": "FULL KAPALI",
+      "city": "istanbul"
+    },
+    {
+      "id": 12910,
+      "code": 290551,
+      "name": "NUMAN CADDESİ",
+      "lng": 29.1847778167409,
+      "lat": 41.0401197834171,
+      "province": "Çekmeköy",
+      "smart": "YOK",
+      "stop_type": "İETTBAYRAK",
+      "disabled_can_use": "Uygun Degil",
+      "physical": "AÇIK",
+      "city": "istanbul"
+    },
+    {
+      "id": 1317,
+      "code": 216611,
+      "name": "YEŞİLTEPE",
+      "lng": 29.1816850000105,
+      "lat": 41.040858999116,
+      "province": "Çekmeköy",
+      "smart": "YOK",
+      "stop_type": "İSTON GENİŞ",
+      "disabled_can_use": "Uygun Degil",
+      "physical": "FULL KAPALI",
+      "city": "istanbul"
+    },
+    {
+      "id": 3135,
+      "code": 216601,
+      "name": "KÜÇÜK KORU CAMİİ",
+      "lng": 29.1800422000105,
+      "lat": 41.040754299116,
+      "province": "Çekmeköy",
+      "smart": "YOK",
+      "stop_type": "İETTBAYRAK",
+      "disabled_can_use": "Uygun Degil",
+      "physical": "AÇIK",
+      "city": "istanbul"
+    },
+    {
+      "id": 8777,
+      "code": 216591,
+      "name": "KÖROĞLU CADDESİ",
+      "lng": 29.1791100000105,
+      "lat": 41.041559999116,
+      "province": "Çekmeköy",
+      "smart": "YOK",
+      "stop_type": "AÇIK DURAK",
+      "disabled_can_use": "Uygun Degil",
+      "physical": "AÇIK",
+      "city": "istanbul"
+    },
+    "… 55 more"
+  ]
+}

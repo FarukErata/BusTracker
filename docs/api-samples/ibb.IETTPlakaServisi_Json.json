@@ -1,0 +1,15 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/ibb/ibb.asmx",
+    "soapAction": "IETTPlakaServisi_Json",
+    "params": {
+      "KapiNo": "C-474"
+    }
+  },
+  "status": 500,
+  "ms": 254,
+  "bytes": 680,
+  "kind": "fault",
+  "count": 1,
+  "response": "Policy Falsified"
+}

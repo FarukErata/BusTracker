@@ -1,0 +1,15 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/FiloDurum/SeferGerceklesme.asmx",
+    "soapAction": "GetHatOtoKonum_json",
+    "params": {
+      "HatKodu": ""
+    }
+  },
+  "status": 500,
+  "ms": 269,
+  "bytes": 424,
+  "kind": "fault",
+  "count": 1,
+  "response": "Server was unable to process request. ---> Hat Kodu Girmeden Veri cekemezsiniz."
+}

@@ -1,0 +1,32 @@
+{
+  "request": {
+    "url": "https://otobusum.metkm.win/v1/stop/113334?city=istanbul"
+  },
+  "status": 200,
+  "ms": 197,
+  "bytes": 310,
+  "count": 1,
+  "response": {
+    "stop": {
+      "id": 13296,
+      "code": 113334,
+      "name": "FABRİKALAR",
+      "lng": 29.0113309999896,
+      "lat": 41.0800130005666,
+      "province": "Sisli",
+      "smart": "YOK",
+      "stop_type": "İETTBAYRAK",
+      "disabled_can_use": "Uygun Degil",
+      "physical": "AÇIK",
+      "city": "istanbul"
+    },
+    "buses": [
+      "122H",
+      "122V",
+      "129L",
+      "29B",
+      "29GM",
+      "… 6 more"
+    ]
+  }
+}

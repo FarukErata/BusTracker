@@ -1,0 +1,15 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/ibb/ibb.asmx",
+    "soapAction": "GetStopLines_json",
+    "params": {
+      "stopCode": "113334"
+    }
+  },
+  "status": 500,
+  "ms": 165,
+  "bytes": 680,
+  "kind": "fault",
+  "count": 1,
+  "response": "Policy Falsified"
+}

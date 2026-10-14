@@ -1,0 +1,87 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/ibb/ibb.asmx",
+    "soapAction": "DurakDetay_GYY_wYonAdi",
+    "params": {
+      "hat_kodu": "131Y"
+    }
+  },
+  "status": 200,
+  "ms": 620,
+  "bytes": 43697,
+  "kind": "xml-dataset",
+  "count": 114,
+  "response": [
+    {
+      "HATKODU": "131Y",
+      "YON": "D",
+      "YON_ADI": "YEŞİLTEPE SON DURAK",
+      "SIRANO": "1",
+      "DURAKKODU": "405191",
+      "DURAKADI": "KARTAL",
+      "XKOORDINATI": "29.193002",
+      "YKOORDINATI": "40.886697",
+      "DURAKTIPI": "CCMODERN",
+      "ISLETMEBOLGE": "Anadolu2",
+      "ISLETMEALTBOLGE": "Pendik",
+      "ILCEADI": "Kartal"
+    },
+    {
+      "HATKODU": "131Y",
+      "YON": "D",
+      "YON_ADI": "YEŞİLTEPE SON DURAK",
+      "SIRANO": "2",
+      "DURAKKODU": "229051",
+      "DURAKADI": "ÇARŞI",
+      "XKOORDINATI": "29.190118",
+      "YKOORDINATI": "40.888856",
+      "DURAKTIPI": "İSTON PERON",
+      "ISLETMEBOLGE": "Anadolu2",
+      "ISLETMEALTBOLGE": "Pendik",
+      "ILCEADI": "Kartal"
+    },
+    {
+      "HATKODU": "131Y",
+      "YON": "D",
+      "YON_ADI": "YEŞİLTEPE SON DURAK",
+      "SIRANO": "3",
+      "DURAKKODU": "225461",
+      "DURAKADI": "KARTAL NEYZEN TEVFİK MEYDANI",
+      "XKOORDINATI": "29.190318",
+      "YKOORDINATI": "40.889952",
+      "DURAKTIPI": "İSTON PERON",
+      "ISLETMEBOLGE": "Anadolu2",
+      "ISLETMEALTBOLGE": "Pendik",
+      "ILCEADI": "Kartal"
+    },
+    {
+      "HATKODU": "131Y",
+      "YON": "D",
+      "YON_ADI": "YEŞİLTEPE SON DURAK",
+      "SIRANO": "4",
+      "DURAKKODU": "229371",
+      "DURAKADI": "KARTAL HÜKÜMET KONAĞI",
+      "XKOORDINATI": "29.192444",
+      "YKOORDINATI": "40.892179",
+      "DURAKTIPI": "İSTON GENİŞ",
+      "ISLETMEBOLGE": "Anadolu2",
+      "ISLETMEALTBOLGE": "Pendik",
+      "ILCEADI": "Kartal"
+    },
+    {
+      "HATKODU": "131Y",
+      "YON": "D",
+      "YON_ADI": "YEŞİLTEPE SON DURAK",
+      "SIRANO": "5",
+      "DURAKKODU": "227501",
+      "DURAKADI": "ÇAVUŞOĞLU",
+      "XKOORDINATI": "29.195461",
+      "YKOORDINATI": "40.893157",
+      "DURAKTIPI": "İSTON PERON",
+      "ISLETMEBOLGE": "Anadolu2",
+      "ISLETMEALTBOLGE": "Pendik",
+      "ILCEADI": "Kartal"
+    },
+    "… 109 more"
+  ]
+}

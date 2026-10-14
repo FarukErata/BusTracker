@@ -1,0 +1,45 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/UlasimAnaVeri/HatDurakGuzergah.asmx",
+    "soapAction": "GetGaraj_json",
+    "params": {}
+  },
+  "status": 200,
+  "ms": 39,
+  "bytes": 10693,
+  "kind": "json-in-xml",
+  "count": 86,
+  "response": [
+    {
+      "ID": 50002,
+      "GARAJ_ADI": "IKITELLIISLETTIRMEGARAJI",
+      "GARAJ_KODU": "G_ISL1",
+      "KOORDINAT": "POINT (28.7915079999927 41.0605889995246)"
+    },
+    {
+      "ID": 50003,
+      "GARAJ_ADI": "GÜRPINAR GARAJI",
+      "GARAJ_KODU": "G_GRP",
+      "KOORDINAT": "POINT (28.6036319999802 40.9673039995104)"
+    },
+    {
+      "ID": 50004,
+      "GARAJ_ADI": "SANCAKTEPE ",
+      "GARAJ_KODU": "GÖHO01",
+      "KOORDINAT": "POINT (29.234392183592 41.0163678411884)"
+    },
+    {
+      "ID": 50005,
+      "GARAJ_ADI": "SILE TERMINAL",
+      "GARAJ_KODU": "GÖHO13",
+      "KOORDINAT": "POINT (29.6090649970808 41.1722017397348)"
+    },
+    {
+      "ID": 50006,
+      "GARAJ_ADI": "AGVA TERMINAL",
+      "GARAJ_KODU": "GÖHO19",
+      "KOORDINAT": "POINT (29.8550412646821 41.1389875816974)"
+    },
+    "… 81 more"
+  ]
+}

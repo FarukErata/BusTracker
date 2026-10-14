@@ -1,0 +1,72 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/FiloDurum/SeferGerceklesme.asmx",
+    "soapAction": "GetHatOtoKonum_json",
+    "params": {
+      "HatKodu": "131Y"
+    }
+  },
+  "status": 200,
+  "ms": 247,
+  "bytes": 2737,
+  "kind": "json-in-xml",
+  "count": 10,
+  "response": [
+    {
+      "kapino": "O1042",
+      "boylam": "29.1768951666667",
+      "enlem": "41.0409263333333",
+      "hatkodu": "131Y",
+      "guzergahkodu": "131Y_G_D0",
+      "hatad": "ÇEKMEKÖY/SAMANDIRA-KARTAL  ",
+      "yon": "KARTAL",
+      "son_konum_zamani": "2026-10-14 11:34:55",
+      "yakinDurakKodu": "214451"
+    },
+    {
+      "kapino": "C-114",
+      "boylam": "29.20831",
+      "enlem": "40.92459",
+      "hatkodu": "131Y",
+      "guzergahkodu": "131Y_D_D0",
+      "hatad": "ÇEKMEKÖY/SAMANDIRA-KARTAL  ",
+      "yon": "YEŞİLTEPE SON DURAK",
+      "son_konum_zamani": "2026-10-14 11:34:54",
+      "yakinDurakKodu": "225763"
+    },
+    {
+      "kapino": "O2031",
+      "boylam": "29.1895101666667",
+      "enlem": "41.0146763333333",
+      "hatkodu": "131Y",
+      "guzergahkodu": "131Y_G_D0",
+      "hatad": "ÇEKMEKÖY/SAMANDIRA-KARTAL  ",
+      "yon": "KARTAL",
+      "son_konum_zamani": "2026-10-14 11:34:55",
+      "yakinDurakKodu": "222381"
+    },
+    {
+      "kapino": "A-1538",
+      "boylam": "29.2297056666667",
+      "enlem": "40.9852848333333",
+      "hatkodu": "131Y",
+      "guzergahkodu": "131Y_D_D0",
+      "hatad": "ÇEKMEKÖY/SAMANDIRA-KARTAL  ",
+      "yon": "YEŞİLTEPE SON DURAK",
+      "son_konum_zamani": "2026-10-14 11:34:49",
+      "yakinDurakKodu": "204132"
+    },
+    {
+      "kapino": "O2057",
+      "boylam": "29.214211",
+      "enlem": "41.0080685",
+      "hatkodu": "131Y",
+      "guzergahkodu": "131Y_G_D0",
+      "hatad": "ÇEKMEKÖY/SAMANDIRA-KARTAL  ",
+      "yon": "KARTAL",
+      "son_konum_zamani": "2026-10-14 11:34:50",
+      "yakinDurakKodu": "218842"
+    },
+    "… 5 more"
+  ]
+}

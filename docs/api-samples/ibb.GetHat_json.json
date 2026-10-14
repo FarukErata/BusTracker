@@ -1,0 +1,23 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/UlasimAnaVeri/HatDurakGuzergah.asmx",
+    "soapAction": "GetHat_json",
+    "params": {
+      "HatKodu": "131Y"
+    }
+  },
+  "status": 200,
+  "ms": 34,
+  "bytes": 484,
+  "kind": "json-in-xml",
+  "count": 1,
+  "response": [
+    {
+      "SHATKODU": "131Y",
+      "SHATADI": "ÇEKMEKÖY/SAMANDIRA-KARTAL  ",
+      "TARIFE": "TEK BİLETLİ",
+      "HAT_UZUNLUGU": 26.549,
+      "SEFER_SURESI": 131.76
+    }
+  ]
+}

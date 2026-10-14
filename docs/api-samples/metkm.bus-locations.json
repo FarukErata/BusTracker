@@ -1,0 +1,52 @@
+{
+  "request": {
+    "url": "https://otobusum.metkm.win/bus-locations/131Y?city=istanbul"
+  },
+  "status": 200,
+  "ms": 1974,
+  "bytes": 1507,
+  "count": 10,
+  "response": [
+    {
+      "bus_id": "O1042",
+      "lng": 29.1768951666667,
+      "lat": 41.0409263333333,
+      "route_code": "131Y_G_D0",
+      "closest_stop_code": 214451,
+      "last_update_time": "2026-10-14T08:34:55Z"
+    },
+    {
+      "bus_id": "C-114",
+      "lng": 29.20831,
+      "lat": 40.92459,
+      "route_code": "131Y_D_D0",
+      "closest_stop_code": 225763,
+      "last_update_time": "2026-10-14T08:34:54Z"
+    },
+    {
+      "bus_id": "O2031",
+      "lng": 29.1895101666667,
+      "lat": 41.0146763333333,
+      "route_code": "131Y_G_D0",
+      "closest_stop_code": 222381,
+      "last_update_time": "2026-10-14T08:34:55Z"
+    },
+    {
+      "bus_id": "A-1538",
+      "lng": 29.2297056666667,
+      "lat": 40.9852848333333,
+      "route_code": "131Y_D_D0",
+      "closest_stop_code": 204132,
+      "last_update_time": "2026-10-14T08:34:49Z"
+    },
+    {
+      "bus_id": "O2057",
+      "lng": 29.214211,
+      "lat": 41.0080685,
+      "route_code": "131Y_G_D0",
+      "closest_stop_code": 218842,
+      "last_update_time": "2026-10-14T08:34:50Z"
+    },
+    "… 5 more"
+  ]
+}

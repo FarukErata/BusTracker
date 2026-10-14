@@ -1,0 +1,17 @@
+{
+  "request": {
+    "url": "https://api.ibb.gov.tr/iett/FiloDurum/SeferGerceklesme.asmx",
+    "soapAction": "GetKaraKutu_json",
+    "params": {
+      "tarih": "2026-10-14",
+      "KapiNo": "",
+      "HatKodu": "131Y"
+    }
+  },
+  "status": 500,
+  "ms": 191,
+  "bytes": 699,
+  "kind": "fault",
+  "count": 1,
+  "response": "Policy Falsified"
+}
