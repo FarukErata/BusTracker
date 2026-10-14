@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using BusTracker.Api.Configuration;
 using BusTracker.Api.Ibb;
 using BusTracker.Api.Shapes;
+using BusTracker.Api.Stops;
 using BusTracker.Api.Tracking;
 using Microsoft.Extensions.Options;
 
@@ -22,6 +23,7 @@ public sealed class LineDataService(
     IbbClient ibb,
     FleetCallGate gate,
     RouteShapeRepository shapes,
+    StopIndexRepository stopIndex,
     IOptions<BusTrackerOptions> options,
     TimeProvider clock,
     ILogger<LineDataService> logger)
@@ -39,7 +41,8 @@ public sealed class LineDataService(
     {
         if (TryGetFresh(_stops, lineCode) is { } cached) return cached;
 
-        var stops = await ibb.GetRouteStopsAsync(lineCode, ct);
+        var indexed = await stopIndex.GetRouteStopsAsync(lineCode, ct);
+        var stops = indexed.Count > 0 ? indexed : await ibb.GetRouteStopsAsync(lineCode, ct);
         _stops[lineCode] = new Cached<IReadOnlyList<RouteStop>>(stops, clock.GetUtcNow());
         return stops;
     }
@@ -72,6 +75,9 @@ public sealed class LineDataService(
             lineLock.Release();
         }
     }
+
+    public DateTimeOffset? LastFetchedAt(string lineCode) =>
+        _live.TryGetValue(lineCode, out var snapshot) ? snapshot.FetchedAt : null;
 
     private T? TryGetFresh<T>(ConcurrentDictionary<string, Cached<T>> cache, string lineCode) where T : class =>
         cache.TryGetValue(lineCode, out var cached) && clock.GetUtcNow() - cached.At < StaticMaxAge ? cached.Value : null;

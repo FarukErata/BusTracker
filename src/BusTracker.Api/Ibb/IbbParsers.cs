@@ -51,7 +51,7 @@ public static class IbbParsers
             NearestStopCode: row.NearestStopCode);
     }
 
-    private static RouteStop ToRouteStop(XElement table) =>
+    public static RouteStop ToRouteStop(XElement table) =>
         new(
             LineCode: Field(table, "HATKODU"),
             Direction: Field(table, "YON"),

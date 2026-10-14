@@ -13,6 +13,7 @@ public sealed class BusTrackerOptions
     public PollingOptions Polling { get; init; } = new();
     public TrackingOptions Tracking { get; init; } = new();
     public StaticDataOptions StaticData { get; init; } = new();
+    public AccessOptions Access { get; init; } = new();
 }
 
 public sealed class IbbOptions
@@ -69,4 +70,17 @@ public sealed class StaticDataOptions
 
     [Range(1, 60)]
     public int DownloadTimeoutMinutes { get; init; } = 15;
+}
+
+public sealed class AccessOptions
+{
+    public string[] InviteCodes { get; init; } = [];
+
+    [Range(1, 60)]
+    public int LinkCodeMinutes { get; init; } = 10;
+
+    [Range(1, 1000)]
+    public int RegistrationsPerIpPer10Minutes { get; init; } = 10;
+
+    public bool RequiresInvite => InviteCodes.Any(c => !string.IsNullOrWhiteSpace(c));
 }

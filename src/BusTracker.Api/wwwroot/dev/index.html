@@ -35,6 +35,12 @@
   .s-off-route { background:var(--off); } .s-arrived { background:#24292f; } .s-no-route { background:var(--alt); }
   .alt { outline:2px dashed var(--alt); outline-offset:1px; }
   #target .eta { font-weight:600; }
+  #board { padding:10px 12px; border-bottom:1px solid var(--line); }
+  #board h3, #target h3 { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  #board .fav { display:flex; justify-content:space-between; gap:8px; padding:4px 0; cursor:pointer; }
+  #board .fav:hover { background:#f6f8fa; }
+  .x { border:none; background:none; color:#57606a; cursor:pointer; padding:0 4px; }
+  footer { padding:8px 12px; font-size:12px; color:#57606a; border-top:1px solid var(--line); }
   .bus-icon { font-size:11px; font-weight:600; color:#fff; padding:2px 5px; border-radius:6px; white-space:nowrap; box-shadow:0 1px 3px #0005; }
   #legend { padding:8px 12px; font-size:12px; display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid var(--line); }
   @media (max-width: 800px) { main { grid-template-columns:1fr; grid-template-rows:45vh 1fr; } aside { order:2; border-right:none; } }
@@ -46,6 +52,8 @@
   <input id="line" placeholder="500T" maxlength="12">
   <button id="load">Load</button>
   <span id="dirs"></span>
+  <button id="favLine" hidden title="Favorite this line in both directions">☆ line</button>
+  <button id="favDir" hidden title="Favorite this line in the current direction only">☆ this direction</button>
   <button id="refresh" title="Server caches each line for 60 s">Refresh</button>
   <span id="status">Enter a line code</span>
 </header>
@@ -55,8 +63,10 @@
       <span class="chip s-ok">ok</span><span class="chip s-at-terminal">at terminal</span><span class="chip s-stale">stale</span>
       <span class="chip s-off-route">off route</span><span class="chip s-arrived">arrived</span><span class="chip s-ok alt">alternate route</span>
     </div>
+    <div id="board"></div>
     <div id="target" hidden></div>
     <ol id="stops"></ol>
+    <footer><span id="device"></span> <button id="link">Link another device</button> <span id="linkCode"></span></footer>
   </aside>
   <div id="map"></div>
 </main>
@@ -86,12 +96,40 @@ new ResizeObserver(() => { map.invalidateSize(); if (pendingFit) fitRoute(pendin
 const save = () => { try { localStorage.setItem("bt-dev", JSON.stringify({ line: state.line, direction: state.direction, targetCode: state.targetCode })); } catch {} };
 const restore = () => { try { return JSON.parse(localStorage.getItem("bt-dev")) ?? {}; } catch { return {}; } };
 
-async function api(path) {
-  const res = await fetch(path);
+const KEY = "bt-key";
+const getKey = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
+const setKey = (k) => { try { k ? localStorage.setItem(KEY, k) : localStorage.removeItem(KEY); } catch {} };
+
+async function ensureDevice() {
+  if (getKey()) return;
+  const invite = new URLSearchParams(location.search).get("invite");
+  const res = await fetch("/api/devices", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ platform: "web", name: "dev page", invite }) });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(body?.detail ?? `Registration failed (HTTP ${res.status})`);
+  setKey(body.key);
+}
+
+function requestHeaders(options) {
+  return { ...(options.headers ?? {}), Authorization: `Bearer ${getKey()}`, ...(options.body ? { "Content-Type": "application/json" } : {}) };
+}
+
+async function readResponse(res) {
+  if (res.status === 204) return null;
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new Error(body?.detail ?? `HTTP ${res.status}`);
   return body;
 }
+
+async function api(path, options = {}, retried = false) {
+  await ensureDevice();
+  const res = await fetch(path, { ...options, headers: requestHeaders(options) });
+  if (res.status === 401 && !retried) { setKey(null); return api(path, options, true); }
+  return readResponse(res);
+}
+
+const post = (path, body) => api(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
+const del = (path) => api(path, { method: "DELETE" });
 
 function setStatus(text, kind = "") { const el = $("status"); el.textContent = text; el.className = kind; }
 
@@ -130,6 +168,132 @@ async function refreshLive() {
   } catch (e) { setStatus(e.message, "error"); }
   await loadArrivals();
   renderAll();
+}
+
+async function loadFavorites() {
+  try { state.favorites = await api("/api/favorites"); } catch (e) { state.favorites = { error: e.message, lines: [], stops: [] }; }
+}
+
+function favoriteStopRow(s) {
+  return `<div class="fav" data-stop="${esc(s.favorite.stopCode)}">
+      <span>🚏 ${esc(s.favorite.label ?? s.favorite.stopName)} <span class="muted">${esc(s.lines.join(", "))}</span></span>
+      <button class="x" data-del-stop="${s.favorite.id}" title="Remove">✕</button></div>`;
+}
+
+function favoriteLineRow(l) {
+  const dir = l.favorite.direction ? l.directions[l.favorite.direction] ?? l.favorite.direction : "both directions";
+  return `<div class="fav" data-line="${esc(l.favorite.lineCode)}" data-dir="${esc(l.favorite.direction ?? "")}">
+      <span>🚌 <b>${esc(l.favorite.lineCode)}</b> <span class="muted">${esc(dir)}</span></span>
+      <button class="x" data-del-line="${l.favorite.id}" title="Remove">✕</button></div>`;
+}
+
+function bindBoard(el) {
+  for (const row of el.querySelectorAll(".fav[data-stop]")) row.onclick = () => openStop(row.dataset.stop);
+  for (const row of el.querySelectorAll(".fav[data-line]")) row.onclick = () => loadLine(row.dataset.line, { line: row.dataset.line, direction: row.dataset.dir || undefined });
+  for (const x of el.querySelectorAll("[data-del-stop]")) x.onclick = (e) => { e.stopPropagation(); removeFavorite(`/api/favorites/stops/${x.dataset.delStop}`); };
+  for (const x of el.querySelectorAll("[data-del-line]")) x.onclick = (e) => { e.stopPropagation(); removeFavorite(`/api/favorites/lines/${x.dataset.delLine}`); };
+  $("stopSearch").oninput = debounce(searchStops, 300);
+}
+
+function renderBoard() {
+  const el = $("board");
+  const f = state.favorites;
+  if (!f) { el.innerHTML = ""; return; }
+  const items = f.stops.map(favoriteStopRow).join("") + f.lines.map(favoriteLineRow).join("");
+  el.innerHTML = `<h3>Favorites</h3>
+    <input id="stopSearch" placeholder="Search stop…" style="width:100%;padding:6px;margin-bottom:6px">
+    <div id="searchResults"></div>
+    ${items || muted("No favorites yet.")}
+    <div id="stopPanel"></div>`;
+  bindBoard(el);
+  renderFavLineButtons();
+  if (state.openStop) renderStopPanel();
+}
+
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+async function searchStops(e) {
+  const q = e.target.value.trim();
+  const box = $("searchResults");
+  if (q.length < 2) { box.innerHTML = ""; return; }
+  const results = await api(`/api/stops?q=${encodeURIComponent(q)}`).catch(() => []);
+  box.innerHTML = results.map(r => `<div class="fav" data-stop="${esc(r.stop.code)}"><span>${esc(r.stop.name)} <span class="muted">${esc(r.stop.district)} · ${esc(r.lines.join(", "))}</span></span></div>`).join("")
+    || `<div class="muted">No stop found.</div>`;
+  for (const row of box.querySelectorAll(".fav")) row.onclick = () => openStop(row.dataset.stop);
+}
+
+async function openStop(code) {
+  state.openStop = { code, data: null };
+  renderStopPanel();
+  try { state.openStop.data = await api(`/api/stops/${encodeURIComponent(code)}/arrivals`); }
+  catch (e) { state.openStop.data = { error: e.message }; }
+  renderStopPanel();
+}
+
+const muted = (text) => `<div class="muted">${esc(text)}</div>`;
+const isStopSaved = (code) => !!state.favorites?.stops.some(s => s.favorite.stopCode === code);
+
+function stopHeader(title, code, buttonId) {
+  const action = isStopSaved(code) ? "<span class=muted>★ saved</span>" : `<button id=${buttonId}>☆ save stop</button>`;
+  return `<h3><span>${title}</span>${action}</h3>`;
+}
+
+function stopArrivalRow(a) {
+  const when = a.bus.notDeparted ? "waiting at first stop" : `${a.bus.stopsAway} stops · <span class="eta">${mins(a.bus.etaSeconds)}</span>`;
+  return `<div class="row"><span><b>${esc(a.line)}</b> <span class="muted">→ ${esc(a.directionName)}</span></span><span>${when}</span></div>`;
+}
+
+function stopPanelHtml(d) {
+  const rows = d.arrivals.slice(0, 8).map(stopArrivalRow).join("");
+  const missing = d.lines.filter(l => l.error).map(l => l.line);
+  return stopHeader(`🚏 ${esc(d.stop.name)}`, d.stop.code, "saveOpenStop")
+    + (rows || muted("No bus approaching."))
+    + (missing.length ? muted(`No data yet: ${missing.join(", ")}`) : "");
+}
+
+function renderStopPanel() {
+  const el = $("stopPanel");
+  if (!el || !state.openStop) return;
+  const d = state.openStop.data;
+  if (!d) { el.innerHTML = muted("Loading stop…"); return; }
+  el.innerHTML = d.error ? muted(d.error) : stopPanelHtml(d);
+  $("saveOpenStop")?.addEventListener("click", () => saveStop(d.stop.code));
+}
+
+function renderFavLineButtons() {
+  const btn = $("favLine");
+  btn.hidden = !state.line;
+  const both = state.favorites?.lines.find(l => l.favorite.lineCode === state.line && !l.favorite.direction);
+  const oneWay = state.favorites?.lines.find(l => l.favorite.lineCode === state.line && l.favorite.direction === state.direction);
+  btn.textContent = both ? "★ line" : "☆ line";
+  btn.onclick = () => toggleLineFavorite(both, null);
+  const dirBtn = $("favDir");
+  dirBtn.hidden = !state.line;
+  dirBtn.textContent = oneWay ? "★ this direction" : "☆ this direction";
+  dirBtn.onclick = () => toggleLineFavorite(oneWay, state.direction);
+}
+
+async function toggleLineFavorite(existing, direction) {
+  try { existing ? await del(`/api/favorites/lines/${existing.favorite.id}`) : await post("/api/favorites/lines", { line: state.line, direction }); }
+  catch (e) { setStatus(e.message, "error"); }
+  await loadFavorites(); renderBoard(); renderAll();
+}
+
+async function removeFavorite(path) {
+  try { await del(path); } catch (e) { setStatus(e.message, "error"); }
+  await loadFavorites(); renderBoard(); renderAll();
+}
+
+async function saveStop(code) {
+  try { await post("/api/favorites/stops", { stop: code }); } catch (e) { setStatus(e.message, "error"); }
+  await loadFavorites(); renderBoard(); renderAll();
+}
+
+async function showDevice() {
+  try {
+    const me = await api("/api/me");
+    $("device").textContent = `device #${me.currentDeviceId} · ${me.devices.length} device${me.devices.length === 1 ? "" : "s"} on this user`;
+  } catch (e) { $("device").textContent = e.message; }
 }
 
 async function loadArrivals() {
@@ -182,7 +346,7 @@ function renderRoute(fit) {
   if (fit) fitRoute(line.getBounds());
 }
 
-function renderAll() { renderBuses(); renderStops(); renderTarget(); }
+function renderAll() { renderBuses(); renderStops(); renderTarget(); if (state.favorites) renderFavLineButtons(); }
 
 function renderBuses() {
   busLayer.clearLayers();
@@ -220,19 +384,32 @@ function renderStops() {
   for (const li of $("stops").children) li.onclick = () => selectTarget(li.dataset.code);
 }
 
+const busChip = (x) => `<span class="chip s-${x.notDeparted ? "at-terminal" : "ok"}${x.variant !== "D0" ? " alt" : ""}" title="${esc(x.routeCode)}">${esc(x.doorNo)}</span>`;
+
+function approachingRow(x) {
+  const waiting = x.notDeparted ? "<span class=muted>waiting at first stop</span>" : "";
+  const where = x.stopsAway === 0 ? "at your stop" : `${x.stopsAway} stops · ${km(x.distanceMeters)}`;
+  const eta = x.etaSeconds != null ? `<span class="eta">${mins(x.etaSeconds)}</span>` : "";
+  return `<div class="row"><span>${busChip(x)} ${waiting}</span><span>${where} ${eta}</span></div>`;
+}
+
+const passedRow = (x) => `<div class="row"><span>${busChip(x)}</span><span class="muted">passed, ${km(x.metersPast)} ago</span></div>`;
+
+function targetHtml(a) {
+  const coming = a.approaching.map(approachingRow).join("");
+  const passed = a.recentlyPassed.slice(0, 3).map(passedRow).join("");
+  return stopHeader(`${a.stop.seq}. ${esc(a.stop.name)}`, a.stop.code, "saveStop")
+    + (coming || muted("No bus approaching in this direction."))
+    + (passed ? `<div class="muted" style="margin-top:6px">Recently passed</div>${passed}` : "");
+}
+
 function renderTarget() {
   const el = $("target");
   const a = state.arrivals;
-  if (!state.targetCode || !a) { el.hidden = true; return; }
-  el.hidden = false;
-  if (a.error) { el.innerHTML = `<div class="muted">${esc(a.error)}</div>`; return; }
-  const chip = (x) => `<span class="chip s-${x.notDeparted ? "at-terminal" : "ok"}${x.variant !== "D0" ? " alt" : ""}" title="${esc(x.routeCode)}">${esc(x.doorNo)}</span>`;
-  const coming = a.approaching.map(x => `<div class="row"><span>${chip(x)} ${x.notDeparted ? "<span class=muted>waiting at first stop</span>" : ""}</span>
-    <span>${x.stopsAway === 0 ? "at your stop" : `${x.stopsAway} stops · ${km(x.distanceMeters)}`} ${x.etaSeconds != null ? `<span class="eta">${mins(x.etaSeconds)}</span>` : ""}</span></div>`).join("");
-  const passed = a.recentlyPassed.slice(0, 3).map(x => `<div class="row"><span>${chip(x)}</span><span class="muted">passed, ${km(x.metersPast)} ago</span></div>`).join("");
-  el.innerHTML = `<h3>${a.stop.seq}. ${esc(a.stop.name)}</h3>
-    ${coming || `<div class="muted">No bus approaching in this direction.</div>`}
-    ${passed ? `<div class="muted" style="margin-top:6px">Recently passed</div>${passed}` : ""}`;
+  el.hidden = !state.targetCode || !a;
+  if (el.hidden) return;
+  el.innerHTML = a.error ? muted(a.error) : targetHtml(a);
+  $("saveStop")?.addEventListener("click", () => saveStop(a.stop.code));
 }
 
 async function selectTarget(code) {
@@ -246,8 +423,18 @@ $("load").onclick = () => loadLine($("line").value);
 $("line").onkeydown = (e) => { if (e.key === "Enter") loadLine($("line").value); };
 $("refresh").onclick = refreshLive;
 
-const saved = restore();
-if (saved.line) loadLine(saved.line, saved);
+$("link").onclick = async () => {
+  try { const c = await post("/api/me/link-codes"); $("linkCode").textContent = `code ${c.code}, valid until ${new Date(c.expiresAt).toLocaleTimeString()}`; }
+  catch (e) { $("linkCode").textContent = e.message; }
+};
+
+(async () => {
+  await showDevice();
+  await loadFavorites();
+  renderBoard();
+  const saved = restore();
+  if (saved.line) loadLine(saved.line, saved);
+})();
 </script>
 </body>
 </html>

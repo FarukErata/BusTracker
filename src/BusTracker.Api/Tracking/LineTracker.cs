@@ -39,6 +39,7 @@ public sealed class LineTracker(TrackingOptions options)
     private const double NewTripBackwardsMeters = 500;
     private const double MaxBusSpeedMps = 30;
     private const double WindowToleranceMeters = 50;
+    private const double StraightLineOffRouteMeters = 750;
 
     private readonly Dictionary<string, BusState> _states = [];
 
@@ -106,11 +107,14 @@ public sealed class LineTracker(TrackingOptions options)
     private string Classify(RouteTrack track, Projection projection, int ageSeconds)
     {
         if (ageSeconds > options.StaleAfterSeconds) return BusStatus.Stale;
-        if (projection.OffsetMeters > options.OffRouteMeters) return BusStatus.OffRoute;
+        if (projection.OffsetMeters > OffRouteLimit(track)) return BusStatus.OffRoute;
         if (IsAtStart(track, projection.AlongMeters)) return BusStatus.AtTerminal;
         if (IsAtEnd(track, projection.AlongMeters)) return BusStatus.Arrived;
         return BusStatus.Ok;
     }
+
+    private double OffRouteLimit(RouteTrack track) =>
+        track.HasRoadGeometry ? options.OffRouteMeters : Math.Max(options.OffRouteMeters, StraightLineOffRouteMeters);
 
     private bool IsAtStart(RouteTrack track, double along) =>
         along <= (track.Stops.FirstOrDefault()?.AlongMeters ?? 0) + options.TerminalMeters;

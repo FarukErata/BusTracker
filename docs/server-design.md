@@ -101,6 +101,27 @@ route_stops     (line_code, direction, seq, stop_code, PRIMARY KEY (line_code, d
 
 Personal, with room for 1–2 friends: a tiny `users` table from day one. Each user has one API key (stored hashed, created with a CLI command, no sign-up flow). Favourites, watches and notify targets belong to a user. Live data and the poller are shared, so two people watching the same line cost one İBB call.
 
+## Users and devices (implemented 2026-10-14)
+
+No login or registration form; one model for web and Android.
+
+- **Anonymous user + per-device key.** `POST /api/devices {platform, name?, invite?, linkCode?}` creates a user and returns a random device key (shown once, stored hashed). Every client sends `Authorization: Bearer <key>`: browser storage on web, encrypted storage on Android.
+- **Invite codes** (`BusTracker:Access:InviteCodes`) are required to create a *new* user. Empty list = open; that's fine on a dev PC, and the server logs a warning when it starts in production that way. Share `https://…/?invite=CODE` once.
+- **Link codes** (`POST /api/me/link-codes` → e.g. `XRE-D3Z`, 10 min, single use) add another device to the same user without an invite. They're also the recovery path.
+- Registration is rate-limited per IP (10 per 10 min). All other `/api` routes need a device key; `/health` is public.
+- Devices are separate records, so each can later carry its own notification target (FCM token, web push, ntfy).
+- Favourites belong to the user and come in two kinds: a **line** with an optional direction (no route variant), or a **stop** on its own. A stop favourite covers every line serving it. `GET /api/favorites` makes no İBB calls; live data loads only when an item is opened (on demand, to save the call budget).
+
+## Stop index and stop-wide arrivals (implemented 2026-10-14)
+
+- Built daily from one bulk `DurakDetay_GYY_wYonAdi` call with an empty line code: ~31 MB, ~16 s, **81,786 rows, 1,102 line codes, 13,685 stops**. Read as a stream (one `<Table>` at a time) into `stops` + `stop_lines`. Per-line stop lists now come from this index instead of one İBB call per line.
+- Lines per stop: median 3, 2,300 stops have ≥10, the busiest has 71.
+- `GET /api/stops?q=`: name search, ignoring case and Turkish letters (`sehit sahinbey` matches `ŞEHİT ŞAHİNBEY`); returns district and lines because many stops share a name (20 × "FABRİKALAR").
+- `GET /api/stops/{code}` lists the lines serving the stop; `GET /api/stops/{code}/arrivals` merges arrivals across those lines. Lines are fetched oldest data first within the call budget, and lines left out report "no data yet" until the next refresh. Example: FABRİKALAR (12 lines) had 9/12 lines on first open and 12/12 a minute later.
+- **Scaling path for busy stops:** one whole-fleet call per minute (`GetFiloAracKonum_json`, all ~7,000 buses), plus a door number → line map learned from per-line calls. That would cover every line at every stop for ~1 call/min.
+
+
+
 ## HTTP API (v1)
 
 All under `/api`, header `Authorization: Bearer <key>` (the user's key) except `/health`. The web client is developed separately (own chat/tests) and consumes this API; the server can host its built files from `wwwroot` so everything is same-origin and needs no CORS.

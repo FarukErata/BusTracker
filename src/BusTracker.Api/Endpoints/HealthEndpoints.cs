@@ -9,7 +9,7 @@ public static class HealthEndpoints
 
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/health", GetHealth);
+        app.MapGet("/health", GetHealth).AllowAnonymous();
         return app;
     }
 

@@ -56,6 +56,68 @@ public sealed class DatabaseInitializer(Database database, ILogger<DatabaseIniti
             imported_at    TEXT,
             item_count     INTEGER
         );
+
+        CREATE TABLE stops (
+            stop_code   TEXT PRIMARY KEY,
+            name        TEXT NOT NULL,
+            search_name TEXT NOT NULL,
+            district    TEXT NOT NULL,
+            lat         REAL NOT NULL,
+            lng         REAL NOT NULL
+        );
+
+        CREATE TABLE stop_lines (
+            stop_code      TEXT NOT NULL,
+            line_code      TEXT NOT NULL,
+            direction      TEXT NOT NULL,
+            direction_name TEXT NOT NULL,
+            seq            INTEGER NOT NULL,
+            PRIMARY KEY (line_code, direction, seq)
+        );
+        CREATE INDEX ix_stop_lines_stop ON stop_lines (stop_code);
+
+        CREATE TABLE users (
+            id          INTEGER PRIMARY KEY,
+            created_at  TEXT NOT NULL,
+            invite_code TEXT
+        );
+
+        CREATE TABLE devices (
+            id           INTEGER PRIMARY KEY,
+            user_id      INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            key_hash     TEXT NOT NULL UNIQUE,
+            platform     TEXT NOT NULL,
+            name         TEXT NOT NULL,
+            created_at   TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL
+        );
+        CREATE INDEX ix_devices_user ON devices (user_id);
+
+        CREATE TABLE link_codes (
+            code_hash  TEXT PRIMARY KEY,
+            user_id    INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            expires_at TEXT NOT NULL
+        );
+
+        CREATE TABLE favorite_lines (
+            id         INTEGER PRIMARY KEY,
+            user_id    INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            line_code  TEXT NOT NULL,
+            direction  TEXT,
+            label      TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX ux_favorite_lines ON favorite_lines (user_id, line_code, COALESCE(direction, ''));
+
+        CREATE TABLE favorite_stops (
+            id         INTEGER PRIMARY KEY,
+            user_id    INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            stop_code  TEXT NOT NULL,
+            stop_name  TEXT NOT NULL,
+            label      TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE (user_id, stop_code)
+        );
         """,
     ];
 

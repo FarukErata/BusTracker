@@ -39,7 +39,7 @@ public static class LiveEndpoints
             var arrivals = Arrivals.ForStop(stop, direction, live.Snapshot.Buses, tracks);
             return Results.Ok(new StopArrivalsResponse(
                 line, direction, new StopRef(target.StopCode, target.Seq, target.Name), Freshness.From(live, clock),
-                arrivals.Approaching.Select(ToView).ToList(),
+                arrivals.Approaching.Select(ToArrivalView).ToList(),
                 arrivals.RecentlyPassed.Select(ToView).ToList()));
         });
     }
@@ -70,7 +70,7 @@ public static class LiveEndpoints
             t.SpeedMps is { } mps ? Math.Round(mps * 3.6, 1) : null,
             t.PassedSinceLastUpdate.Select(s => s.Seq).ToList());
 
-    private static ArrivalView ToView(Arrival a) =>
+    internal static ArrivalView ToArrivalView(Arrival a) =>
         new(a.Bus.Bus.DoorNo, a.Bus.Bus.RouteCode, a.Bus.Bus.Variant, a.StopsAway, Math.Round(a.DistanceMeters),
             a.EtaSeconds, a.NotDeparted, a.Bus.AgeSeconds, a.Bus.LastStop?.Seq);
 

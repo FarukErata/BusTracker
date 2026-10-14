@@ -1,9 +1,15 @@
+using System.Threading.RateLimiting;
 using BusTracker.Api.Configuration;
 using BusTracker.Api.Data;
 using BusTracker.Api.Endpoints;
+using BusTracker.Api.Favorites;
 using BusTracker.Api.Ibb;
 using BusTracker.Api.Lines;
 using BusTracker.Api.Shapes;
+using BusTracker.Api.Stops;
+using BusTracker.Api.Users;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
 
@@ -22,18 +28,41 @@ builder.Services.AddSingleton<FleetCallGate>();
 builder.Services.AddSingleton<LineDataService>();
 builder.Services.AddSingleton<RouteShapeRepository>();
 builder.Services.AddSingleton<RouteShapeSync>();
-builder.Services.AddHostedService<RouteShapeSyncService>();
+builder.Services.AddSingleton<StopIndexRepository>();
+builder.Services.AddSingleton<StopIndexSync>();
+builder.Services.AddSingleton<StopArrivalsService>();
+builder.Services.AddHostedService<StaticDataSyncService>();
+builder.Services.AddSingleton<UserRepository>();
+builder.Services.AddSingleton<FavoriteRepository>();
 
 builder.Services.AddHttpClient<IbbClient>((services, http) =>
 {
-    var ibb = services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb;
-    http.BaseAddress = new Uri(ibb.BaseUrl);
-    http.Timeout = TimeSpan.FromSeconds(ibb.TimeoutSeconds);
+    http.BaseAddress = new Uri(services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb.BaseUrl);
+    http.Timeout = Timeout.InfiniteTimeSpan;
 });
 
 builder.Services.AddHttpClient<OpenDataClient>((services, http) =>
     http.Timeout = TimeSpan.FromMinutes(
         services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.StaticData.DownloadTimeoutMinutes));
+
+builder.Services
+    .AddAuthentication(DeviceKeyAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, DeviceKeyAuthenticationHandler>(DeviceKeyAuthenticationHandler.SchemeName, null);
+
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(DeviceEndpoints.RegistrationRateLimit, context =>
+    {
+        var limit = context.RequestServices.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Access.RegistrationsPerIpPer10Minutes;
+        return RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(10) });
+    });
+});
 
 builder.Services.AddProblemDetails();
 
@@ -55,12 +84,22 @@ if (app.Environment.IsDevelopment())
 {
     app.UseDefaultFiles();
     app.UseStaticFiles();
-    app.MapGet("/", () => Results.Redirect("/dev/"));
+    app.MapGet("/", () => Results.Redirect("/dev/")).AllowAnonymous();
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
+
 app.MapHealthEndpoints();
+app.MapDeviceEndpoints();
+app.MapFavoriteEndpoints();
+app.MapStopEndpoints();
 app.MapLineEndpoints();
 app.MapLiveEndpoints();
+
+if (!app.Environment.IsDevelopment() && !app.Services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Access.RequiresInvite)
+    app.Logger.LogWarning("No invite codes configured: anyone who can reach this server can create a user");
 
 app.Run();
 

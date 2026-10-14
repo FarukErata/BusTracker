@@ -116,6 +116,17 @@ public sealed class LineTrackerTests
     }
 
     [Fact]
+    public void WithoutRoadGeometry_BusesOnCurvesBetweenStopsAreNotOffRoute()
+    {
+        var straightLines = LineTracks.Build(Stops, [], Options.StopOnRouteMeters);
+
+        var bus = new LineTracker(Options).Update([Bus("O1025")], straightLines, SnapshotTime).Single();
+
+        Assert.True(bus.OffsetMeters > Options.OffRouteMeters);
+        Assert.Equal(BusStatus.Ok, bus.Status);
+    }
+
+    [Fact]
     public void BusAtTheLastStop_HasArrived()
     {
         var main = _tracks.Main("D")!;
