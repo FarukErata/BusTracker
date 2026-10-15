@@ -120,6 +120,16 @@ public sealed class DatabaseInitializer(Database database, ILogger<DatabaseIniti
             UNIQUE (user_id, stop_code)
         );
         """,
+        """
+        CREATE TABLE bus_lines (
+            door_no      TEXT PRIMARY KEY,
+            line_code    TEXT NOT NULL,
+            route_code   TEXT NOT NULL,
+            destination  TEXT NOT NULL,
+            confirmed_at TEXT NOT NULL
+        );
+        CREATE INDEX ix_bus_lines_line ON bus_lines (line_code);
+        """,
     ];
 
     public async Task StartAsync(CancellationToken ct)

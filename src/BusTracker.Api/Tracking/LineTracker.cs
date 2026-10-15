@@ -50,6 +50,8 @@ public sealed class LineTracker(TrackingOptions options)
         return tracked;
     }
 
+    public void Reset(string doorNo) => _states.Remove(doorNo);
+
     private TrackedBus Track(LiveBus bus, LineTracks tracks, DateTimeOffset now)
     {
         var ageSeconds = (int)Math.Max(0, (now - bus.ReportedAt).TotalSeconds);
@@ -107,13 +109,13 @@ public sealed class LineTracker(TrackingOptions options)
     private string Classify(RouteTrack track, Projection projection, int ageSeconds)
     {
         if (ageSeconds > options.StaleAfterSeconds) return BusStatus.Stale;
-        if (projection.OffsetMeters > OffRouteLimit(track)) return BusStatus.OffRoute;
+        if (projection.OffsetMeters > OffRouteLimit(options, track)) return BusStatus.OffRoute;
         if (IsAtStart(track, projection.AlongMeters)) return BusStatus.AtTerminal;
         if (IsAtEnd(track, projection.AlongMeters)) return BusStatus.Arrived;
         return BusStatus.Ok;
     }
 
-    private double OffRouteLimit(RouteTrack track) =>
+    public static double OffRouteLimit(TrackingOptions options, RouteTrack track) =>
         track.HasRoadGeometry ? options.OffRouteMeters : Math.Max(options.OffRouteMeters, StraightLineOffRouteMeters);
 
     private bool IsAtStart(RouteTrack track, double along) =>

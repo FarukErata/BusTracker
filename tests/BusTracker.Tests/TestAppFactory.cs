@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -22,6 +23,12 @@ public class TestAppFactory : WebApplicationFactory<Program>
 
     public FakeTimeProvider Clock { get; } = new(FixtureTime);
 
+    public ConcurrentDictionary<string, int> IbbCalls { get; } = new();
+
+    public string FleetXml { get; set; } = Fixture.Read("fleet-sample.xml");
+
+    public int CallsTo(string operation) => IbbCalls.GetValueOrDefault(operation);
+
     protected virtual string[] InviteCodes => [];
 
     protected virtual int RegistrationsPerIp => 1000;
@@ -38,7 +45,7 @@ public class TestAppFactory : WebApplicationFactory<Program>
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<TimeProvider>(Clock);
-            services.AddHttpClient<IbbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeIbbHandler());
+            services.AddHttpClient<IbbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeIbbHandler(IbbCalls, () => FleetXml));
         });
     }
 
@@ -83,11 +90,12 @@ public class TestAppFactory : WebApplicationFactory<Program>
         try { Directory.Delete(_directory, recursive: true); } catch (IOException) { }
     }
 
-    private sealed class FakeIbbHandler : HttpMessageHandler
+    private sealed class FakeIbbHandler(ConcurrentDictionary<string, int> calls, Func<string> fleetXml) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var action = request.Headers.GetValues("SOAPAction").Single();
+            calls.AddOrUpdate(action.Trim('"').Split('/')[^1], 1, (_, n) => n + 1);
             var body = await request.Content!.ReadAsStringAsync(ct);
             var is131Y = body.Contains(">131Y<");
             var isAllLines = body.Contains("<hat_kodu></hat_kodu>") || body.Contains("<hat_kodu />");
@@ -96,6 +104,7 @@ public class TestAppFactory : WebApplicationFactory<Program>
                 _ when action.Contains("DurakDetay_GYY_wYonAdi") =>
                     (HttpStatusCode.OK, isAllLines ? Fixture.Read("all-route-stops-sample.xml")
                         : is131Y ? Fixture.Read("route-stops-131Y.xml") : EmptyDataSet("DurakDetay_GYY_wYonAdi")),
+                _ when action.Contains("GetFiloAracKonum_json") => (HttpStatusCode.OK, fleetXml()),
                 _ when action.Contains("GetHatOtoKonum_json") =>
                     is131Y ? (HttpStatusCode.OK, Fixture.Read("live-131Y.xml")) : (HttpStatusCode.InternalServerError, Fixture.Read("fault-unknown-line.xml")),
                 _ => (HttpStatusCode.InternalServerError, Fixture.Read("fault-unknown-line.xml")),

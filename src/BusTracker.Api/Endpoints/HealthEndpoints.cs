@@ -14,16 +14,20 @@ public static class HealthEndpoints
     }
 
     private static async Task<HealthResponse> GetHealth(
-        TimeProvider clock, FleetCallGate gate, RouteShapeRepository shapes, CancellationToken ct)
+        TimeProvider clock, FleetCallGate gate, FleetFeed fleet, BusLineMemory memory, RouteShapeRepository shapes, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         var source = await shapes.GetSourceStateAsync(ct);
+        var calls = gate.CallsInLastHour;
         return new HealthResponse(
             Status: "ok",
             StartedAt: StartedAt,
             UptimeSeconds: (long)(now - StartedAt).TotalSeconds,
             WorkingSetMb: Environment.WorkingSet / (1024 * 1024),
-            FleetCallsLastMinute: gate.CallsInLastMinute,
+            IbbCallsLastHour: new IbbCallsHealth(calls.Total, calls.Fleet, calls.Roster),
+            FleetFetchedAt: fleet.Latest?.FetchedAt,
+            FleetVehicles: fleet.Latest?.Vehicles.Count ?? 0,
+            KnownBuses: memory.Count,
             FleetBlockedUntil: gate.BlockedUntil,
             RouteShapes: new RouteShapesHealth(
                 await shapes.CountAsync(ct), source?.ETag, source?.LastModified, source?.CheckedAt, source?.ImportedAt));
@@ -38,6 +42,11 @@ public sealed record HealthResponse(
     DateTimeOffset StartedAt,
     long UptimeSeconds,
     long WorkingSetMb,
-    int FleetCallsLastMinute,
+    IbbCallsHealth IbbCallsLastHour,
+    DateTimeOffset? FleetFetchedAt,
+    int FleetVehicles,
+    int KnownBuses,
     DateTimeOffset? FleetBlockedUntil,
     RouteShapesHealth RouteShapes);
+
+public sealed record IbbCallsHealth(int Total, int Fleet, int Roster);

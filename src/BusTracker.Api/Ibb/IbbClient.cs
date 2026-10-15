@@ -22,6 +22,12 @@ public sealed class IbbClient(HttpClient http, IOptions<BusTrackerOptions> optio
         return IbbParsers.ParseLiveBuses(result);
     }
 
+    public async Task<IReadOnlyList<FleetVehicle>> GetFleetAsync(DateTimeOffset now, CancellationToken ct)
+    {
+        var result = await CallAsync(FleetService, "GetFiloAracKonum_json", new(), ct);
+        return IbbParsers.ParseFleet(result, now);
+    }
+
     public async Task<IReadOnlyList<RouteStop>> GetRouteStopsAsync(string lineCode, CancellationToken ct)
     {
         var result = await CallAsync(RouteService, RouteStopsOperation, new() { ["hat_kodu"] = lineCode }, ct);

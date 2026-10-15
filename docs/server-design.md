@@ -227,3 +227,30 @@ What we will do instead, most effective first:
 3. **Ask İBB for an official key or a higher quota** (open data portal, data.ibb.gov.tr) for a personal, non-commercial project. Also ask whether a GTFS-Realtime feed exists, which would remove polling altogether.
 4. **İETT website stop estimate** (\`/tr/RouteStation/GetStationInfo\`): a separate, unofficial service. Use it only as an occasional second opinion, never as a main source.
 5. **metkm backend:** it forwards the same İBB data, so it moves the load rather than reducing it. Not used.
+
+### Official limit and contact (found 2026-10-14)
+
+- **İETT web service usage document v1.4, section 6.1:** the fleet service (`FiloDurum/SeferGerceklesme.asmx`, which includes `GetHatOtoKonum_json` and `GetFiloAracKonum_json`) allows **at most 100 requests per hour**. Our 10/min budget (600/hour) was 6× over, which explains the blocks. Per-line polling can follow about one line; **whole-fleet polling (60/hour) is required**, with at most ~40/hour left for learning which bus is on which line.
+- **Timetable service:** `UlasimAnaVeri/PlanlananSeferSaati.asmx` → `GetPlanlananSeferSaati_json(HatKodu)` returns scheduled departures per line. Use it for the ETA of buses still waiting at the first stop.
+- **Contact:** no public email (portal datasets list İETT with empty contact fields). Channels:
+  - Data requests page https://data.ibb.gov.tr/datarequest. Open, unanswered requests already exist for GTFS-Realtime and API limits.
+  - İBB Bilgi İşlem Dairesi Başkanlığı contact section: https://ibb.istanbul/bilgi-islem-dairesi-baskanligi/#iletisim
+  - Each dataset's feedback survey; general İBB support (WhatsApp 0 552 153 00 34, Alo 153) redirects data requests to the data requests page.
+
+### Whole-fleet polling (implemented 2026-10-15)
+
+- **Fleet:** `GetFiloAracKonum_json` is fetched at most once per `FleetIntervalSeconds` (60), only when a request needs live data, so no viewers means no calls. One fetch serves every line and stop.
+- **Rosters:** `GetHatOtoKonum_json` per line now only says which buses are on the line and on which route variant. A roster is refreshed after `RosterMaxAgeMinutes` (10), or after `RosterRecheckMinutes` (3) when something looks wrong (a bus off-route, or a bus that jumped back on its route).
+- **Merge:** each roster bus takes its position and time from the fleet when the fleet's report is newer. The fleet has only a clock time (`Saat`), so the date is the latest one that isn't more than 5 minutes in the future.
+- **Turnarounds:** a bus that finishes a trip and starts back keeps its old direction until the roster is refreshed. The tracker sees it jump back along the route (new trip on the same variant); that bus is hidden and the roster is rechecked, so it never shows as approaching in the wrong direction.
+- **Budget:** at most `CallsPerHour` (90) calls per sliding hour, of which rosters may use `RosterCallsPerHour` (30) and `RosterCallsPerMinute` (4). Backoff after a rate-limit fault: 5, 10, 20, 30 minutes.
+- **Stale data:** live responses are marked stale when positions are older than two fleet intervals (`positions-delayed`, or `rate-limited` with a retry time).
+- **Health:** `/health` shows calls in the last hour (fleet and roster), the last fleet fetch and its vehicle count.
+
+### Door→line memory (implemented 2026-10-15)
+
+- **What it stores:** table `bus_lines` (door number → line, route variant, destination, last confirmed). Every roster call writes it: buses in the answer are assigned to that line, buses missing from it are removed from that line.
+- **How it is used:** a line's buses come from the memory, with positions from the fleet. An assignment is trusted for `MemoryTrustHours` (12) after its last confirmation, so it survives restarts and serves last evening's buses in the morning until the first roster call corrects them.
+- **Roster role:** confirmation and discovery of new buses only, refreshed after `RosterMaxAgeMinutes` (15) or the 3-minute recheck. A line with nothing in memory still needs one roster call before it shows anything.
+- **Turnarounds:** a bus that was at the end of its route and moves back more than 100 m, or jumps back more than 500 m, is checked against the opposite direction's main route. If it fits within the off-route limit and within 1.5 km of that route's start, its direction is flipped in memory (main variant, that direction's last stop as destination) with no İBB call. Otherwise it is hidden until the roster recheck.
+- **Stop screen order:** every line is first drawn from memory without any İBB call; then lines get their roster calls in order of the soonest approaching bus, then lines with nothing in memory, then the rest.

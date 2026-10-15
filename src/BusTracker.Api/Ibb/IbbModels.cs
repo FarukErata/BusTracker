@@ -15,6 +15,8 @@ public sealed record LiveBus(
     public bool IsMainVariant => Variant == "D0";
 }
 
+public sealed record FleetVehicle(string DoorNo, double Lat, double Lng, DateTimeOffset ReportedAt);
+
 public sealed record RouteStop(
     string LineCode,
     string Direction,

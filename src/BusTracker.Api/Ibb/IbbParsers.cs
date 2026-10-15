@@ -8,6 +8,7 @@ namespace BusTracker.Api.Ibb;
 public static class IbbParsers
 {
     public static readonly TimeSpan IstanbulOffset = TimeSpan.FromHours(3);
+    private static readonly TimeSpan FutureTolerance = TimeSpan.FromMinutes(5);
 
     public static IReadOnlyList<LiveBus> ParseLiveBuses(XElement result)
     {
@@ -17,6 +18,29 @@ public static class IbbParsers
         var rows = JsonSerializer.Deserialize<List<LiveBusRow>>(json)
             ?? throw new IbbException("Live bus list is null");
         return rows.Select(ToLiveBus).ToList();
+    }
+
+    public static IReadOnlyList<FleetVehicle> ParseFleet(XElement result, DateTimeOffset now)
+    {
+        var json = result.Value.Trim();
+        if (json.Length == 0) return [];
+
+        var rows = JsonSerializer.Deserialize<List<FleetRow>>(json)
+            ?? throw new IbbException("Fleet list is null");
+        return rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.DoorNo) && TryParseDouble(r.Lat, out _) && TryParseDouble(r.Lng, out _)
+                && TimeOnly.TryParseExact(r.Time, "HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            .Select(r => new FleetVehicle(
+                r.DoorNo!.Trim(), ParseDouble(r.Lat!), ParseDouble(r.Lng!), InferIstanbulTime(r.Time!, now)))
+            .ToList();
+    }
+
+    public static DateTimeOffset InferIstanbulTime(string clockText, DateTimeOffset now)
+    {
+        var local = now.ToOffset(IstanbulOffset);
+        var time = TimeOnly.ParseExact(clockText, "HH:mm:ss", CultureInfo.InvariantCulture);
+        var at = new DateTimeOffset(DateOnly.FromDateTime(local.DateTime).ToDateTime(time), IstanbulOffset);
+        return at > local + FutureTolerance ? at.AddDays(-1) : at;
     }
 
     public static IReadOnlyList<RouteStop> ParseRouteStops(XElement result) =>
@@ -67,6 +91,15 @@ public static class IbbParsers
 
     private static double ParseDouble(string text) =>
         double.Parse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture);
+
+    private static bool TryParseDouble(string? text, out double value) =>
+        double.TryParse(text?.Replace(',', '.').Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+
+    private sealed record FleetRow(
+        [property: JsonPropertyName("KapiNo")] string? DoorNo,
+        [property: JsonPropertyName("Saat")] string? Time,
+        [property: JsonPropertyName("Boylam")] string? Lng,
+        [property: JsonPropertyName("Enlem")] string? Lat);
 
     private sealed record LiveBusRow(
         [property: JsonPropertyName("kapino")] string DoorNo,

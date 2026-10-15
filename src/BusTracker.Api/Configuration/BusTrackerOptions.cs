@@ -28,15 +28,27 @@ public sealed class IbbOptions
 public sealed class PollingOptions
 {
     [Range(60, 600)]
-    public int LineIntervalSeconds { get; init; } = 60;
+    public int FleetIntervalSeconds { get; init; } = 60;
+
+    [Range(10, 100)]
+    public int CallsPerHour { get; init; } = 90;
+
+    [Range(0, 100)]
+    public int RosterCallsPerHour { get; init; } = 30;
 
     [Range(1, 20)]
-    public int FleetCallsPerMinute { get; init; } = 10;
+    public int RosterCallsPerMinute { get; init; } = 4;
+
+    [Range(1, 120)]
+    public int RosterMaxAgeMinutes { get; init; } = 15;
+
+    [Range(1, 72)]
+    public int MemoryTrustHours { get; init; } = 12;
 
     [Range(1, 60)]
-    public int HotLineTtlMinutes { get; init; } = 5;
+    public int RosterRecheckMinutes { get; init; } = 3;
 
-    public int[] BackoffMinutes { get; init; } = [2, 4, 8, 15];
+    public int[] BackoffMinutes { get; init; } = [5, 10, 20, 30];
 }
 
 public sealed class TrackingOptions
