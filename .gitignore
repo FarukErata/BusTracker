@@ -491,3 +491,11 @@ App_Data/
 src/BusTracker.Api/wwwroot/
 
 /docs/iett-research/
+
+appsettings.Production.json
+google-services.json
+*.p12
+*.pem
+*.jks
+*.keystore
+keystore.properties
