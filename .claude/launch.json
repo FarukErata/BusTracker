@@ -6,6 +6,12 @@
       "runtimeExecutable": "dotnet",
       "runtimeArgs": ["run", "--project", "src/BusTracker.Api", "--launch-profile", "http"],
       "port": 5080
+    },
+    {
+      "name": "Client",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "client", "--", "--host", "127.0.0.1"],
+      "port": 5173
     }
   ]
 }
