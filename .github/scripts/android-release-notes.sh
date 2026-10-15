@@ -44,6 +44,10 @@ else
   fi
 fi
 
+printf '\n### Install\n'
+printf '<img src="https://github.com/%s/raw/main/.github/assets/install-qr.png" width="160" alt="QR code to install the latest Kaç Kaldı">\n\n' "$repo"
+printf 'Scan with your Android phone to install the latest version, or [download this version](https://github.com/%s/releases/download/%s/kackaldi.apk).\n' "$repo" "$new_tag"
+
 if [ -n "$previous" ]; then
   printf '\n**Full changelog:** https://github.com/%s/compare/%s...%s\n' "$repo" "$previous" "$new_tag"
 fi
