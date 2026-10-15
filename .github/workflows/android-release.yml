@@ -3,15 +3,113 @@ name: Android release
 on:
   push:
     tags: ["android-v*"]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "prepare: draft with suggested version and notes. publish: build and publish the draft."
+        type: choice
+        options: [prepare, publish]
+        default: prepare
+      bump:
+        description: "Version bump for prepare (auto: minor if any Feature commit, otherwise patch)"
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
 
 permissions:
   contents: write
 
+concurrency:
+  group: android-release
+
 jobs:
-  release:
+  prepare:
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'prepare'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Create draft release
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Prepare from main only, got $GITHUB_REF" >&2
+            exit 1
+          fi
+          drafts=$(gh release list --json tagName,isDraft --jq '.[] | select(.isDraft and (.tagName | startswith("android-v"))) | .tagName')
+          if [ -n "$drafts" ]; then
+            echo "A draft already exists ($drafts). Publish it or delete it first." >&2
+            exit 1
+          fi
+          name=$(bash .github/scripts/android-next-version.sh "$BUMP")
+          tag="android-v$name"
+          bash .github/scripts/android-release-notes.sh HEAD "$GITHUB_REPOSITORY" "$tag" > notes.md
+          printf '\n<!-- prepared-version: %s -->\n' "$name" >> notes.md
+          gh release create "$tag" --draft --target "$(git rev-parse HEAD)" --title "Kaç Kaldı $name" --notes-file notes.md
+          {
+            echo "### Draft Kaç Kaldı $name is ready"
+            echo
+            echo "Review or edit it on https://github.com/$GITHUB_REPOSITORY/releases, then run this workflow again with **publish**."
+            echo "The version can be raised by renaming the tag, but not lowered below $name."
+            echo
+            cat notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: github.event_name == 'push' || inputs.action == 'publish'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Find release
+        id: find
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "mode=tag" >> "$GITHUB_OUTPUT"
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          drafts=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '[.[] | select(.draft and (.tag_name | startswith("android-v")))]')
+          count=$(echo "$drafts" | jq length)
+          if [ "$count" != "1" ]; then
+            echo "Expected exactly one Android draft release, found $count. Run prepare first." >&2
+            exit 1
+          fi
+          echo "$drafts" | jq -r '.[0].body' > "$RUNNER_TEMP/draft-notes.md"
+          echo "mode=draft" >> "$GITHUB_OUTPUT"
+          echo "tag=$(echo "$drafts" | jq -r '.[0].tag_name')" >> "$GITHUB_OUTPUT"
+          echo "sha=$(echo "$drafts" | jq -r '.[0].target_commitish')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.find.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Version
+        id: version
+        env:
+          MODE: ${{ steps.find.outputs.mode }}
+          TAG: ${{ steps.find.outputs.tag }}
+        run: |
+          name="${TAG#android-v}"
+          if [ "$MODE" = "draft" ]; then
+            minimum=$(sed -n 's/.*<!-- prepared-version: \([0-9.]*\) -->.*/\1/p' "$RUNNER_TEMP/draft-notes.md" | head -1)
+            [ -z "$minimum" ] && minimum=$(bash .github/scripts/android-next-version.sh auto)
+            bash .github/scripts/android-check-version.sh "$name" "$minimum"
+          fi
+          if ! [[ "$name" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Version must look like 1.2.3, got $name" >&2
+            exit 1
+          fi
+          code=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v6
         with:
@@ -19,18 +117,6 @@ jobs:
           java-version: "21"
 
       - uses: gradle/actions/setup-gradle@v6
-
-      - name: Version from tag
-        id: version
-        run: |
-          name="${GITHUB_REF_NAME#android-v}"
-          if ! [[ "$name" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "Tag must look like android-v1.2.3, got $GITHUB_REF_NAME" >&2
-            exit 1
-          fi
-          code=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-          echo "code=$code" >> "$GITHUB_OUTPUT"
 
       - name: Restore signing key
         env:
@@ -48,9 +134,19 @@ jobs:
 
       - name: Publish release
         env:
-          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ steps.find.outputs.mode }}
+          TAG: ${{ steps.find.outputs.tag }}
+          NAME: ${{ steps.version.outputs.name }}
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk kackaldi.apk
-          gh release create "$GITHUB_REF_NAME" --draft --title "Kaç Kaldı ${{ steps.version.outputs.name }}" --generate-notes
-          gh release upload "$GITHUB_REF_NAME" kackaldi.apk
-          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          if [ "$MODE" = "tag" ]; then
+            git fetch --force --quiet origin "refs/tags/$TAG:refs/tags/$TAG"
+            bash .github/scripts/android-release-notes.sh "$TAG" "$GITHUB_REPOSITORY" "$TAG" > notes.md
+            gh release create "$TAG" --draft --title "Kaç Kaldı $NAME" --notes-file notes.md
+          else
+            sed '/<!-- prepared-version: /d' "$RUNNER_TEMP/draft-notes.md" > notes.md
+            gh release edit "$TAG" --title "Kaç Kaldı $NAME" --notes-file notes.md
+          fi
+          cat notes.md
+          gh release upload "$TAG" kackaldi.apk
+          gh release edit "$TAG" --draft=false --latest
