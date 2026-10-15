@@ -489,3 +489,5 @@ App_Data/
 
 # Built web client (produced by client/ npm run build)
 src/BusTracker.Api/wwwroot/
+
+/docs/iett-research/
