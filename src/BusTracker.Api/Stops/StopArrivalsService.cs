@@ -20,15 +20,15 @@ public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataS
             fromMemory.Add(await LoadAsync(stopCode, line, refreshRoster: false, ct));
 
         var results = new List<LineAtStop>();
-        foreach (var known in ClosestFirst(fromMemory))
+        foreach (var known in MissingThenClosest(fromMemory))
             results.Add(await LoadAsync(stopCode, known.Line, refreshRoster: true, ct));
 
         return new StopArrivalsResult(stop, results.OrderBy(r => r.Line.LineCode).ThenBy(r => r.Line.Direction).ToList());
     }
 
-    private IEnumerable<LineAtStop> ClosestFirst(IEnumerable<LineAtStop> lines) =>
+    private IEnumerable<LineAtStop> MissingThenClosest(IEnumerable<LineAtStop> lines) =>
         lines
-            .OrderBy(r => r.Arrivals.Count > 0 ? 0 : r.Live is null ? 1 : 2)
+            .OrderBy(r => r.Live is null ? 0 : r.Arrivals.Count > 0 ? 1 : 2)
             .ThenBy(r => r.Arrivals.Select(a => a.EtaSeconds ?? int.MaxValue).DefaultIfEmpty(int.MaxValue).Min())
             .ThenBy(r => data.LastFetchedAt(r.Line.LineCode) ?? DateTimeOffset.MinValue);
 

@@ -112,6 +112,23 @@ public sealed class FleetPollingTests
     }
 
     [Fact]
+    public async Task OffRouteBus_DoesNotSpendRosterCallsOnRechecks()
+    {
+        using var factory = new TestAppFactory();
+        var client = await factory.CreateUserClientAsync();
+        var first = await client.GetFromJsonAsync<LineLiveResponse>("/api/lines/131Y/live");
+        var bus = first!.Buses.First(b => b.Status == "ok");
+
+        var offRoute = await MoveAsync(factory, client, bus.DoorNo, new LatLng(41.25, 28.75), "13:07:50");
+        Assert.Equal("off-route", offRoute.Buses.Single(b => b.DoorNo == bus.DoorNo).Status);
+
+        factory.Clock.Advance(TimeSpan.FromMinutes(5));
+        await client.GetAsync("/api/lines/131Y/live");
+
+        Assert.Equal(1, factory.CallsTo(Roster));
+    }
+
+    [Fact]
     public async Task Memory_SurvivesARestartAndServesALineWithoutItsRoster()
     {
         using var factory = new TestAppFactory();

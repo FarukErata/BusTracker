@@ -141,7 +141,7 @@ public sealed class LineDataService(
         var turns = Turnarounds.Find(previous?.Snapshot.Buses ?? [], tracked, tracks, _options.Tracking);
         tracked = await ApplyTurnaroundsAsync(tracked, turns, assignments, tracker, tracks, now, ct);
 
-        FlagForRecheck(lineCode, check, turns, tracked);
+        FlagForRecheck(lineCode, check, turns);
 
         var snapshot = new LiveSnapshot(tracked, PositionsAt(lineCode, fleet, buses, now));
         _snapshots[lineCode] = new LineSnapshot(snapshot, memory.Version, fleet?.FetchedAt);
@@ -151,10 +151,9 @@ public sealed class LineDataService(
     private bool IsCurrent([NotNullWhen(true)] LineSnapshot? previous, FleetSnapshot? fleet) =>
         previous is not null && previous.MemoryVersion == memory.Version && previous.FleetAt == fleet?.FetchedAt;
 
-    private void FlagForRecheck(string lineCode, LineCheck check, TurnaroundResult turns, IReadOnlyList<TrackedBus> tracked)
+    private void FlagForRecheck(string lineCode, LineCheck check, TurnaroundResult turns)
     {
-        var suspicious = turns.Flipped.Count > 0 || turns.Lost.Count > 0 || tracked.Any(b => b.Status == BusStatus.OffRoute);
-        if (suspicious)
+        if (turns.Flipped.Count > 0 || turns.Lost.Count > 0)
             _checks[lineCode] = new LineCheck(Recheck: true, Lost: new HashSet<string>(check.Lost.Concat(turns.Lost)));
     }
 
