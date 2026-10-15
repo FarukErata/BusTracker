@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import './index.css'
 import { rememberInviteFromUrl } from '@/api/client'
 import { applyTheme } from '@/lib/theme'
+import { AndroidApp } from '@/screens/AndroidApp'
 import { Home } from '@/screens/Home'
 import { Line } from '@/screens/Line'
 import { Stop } from '@/screens/Stop'
@@ -21,6 +22,7 @@ const router = createBrowserRouter([
   { path: '/', element: <Home /> },
   { path: '/stops/:code', element: <Stop /> },
   { path: '/lines/:code', element: <Line /> },
+  { path: '/android', element: <AndroidApp /> },
 ])
 
 createRoot(document.getElementById('root')!).render(

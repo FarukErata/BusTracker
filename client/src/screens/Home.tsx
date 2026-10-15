@@ -1,10 +1,10 @@
 import { useDeferredValue, useState } from 'react'
 import { Link } from 'react-router'
-import { ChevronRight, MapPin, Search, X } from 'lucide-react'
+import { ChevronRight, MapPin, Search, Smartphone, X } from 'lucide-react'
 import { useFavorites, useLineSearch, useStopSearch } from '@/api/hooks'
 import type { FavoritesResponse, LineSummary, StopSearchResult } from '@/api/types'
 import { EmptyState, ErrorState, LineBadge, LineBadges, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards } from '@/components/bits'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { directionLabel, titleCase } from '@/lib/format'
@@ -17,7 +17,10 @@ export function Home() {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
       <header className="flex items-center gap-2 px-3 pt-3">
-        <h1 className="flex-1 text-lg font-semibold tracking-tight">Buses</h1>
+        <h1 className="flex-1 text-lg font-semibold tracking-tight">Kaç Kaldı</h1>
+        <Link to="/android" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Get the Android app">
+          <Smartphone />
+        </Link>
         <ThemeToggle />
       </header>
       <div className="px-3 pt-2">
