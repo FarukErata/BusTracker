@@ -1,4 +1,5 @@
 name: Android release
+run-name: ${{ github.event_name == 'push' && format('Release {0}', github.ref_name) || inputs.action == 'publish' && 'Publish release' || format('Prepare release ({0} bump)', inputs.bump) }}
 
 on:
   push:
@@ -139,7 +140,10 @@ jobs:
           NAME: ${{ steps.version.outputs.name }}
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk kackaldi.apk
-          if [ "$MODE" = "tag" ]; then
+          if [ "$MODE" = "tag" ] && gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .body > existing-notes.md 2>/dev/null; then
+            sed '/<!-- prepared-version: /d' existing-notes.md > notes.md
+            gh release edit "$TAG" --title "Kaç Kaldı $NAME" --notes-file notes.md
+          elif [ "$MODE" = "tag" ]; then
             git fetch --force --quiet origin "refs/tags/$TAG:refs/tags/$TAG"
             bash .github/scripts/android-release-notes.sh "$TAG" "$GITHUB_REPOSITORY" "$TAG" > notes.md
             gh release create "$TAG" --draft --title "Kaç Kaldı $NAME" --notes-file notes.md
