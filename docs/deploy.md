@@ -56,6 +56,6 @@ Pin an earlier build in `compose.yaml` (`image: ghcr.io/farukerata/bustracker:sh
 ## Notes
 
 - The container listens on `127.0.0.1:5080` only; nginx is the only way in.
-- Memory is capped at 256 MB (`mem_limit` in `compose.yaml`).
+- Memory is capped at 384 MB (`mem_limit` in `compose.yaml`). .NET keeps its own heap below about 75 % of that.
 - Back up `data/bustracker.db`; it holds users, devices and favourites. Everything else is downloaded again.
 - Logs rotate at 10 MB, three files.
