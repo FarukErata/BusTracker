@@ -241,3 +241,10 @@ What we will do instead, most effective first:
 - **Roster role:** confirmation and discovery of new buses only, refreshed after `RosterMaxAgeMinutes` (15) or the 3-minute recheck. A line with nothing in memory still needs one roster call before it shows anything.
 - **Turnarounds:** a bus that was at the end of its route and moves back more than 100 m, or jumps back more than 500 m, is checked against the opposite direction's main route. If it fits within the off-route limit and within 1.5 km of that route's start, its direction is flipped in memory (main variant, that direction's last stop as destination) with no İBB call. Otherwise it is hidden until the roster recheck.
 - **Stop screen order:** every line is first drawn from memory without any İBB call; then lines get their roster calls in order of the soonest approaching bus, then lines with nothing in memory, then the rest.
+
+### Restarts and automatic updates (implemented 2026-10-16)
+
+- **İBB call log:** every allowed İBB call is written to `ibb_calls` (time, fleet or roster) in the background, and a rate-limit block to `ibb_state`. On startup the last hour is loaded back into the call gate before the first request, so restarts and deploys no longer reset the hourly budget, and a block stays in force across a restart.
+- **Line confirmations:** on startup, the last confirmation time of each line is taken from the newest `bus_lines.confirmed_at` of its buses, so lines confirmed shortly before a restart are not all re-checked.
+- **Requests never wait for writes:** roster confirmations, turnaround saves, device last-seen updates and call-log writes all happen off the request path. They used to wait behind the daily stop-index import's write lock.
+- **Updates:** `deploy/update.sh` on a five-minute systemd timer pulls the image named in `compose.yaml`, switches to it, waits for `/health` to report the new commit, rolls back on failure and remembers the bad image. GitHub never connects to the server. Setup: [deploy.md](deploy.md).
