@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.farukerata.kackaldi.data.ApiException
@@ -60,7 +61,9 @@ private enum class JoinMode(
         wrongStatus = 400,
     );
 
-    fun format(value: String) = if (this == Link) linkCodeInput(value) else value
+    fun format(value: String) = if (this == Link) linkCodeChars(value) else value
+
+    fun submitted(value: String) = if (this == Link) linkCodeInput(value) else value
 
     fun isComplete(value: String) = if (this == Link) isCompleteLinkCode(value) else value.isNotBlank()
 }
@@ -79,7 +82,8 @@ fun WelcomeScreen(api: KacKaldiApi) {
         error = null
         scope.launch {
             try {
-                if (mode == JoinMode.Link) api.joinWithLinkCode(value) else api.joinWithInvite(value)
+                val sent = mode.submitted(value)
+                if (mode == JoinMode.Link) api.joinWithLinkCode(sent) else api.joinWithInvite(sent)
             } catch (e: ApiException) {
                 error = if (e.status == mode.wrongStatus) mode.wrong else e.message
             } catch (e: Exception) {
@@ -111,6 +115,7 @@ fun WelcomeScreen(api: KacKaldiApi) {
                 onValueChange = ::change,
                 label = { Text(mode.label) },
                 singleLine = true,
+                visualTransformation = if (mode == JoinMode.Link) LinkCodeTransformation else VisualTransformation.None,
                 isError = error != null,
                 supportingText = error?.let { { Text(it) } },
                 textStyle = if (mode == JoinMode.Link) MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center) else MaterialTheme.typography.bodyLarge,

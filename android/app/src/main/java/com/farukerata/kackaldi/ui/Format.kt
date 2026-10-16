@@ -1,5 +1,9 @@
 package com.farukerata.kackaldi.ui
 
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -34,9 +38,22 @@ fun ago(seconds: Long): String = when {
 fun secondsSince(iso: String, now: Instant = Instant.now()): Long =
     runCatching { Duration.between(OffsetDateTime.parse(iso).toInstant(), now).seconds.coerceAtLeast(0) }.getOrDefault(0)
 
+fun linkCodeChars(text: String): String = text.uppercase(Locale.ROOT).filter { it.isLetterOrDigit() }.take(6)
+
 fun linkCodeInput(text: String): String {
-    val compact = text.uppercase(Locale.ROOT).filter { it.isLetterOrDigit() }.take(6)
+    val compact = linkCodeChars(text)
     return if (compact.length > 3) "${compact.take(3)}-${compact.drop(3)}" else compact
 }
 
-fun isCompleteLinkCode(code: String): Boolean = Regex("^[A-Z0-9]{3}-[A-Z0-9]{3}$").matches(code)
+fun isCompleteLinkCode(code: String): Boolean = Regex("^[A-Z0-9]{3}-[A-Z0-9]{3}$").matches(linkCodeInput(code))
+
+object LinkCodeTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val raw = text.text
+        val mapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int) = if (offset > 3) offset + 1 else offset
+            override fun transformedToOriginal(offset: Int) = (if (offset > 3) offset - 1 else offset).coerceAtMost(raw.length)
+        }
+        return TransformedText(AnnotatedString(linkCodeInput(raw)), mapping)
+    }
+}
