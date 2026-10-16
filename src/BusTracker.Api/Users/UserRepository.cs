@@ -5,7 +5,7 @@ namespace BusTracker.Api.Users;
 
 public sealed record Device(long Id, long UserId, string Platform, string Name, DateTimeOffset CreatedAt, DateTimeOffset LastSeenAt);
 
-public sealed class UserRepository(Database database)
+public sealed class UserRepository(Database database, ILogger<UserRepository> logger)
 {
     private static readonly TimeSpan TouchInterval = TimeSpan.FromMinutes(5);
 
@@ -45,13 +45,23 @@ public sealed class UserRepository(Database database)
         return row?.ToDevice();
     }
 
-    public async Task TouchAsync(Device device, DateTimeOffset now, CancellationToken ct)
+    public void TouchInBackground(Device device, DateTimeOffset now)
     {
         if (now - device.LastSeenAt < TouchInterval) return;
 
-        await using var connection = await database.OpenAsync(ct);
-        await connection.ExecuteAsync("UPDATE devices SET last_seen_at = @Now WHERE id = @Id;",
-            new { Now = DbTime.Format(now), device.Id });
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await using var connection = await database.OpenAsync(CancellationToken.None);
+                await connection.ExecuteAsync("UPDATE devices SET last_seen_at = @Now WHERE id = @Id;",
+                    new { Now = DbTime.Format(now), device.Id });
+            }
+            catch (Exception e)
+            {
+                logger.LogWarning(e, "Could not update last seen for device {Device}", device.Id);
+            }
+        });
     }
 
     public async Task<IReadOnlyList<Device>> GetDevicesAsync(long userId, CancellationToken ct)

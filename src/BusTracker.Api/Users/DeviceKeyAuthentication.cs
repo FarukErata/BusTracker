@@ -23,7 +23,7 @@ public sealed class DeviceKeyAuthenticationHandler(
         var device = await users.FindDeviceByKeyHashAsync(Secrets.Hash(key), Context.RequestAborted);
         if (device is null) return AuthenticateResult.Fail("Unknown device key");
 
-        await users.TouchAsync(device, clock.GetUtcNow(), Context.RequestAborted);
+        users.TouchInBackground(device, clock.GetUtcNow());
         var identity = new ClaimsIdentity(
             [new Claim(UserIdClaim, device.UserId.ToString()), new Claim(DeviceIdClaim, device.Id.ToString())],
             SchemeName);

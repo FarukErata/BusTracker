@@ -67,6 +67,25 @@ public sealed class FleetPollingTests
     }
 
     [Fact]
+    public async Task KnownLine_AnswersWithoutWaitingForItsRosterCall()
+    {
+        using var factory = new TestAppFactory();
+        var client = await factory.CreateUserClientAsync();
+        await client.GetAsync("/api/lines/131Y/live");
+
+        factory.RosterDelay = TimeSpan.FromSeconds(3);
+        factory.Clock.Advance(TimeSpan.FromMinutes(15));
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var live = await client.GetFromJsonAsync<LineLiveResponse>("/api/lines/131Y/live");
+        timer.Stop();
+
+        Assert.True(timer.Elapsed < TimeSpan.FromSeconds(1.5), $"took {timer.Elapsed}");
+        Assert.NotEmpty(live!.Buses);
+        Assert.Equal(2, factory.CallsTo(Roster));
+        await factory.Services.GetRequiredService<LineDataService>().WhenIdleAsync();
+    }
+
+    [Fact]
     public async Task BusLeavingTheEndOfItsRoute_FlipsDirectionWithoutARosterCall()
     {
         using var factory = new TestAppFactory();
@@ -106,9 +125,9 @@ public sealed class FleetPollingTests
         Assert.Equal(1, factory.CallsTo(Roster));
 
         factory.Clock.Advance(TimeSpan.FromMinutes(1));
-        var rechecked = await client.GetFromJsonAsync<LineLiveResponse>("/api/lines/131Y/live");
+        var rechecked = await RefreshedAsync(factory, client);
         Assert.Equal(2, factory.CallsTo(Roster));
-        Assert.Contains(rechecked!.Buses, b => b.DoorNo == bus.DoorNo);
+        Assert.Contains(rechecked.Buses, b => b.DoorNo == bus.DoorNo);
     }
 
     [Fact]
@@ -138,14 +157,15 @@ public sealed class FleetPollingTests
         var restarted = new BusLineMemory(
             factory.Services.GetRequiredService<Database>(),
             factory.Services.GetRequiredService<IOptions<BusTrackerOptions>>(),
-            factory.Clock);
+            factory.Clock,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BusLineMemory>.Instance);
         var known = await restarted.OnLineAsync("131Y", CancellationToken.None);
 
         Assert.Equal(11, known.Count);
         Assert.Contains(known, a => a.DoorNo == "O2031" && a.RouteCode == "131Y_D_D0");
         Assert.Null(restarted.RosterAt("131Y"));
 
-        factory.Clock.Advance(TimeSpan.FromHours(12));
+        factory.Clock.Advance(TimeSpan.FromHours(72));
         Assert.Empty(await restarted.OnLineAsync("131Y", CancellationToken.None));
     }
 
@@ -156,6 +176,13 @@ public sealed class FleetPollingTests
     {
         factory.FleetXml = FleetWith(doorNo, at.Lat, at.Lng, time);
         factory.Clock.Advance(TimeSpan.FromSeconds(60));
+        return await RefreshedAsync(factory, client);
+    }
+
+    private static async Task<LineLiveResponse> RefreshedAsync(TestAppFactory factory, HttpClient client)
+    {
+        await client.GetAsync("/api/lines/131Y/live");
+        await factory.Services.GetRequiredService<LineDataService>().WhenIdleAsync();
         return (await client.GetFromJsonAsync<LineLiveResponse>("/api/lines/131Y/live"))!;
     }
 

@@ -10,7 +10,7 @@ namespace BusTracker.Api.Lines;
 public sealed record BusAssignment(
     string DoorNo, string LineCode, string RouteCode, string Destination, DateTimeOffset ConfirmedAt, LiveBus? Reported);
 
-public sealed class BusLineMemory(Database database, IOptions<BusTrackerOptions> options, TimeProvider clock)
+public sealed class BusLineMemory(Database database, IOptions<BusTrackerOptions> options, TimeProvider clock, ILogger<BusLineMemory> logger)
 {
     private const string UpsertSql =
         """
@@ -76,19 +76,27 @@ public sealed class BusLineMemory(Database database, IOptions<BusTrackerOptions>
         }
     }
 
-    public async Task ReassignAsync(BusAssignment assignment, string routeCode, string destination, CancellationToken ct)
+    public void Reassign(BusAssignment assignment, string routeCode, string destination)
     {
-        await _lock.WaitAsync(ct);
+        if (_byDoor.TryGetValue(assignment.DoorNo, out var current) && current.LineCode == assignment.LineCode)
+            _byDoor[assignment.DoorNo] = current with { RouteCode = routeCode, Destination = destination };
+        Interlocked.Increment(ref _version);
+        _ = PersistReassignAsync(assignment.DoorNo, assignment.LineCode, routeCode, destination);
+    }
+
+    private async Task PersistReassignAsync(string doorNo, string lineCode, string routeCode, string destination)
+    {
+        await _lock.WaitAsync();
         try
         {
-            await using var connection = await database.OpenAsync(ct);
+            await using var connection = await database.OpenAsync(CancellationToken.None);
             await connection.ExecuteAsync(
-                "UPDATE bus_lines SET route_code = @routeCode, destination = @destination WHERE door_no = @DoorNo AND line_code = @LineCode;",
-                new { routeCode, destination, assignment.DoorNo, assignment.LineCode });
-
-            if (_byDoor.TryGetValue(assignment.DoorNo, out var current) && current.LineCode == assignment.LineCode)
-                _byDoor[assignment.DoorNo] = current with { RouteCode = routeCode, Destination = destination };
-            Interlocked.Increment(ref _version);
+                "UPDATE bus_lines SET route_code = @routeCode, destination = @destination WHERE door_no = @doorNo AND line_code = @lineCode;",
+                new { routeCode, destination, doorNo, lineCode });
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not save the new direction of bus {Door}", doorNo);
         }
         finally
         {

@@ -15,8 +15,10 @@ public sealed class FleetFeed(
 {
     private readonly TimeSpan _interval = TimeSpan.FromSeconds(options.Value.Polling.FleetIntervalSeconds);
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly Lock _backgroundLock = new();
     private FleetSnapshot? _latest;
     private DateTimeOffset _lastCall = DateTimeOffset.MinValue;
+    private Task _background = Task.CompletedTask;
 
     public FleetSnapshot? Latest => _latest;
 
@@ -25,7 +27,41 @@ public sealed class FleetFeed(
     public async Task<FleetSnapshot?> GetAsync(CancellationToken ct)
     {
         if (!IsDue()) return _latest;
+        if (_latest is not null)
+        {
+            RefreshInBackground();
+            return _latest;
+        }
 
+        return await RefreshUnderLockAsync(ct);
+    }
+
+    public Task WhenIdleAsync()
+    {
+        lock (_backgroundLock) return _background;
+    }
+
+    private void RefreshInBackground()
+    {
+        lock (_backgroundLock)
+        {
+            if (!_background.IsCompleted) return;
+            _background = Task.Run(async () =>
+            {
+                try
+                {
+                    await RefreshUnderLockAsync(CancellationToken.None);
+                }
+                catch (Exception e)
+                {
+                    logger.LogWarning(e, "Background fleet refresh failed");
+                }
+            });
+        }
+    }
+
+    private async Task<FleetSnapshot?> RefreshUnderLockAsync(CancellationToken ct)
+    {
         await _lock.WaitAsync(ct);
         try
         {

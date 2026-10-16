@@ -34,16 +34,16 @@ public sealed class PollingOptions
     public int CallsPerHour { get; init; } = 90;
 
     [Range(0, 100)]
-    public int RosterCallsPerHour { get; init; } = 30;
+    public int RosterCallsPerHour { get; init; } = 60;
 
     [Range(1, 20)]
-    public int RosterCallsPerMinute { get; init; } = 4;
+    public int RosterCallsPerMinute { get; init; } = 10;
 
     [Range(1, 120)]
     public int RosterMaxAgeMinutes { get; init; } = 15;
 
-    [Range(1, 72)]
-    public int MemoryTrustHours { get; init; } = 12;
+    [Range(1, 168)]
+    public int MemoryTrustHours { get; init; } = 72;
 
     [Range(1, 60)]
     public int RosterRecheckMinutes { get; init; } = 3;

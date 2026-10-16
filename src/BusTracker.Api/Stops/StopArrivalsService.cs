@@ -4,7 +4,7 @@ using BusTracker.Api.Tracking;
 
 namespace BusTracker.Api.Stops;
 
-public sealed record LineAtStop(StopLine Line, LiveResult? Live, string? Error, IReadOnlyList<Arrival> Arrivals);
+public sealed record LineAtStop(StopLine Line, LiveResult? Live, string? Error, IReadOnlyList<Arrival> Arrivals, DateTimeOffset? RetryAt = null);
 
 public sealed record StopArrivalsResult(StopInfo Stop, IReadOnlyList<LineAtStop> Lines);
 
@@ -43,7 +43,7 @@ public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataS
         }
         catch (LineUnavailableException e)
         {
-            return new LineAtStop(line, null, $"waiting for data ({e.Reason})", []);
+            return new LineAtStop(line, null, $"waiting for data ({e.Reason})", [], e.RetryAt);
         }
         catch (IbbException e)
         {

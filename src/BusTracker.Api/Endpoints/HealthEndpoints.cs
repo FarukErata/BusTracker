@@ -5,7 +5,7 @@ namespace BusTracker.Api.Endpoints;
 
 public static class HealthEndpoints
 {
-    private static readonly DateTimeOffset StartedAt = DateTimeOffset.UtcNow;
+    private static readonly DateTimeOffset StartedAt = new(System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime());
 
     public static IEndpointRouteBuilder MapHealthEndpoints(this IEndpointRouteBuilder app)
     {
@@ -14,17 +14,16 @@ public static class HealthEndpoints
     }
 
     private static async Task<HealthResponse> GetHealth(
-        TimeProvider clock, IConfiguration configuration, FleetCallGate gate, FleetFeed fleet, BusLineMemory memory,
+        IConfiguration configuration, FleetCallGate gate, FleetFeed fleet, BusLineMemory memory,
         RouteShapeRepository shapes, CancellationToken ct)
     {
-        var now = clock.GetUtcNow();
         var source = await shapes.GetSourceStateAsync(ct);
         var calls = gate.CallsInLastHour;
         return new HealthResponse(
             Status: "ok",
             Commit: configuration["BUSTRACKER_COMMIT"],
             StartedAt: StartedAt,
-            UptimeSeconds: (long)(now - StartedAt).TotalSeconds,
+            UptimeSeconds: (long)(DateTimeOffset.UtcNow - StartedAt).TotalSeconds,
             WorkingSetMb: Environment.WorkingSet / (1024 * 1024),
             IbbCallsLastHour: new IbbCallsHealth(calls.Total, calls.Fleet, calls.Roster),
             FleetFetchedAt: fleet.Latest?.FetchedAt,

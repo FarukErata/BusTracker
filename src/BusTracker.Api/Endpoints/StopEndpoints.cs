@@ -35,10 +35,13 @@ public static class StopEndpoints
             .ToList();
         var lines = result.Lines
             .Select(l => new LineStatusView(l.Line.LineCode, l.Line.Direction, l.Line.DirectionName,
-                l.Live is null ? null : Freshness.From(l.Live, clock), l.Error))
+                l.Live is null ? null : Freshness.From(l.Live, clock), l.Error, RetryInSeconds(l.RetryAt, clock)))
             .ToList();
         return Results.Ok(new StopArrivalsView(result.Stop, merged, lines));
     }
+
+    private static int? RetryInSeconds(DateTimeOffset? retryAt, TimeProvider clock) =>
+        retryAt is { } at ? Math.Max(1, (int)Math.Ceiling((at - clock.GetUtcNow()).TotalSeconds)) : null;
 
     private static IResult UnknownStop(string code) =>
         Results.Problem($"Stop {code} is not in the stop index.", statusCode: StatusCodes.Status404NotFound);
@@ -50,6 +53,6 @@ public sealed record StopDetails(StopInfo Stop, IReadOnlyList<StopLine> Lines);
 
 public sealed record StopArrivalView(string Line, string Direction, string DirectionName, ArrivalView Bus);
 
-public sealed record LineStatusView(string Line, string Direction, string DirectionName, Freshness? Data, string? Error);
+public sealed record LineStatusView(string Line, string Direction, string DirectionName, Freshness? Data, string? Error, int? RetryInSeconds);
 
 public sealed record StopArrivalsView(StopInfo Stop, IReadOnlyList<StopArrivalView> Arrivals, IReadOnlyList<LineStatusView> Lines);

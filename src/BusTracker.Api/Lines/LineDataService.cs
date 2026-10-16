@@ -38,6 +38,7 @@ public sealed class LineDataService(
     private readonly ConcurrentDictionary<string, LineSnapshot> _snapshots = new();
     private readonly ConcurrentDictionary<string, LineTracker> _trackers = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _lineLocks = new();
+    private readonly ConcurrentDictionary<string, Lazy<Task<GateDecision?>>> _rosterRefreshes = new();
 
     private TimeSpan StaticMaxAge => TimeSpan.FromHours(_options.StaticData.RefreshHours);
     private TimeSpan RosterMaxAge => TimeSpan.FromMinutes(_options.Polling.RosterMaxAgeMinutes);
@@ -67,17 +68,17 @@ public sealed class LineDataService(
     public async Task<LiveResult> GetLiveAsync(string lineCode, CancellationToken ct, bool refreshRoster = true)
     {
         var tracks = await GetTracksAsync(lineCode, ct);
+        var denied = refreshRoster && IsRosterDue(lineCode) ? await RefreshRosterAsync(lineCode, ct) : null;
         var lineLock = _lineLocks.GetOrAdd(lineCode, _ => new SemaphoreSlim(1, 1));
         await lineLock.WaitAsync(ct);
         try
         {
-            var denied = refreshRoster ? await RefreshRosterIfDueAsync(lineCode, ct) : null;
             var assignments = await memory.OnLineAsync(lineCode, ct);
             if (assignments.Count == 0 && memory.RosterAt(lineCode) is null)
                 throw new LineUnavailableException(denied?.Reason ?? "not-loaded", denied?.RetryAt);
 
             var fleet = await fleetFeed.GetAsync(ct);
-            return WithFreshness(await TrackAsync(lineCode, assignments, fleet, tracks, ct));
+            return WithFreshness(Track(lineCode, assignments, fleet, tracks));
         }
         finally
         {
@@ -87,21 +88,47 @@ public sealed class LineDataService(
 
     public DateTimeOffset? LastFetchedAt(string lineCode) => memory.RosterAt(lineCode);
 
+    public Task WhenIdleAsync() =>
+        Task.WhenAll(_rosterRefreshes.Values.Select(r => r.Value).Append(fleetFeed.WhenIdleAsync()))
+            .ContinueWith(_ => { }, TaskScheduler.Default);
+
     private T? TryGetFresh<T>(ConcurrentDictionary<string, Cached<T>> cache, string lineCode) where T : class =>
         cache.TryGetValue(lineCode, out var cached) && clock.GetUtcNow() - cached.At < StaticMaxAge ? cached.Value : null;
 
-    private async Task<GateDecision?> RefreshRosterIfDueAsync(string lineCode, CancellationToken ct)
+    private async Task<GateDecision?> RefreshRosterAsync(string lineCode, CancellationToken ct)
     {
-        if (!IsRosterDue(lineCode)) return null;
+        var known = memory.RosterAt(lineCode) is not null || (await memory.OnLineAsync(lineCode, ct)).Count > 0;
+        var refresh = _rosterRefreshes.GetOrAdd(lineCode, code => new Lazy<Task<GateDecision?>>(() => FetchRosterAsync(code))).Value;
+        if (!known) return await refresh;
 
+        _ = refresh.ContinueWith(
+            t => logger.LogWarning(t.Exception, "Background roster refresh for {Line} failed", lineCode),
+            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+        return null;
+    }
+
+    private async Task<GateDecision?> FetchRosterAsync(string lineCode)
+    {
+        try
+        {
+            return await FetchRosterCoreAsync(lineCode);
+        }
+        finally
+        {
+            _rosterRefreshes.TryRemove(lineCode, out _);
+        }
+    }
+
+    private async Task<GateDecision?> FetchRosterCoreAsync(string lineCode)
+    {
         var decision = gate.TryAcquire(FleetCallKind.Roster);
         if (!decision.Allowed) return decision;
 
         try
         {
-            var buses = await ibb.GetLiveBusesAsync(lineCode, ct);
+            var buses = await ibb.GetLiveBusesAsync(lineCode, CancellationToken.None);
             gate.ReportSuccess();
-            await memory.ApplyRosterAsync(lineCode, buses, ct);
+            await memory.ApplyRosterAsync(lineCode, buses, CancellationToken.None);
             _checks.TryRemove(lineCode, out _);
             return null;
         }
@@ -121,8 +148,7 @@ public sealed class LineDataService(
         return age >= RosterMaxAge || _checks.TryGetValue(lineCode, out var check) && check.Recheck && age >= RosterRecheck;
     }
 
-    private async Task<LiveSnapshot> TrackAsync(
-        string lineCode, IReadOnlyList<BusAssignment> assignments, FleetSnapshot? fleet, LineTracks tracks, CancellationToken ct)
+    private LiveSnapshot Track(string lineCode, IReadOnlyList<BusAssignment> assignments, FleetSnapshot? fleet, LineTracks tracks)
     {
         _snapshots.TryGetValue(lineCode, out var previous);
         if (IsCurrent(previous, fleet)) return previous.Snapshot;
@@ -139,7 +165,7 @@ public sealed class LineDataService(
         var tracked = tracker.Update(buses, tracks, now).ToList();
 
         var turns = Turnarounds.Find(previous?.Snapshot.Buses ?? [], tracked, tracks, _options.Tracking);
-        tracked = await ApplyTurnaroundsAsync(tracked, turns, assignments, tracker, tracks, now, ct);
+        tracked = ApplyTurnarounds(tracked, turns, assignments, tracker, tracks, now);
 
         FlagForRecheck(lineCode, check, turns);
 
@@ -157,9 +183,9 @@ public sealed class LineDataService(
             _checks[lineCode] = new LineCheck(Recheck: true, Lost: new HashSet<string>(check.Lost.Concat(turns.Lost)));
     }
 
-    private async Task<List<TrackedBus>> ApplyTurnaroundsAsync(
+    private List<TrackedBus> ApplyTurnarounds(
         List<TrackedBus> tracked, TurnaroundResult turns, IReadOnlyList<BusAssignment> assignments,
-        LineTracker tracker, LineTracks tracks, DateTimeOffset now, CancellationToken ct)
+        LineTracker tracker, LineTracks tracks, DateTimeOffset now)
     {
         if (turns.Flipped.Count == 0 && turns.Lost.Count == 0) return tracked;
 
@@ -167,7 +193,7 @@ public sealed class LineDataService(
         {
             tracker.Reset(bus.DoorNo);
             if (assignments.FirstOrDefault(a => a.DoorNo == bus.DoorNo) is { } assignment)
-                await memory.ReassignAsync(assignment, bus.RouteCode, bus.Destination, ct);
+                memory.Reassign(assignment, bus.RouteCode, bus.Destination);
             logger.LogInformation("Bus {Door} turned around on {Line}: now {Route}", bus.DoorNo, bus.LineCode, bus.RouteCode);
         }
 
