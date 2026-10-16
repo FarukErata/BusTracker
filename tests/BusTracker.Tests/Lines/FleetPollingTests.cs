@@ -51,6 +51,24 @@ public sealed class FleetPollingTests
     }
 
     [Fact]
+    public async Task FirstRequestAfterAQuietHour_WaitsForFreshPositions()
+    {
+        using var factory = new TestAppFactory();
+        var client = await factory.CreateUserClientAsync();
+        await client.GetAsync("/api/lines/131Y/live");
+
+        factory.FleetDelay = TimeSpan.FromMilliseconds(300);
+        factory.RosterDelay = TimeSpan.FromSeconds(2);
+        factory.Clock.Advance(TimeSpan.FromHours(1));
+        var live = await client.GetFromJsonAsync<LineLiveResponse>("/api/lines/131Y/live");
+
+        Assert.Equal(2, factory.CallsTo(Fleet));
+        Assert.False(live!.Data.Stale);
+        Assert.True(live.Data.AgeSeconds < 60, $"age {live.Data.AgeSeconds}");
+        await factory.Services.GetRequiredService<LineDataService>().WhenIdleAsync();
+    }
+
+    [Fact]
     public async Task Roster_IsRefreshedOnlyAfterItsMaxAge()
     {
         using var factory = new TestAppFactory();

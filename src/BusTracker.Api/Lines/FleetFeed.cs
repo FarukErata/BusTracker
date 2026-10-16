@@ -27,7 +27,7 @@ public sealed class FleetFeed(
     public async Task<FleetSnapshot?> GetAsync(CancellationToken ct)
     {
         if (!IsDue()) return _latest;
-        if (_latest is not null)
+        if (_latest is not null && IsRecent(_latest))
         {
             RefreshInBackground();
             return _latest;
@@ -74,6 +74,8 @@ public sealed class FleetFeed(
     }
 
     private bool IsDue() => clock.GetUtcNow() - _lastCall >= _interval;
+
+    private bool IsRecent(FleetSnapshot snapshot) => clock.GetUtcNow() - snapshot.FetchedAt < _interval * 2;
 
     private async Task<FleetSnapshot?> RefreshAsync(CancellationToken ct)
     {

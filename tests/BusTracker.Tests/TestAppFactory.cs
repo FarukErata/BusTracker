@@ -29,6 +29,8 @@ public class TestAppFactory : WebApplicationFactory<Program>
 
     public TimeSpan RosterDelay { get; set; } = TimeSpan.Zero;
 
+    public TimeSpan FleetDelay { get; set; } = TimeSpan.Zero;
+
     public int CallsTo(string operation) => IbbCalls.GetValueOrDefault(operation);
 
     protected virtual string[] InviteCodes => [];
@@ -47,7 +49,7 @@ public class TestAppFactory : WebApplicationFactory<Program>
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<TimeProvider>(Clock);
-            services.AddHttpClient<IbbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeIbbHandler(IbbCalls, () => FleetXml, () => RosterDelay));
+            services.AddHttpClient<IbbClient>().ConfigurePrimaryHttpMessageHandler(() => new FakeIbbHandler(IbbCalls, () => FleetXml, () => RosterDelay, () => FleetDelay));
         });
     }
 
@@ -92,13 +94,14 @@ public class TestAppFactory : WebApplicationFactory<Program>
         try { Directory.Delete(_directory, recursive: true); } catch (IOException) { }
     }
 
-    private sealed class FakeIbbHandler(ConcurrentDictionary<string, int> calls, Func<string> fleetXml, Func<TimeSpan> rosterDelay) : HttpMessageHandler
+    private sealed class FakeIbbHandler(ConcurrentDictionary<string, int> calls, Func<string> fleetXml, Func<TimeSpan> rosterDelay, Func<TimeSpan> fleetDelay) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var action = request.Headers.GetValues("SOAPAction").Single();
             calls.AddOrUpdate(action.Trim('"').Split('/')[^1], 1, (_, n) => n + 1);
             if (action.Contains("GetHatOtoKonum_json") && rosterDelay() > TimeSpan.Zero) await Task.Delay(rosterDelay(), ct);
+            if (action.Contains("GetFiloAracKonum_json") && fleetDelay() > TimeSpan.Zero) await Task.Delay(fleetDelay(), ct);
             var body = await request.Content!.ReadAsStringAsync(ct);
             var is131Y = body.Contains(">131Y<");
             var isAllLines = body.Contains("<hat_kodu></hat_kodu>") || body.Contains("<hat_kodu />");
