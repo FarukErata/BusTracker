@@ -53,6 +53,21 @@ public sealed class FallbackTests(TestAppFactory factory) : IClassFixture<TestAp
 
 public sealed class AppShellTests(TestAppFactory factory) : IClassFixture<TestAppFactory>
 {
+    [Fact]
+    public async Task AppFiles_AreServedAsThemselvesNotAsThePage()
+    {
+        var webRoot = factory.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>().WebRootPath;
+        Directory.CreateDirectory(Path.Combine(webRoot, "assets"));
+        await File.WriteAllTextAsync(Path.Combine(webRoot, "index.html"), "<!doctype html><title>Buses</title>");
+        await File.WriteAllTextAsync(Path.Combine(webRoot, "assets", "app.js"), "console.log(1)");
+
+        var response = await factory.CreateClient().GetAsync("/assets/app.js");
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("text/javascript", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("console.log(1)", await response.Content.ReadAsStringAsync());
+    }
+
     [Theory]
     [InlineData("/")]
     [InlineData("/stops/402011")]
