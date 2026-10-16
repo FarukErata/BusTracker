@@ -2,7 +2,7 @@
 
 The API and the web app ship as one Docker image, `ghcr.io/farukerata/bustracker`. GitHub Actions builds it on every push to `main` that changes the server or the web app, starts it once to check `/health`, and publishes it with two tags: `latest` and `sha-<commit>`.
 
-The server only needs Docker (with Compose) and nginx.
+The server only needs Docker with Compose v2 (`docker compose`, with a space) and nginx. The old standalone `docker-compose` 1.29 starts the container the first time but fails on every update with `KeyError: 'ContainerConfig'`. Install v2 next to it (`sudo apt install docker-compose-v2`, or `docker-compose-plugin`); other projects keep working with the old command. If you are stuck on 1.29, update with `docker-compose down` before `docker-compose up -d`.
 
 ## First-time setup
 
