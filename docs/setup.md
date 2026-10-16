@@ -1,0 +1,61 @@
+# Development setup
+
+What each part of the repo needs, and how to build it on a fresh machine.
+
+## Tools
+
+| Tool | Version | Used for |
+|---|---|---|
+| .NET SDK | 10.0 | API (`src/`) and its tests (`tests/`) |
+| Node.js + npm | 22 | Web app (`client/`) |
+| JDK | 21 | Android app only (`android/`). Gradle needs 17 or newer |
+| Android SDK | platform 37, build-tools 36 | Android app only |
+| Git | any recent | Everything |
+
+Gradle itself is downloaded by the wrapper (`android/gradlew`); nothing to install.
+The server needs none of these: it runs the Docker image (see [deploy.md](deploy.md)).
+
+## API
+
+```bash
+dotnet run --project src/BusTracker.Api --launch-profile http
+```
+
+Listens on `http://localhost:5080`. Data lives in `src/BusTracker.Api/App_Data/` (gitignored). On first start it downloads the route shapes and the stop index from İBB.
+
+```bash
+dotnet test tests/BusTracker.Tests
+```
+
+## Web app
+
+```bash
+npm ci --prefix client
+npm run dev --prefix client
+```
+
+Vite on `http://localhost:5173`, forwarding `/api` and `/health` to the API. `npm run build --prefix client` writes the production build into `src/BusTracker.Api/wwwroot/` (gitignored), where the API serves it.
+
+## Android app
+
+Point the build at a JDK 21 (it does not have to be on `PATH`), and tell Gradle where the Android SDK is in `android/local.properties` (gitignored, forward slashes):
+
+```properties
+sdk.dir=C\:/Users/<you>/AppData/Local/Android/Sdk
+```
+
+```bash
+cd android
+JAVA_HOME=/path/to/jdk-21 ./gradlew assembleDebug
+```
+
+Release builds are signed. Locally the key and its password are read from `~/.android-keys/bustracker/keystore.properties`; in GitHub Actions from the secrets `BT_KEYSTORE_BASE64` and `BT_KEYSTORE_PASSWORD`. The key is never committed, and every release must be signed with the same one.
+
+## Releases and images
+
+| What | How |
+|---|---|
+| Android app | Actions → Android release → Run workflow → `prepare`, review the draft, then `publish` |
+| Server image | Built and published to `ghcr.io/farukerata/bustracker` on every push to `main` that touches the server or web app |
+
+Commit titles follow `Area - Feature|Fix|Chore: what changed`; Android release versions and notes are built from them.

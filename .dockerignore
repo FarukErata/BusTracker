@@ -1,0 +1,13 @@
+.git
+.github
+.claude
+android
+docs
+tests
+tools
+**/bin
+**/obj
+**/node_modules
+**/App_Data
+src/BusTracker.Api/wwwroot
+*.md

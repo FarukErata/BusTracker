@@ -19,6 +19,16 @@ public sealed class HealthEndpointTests(TestAppFactory factory) : IClassFixture<
     }
 
     [Fact]
+    public async Task Health_ShowsTheCommitTheImageWasBuiltFrom()
+    {
+        using var built = factory.WithWebHostBuilder(b => b.UseSetting("BUSTRACKER_COMMIT", "abc1234"));
+
+        var body = await built.CreateClient().GetFromJsonAsync<HealthResponse>("/health");
+
+        Assert.Equal("abc1234", body!.Commit);
+    }
+
+    [Fact]
     public async Task Shapes_ForLineWithoutImport_ReturnsEmptyList()
     {
         var client = await factory.CreateUserClientAsync();

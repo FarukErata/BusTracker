@@ -180,24 +180,11 @@ One API project + one test project. The engine stays free of I/O, so it can move
 
 ## Deployment
 
-- `dotnet publish -c Release -r linux-x64 --self-contained` → one folder, nothing to install on the server.
-- systemd unit with a memory cap, `Restart=on-failure`, environment file for the API key and DB path.
-- Ubuntu + nginx. The app listens on `127.0.0.1:5080` only; nginx terminates HTTPS and proxies:
-  ```nginx
-  location / {
-      proxy_pass         http://127.0.0.1:5080;
-      proxy_set_header   Host $host;
-      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header   X-Forwarded-Proto $scheme;
-  }
-  ```
-  The app enables `UseForwardedHeaders` so it sees the real scheme and client IP.
-- Add a user: `BusTracker.Api add-user <name>` prints the new API key once.
-- Backup = copy one SQLite file.
+One Docker image (`ghcr.io/farukerata/bustracker`) with the API and the built web app, built and smoke-tested by GitHub Actions on every push to `main` that touches the server or web app. On the server: `docker compose` with the container on `127.0.0.1:5080`, the SQLite file in a mounted `data/` folder, settings in a local `.env`, a 256 MB memory cap, and nginx in front for HTTPS. `/health` reports the commit the image was built from. Step by step: [deploy.md](deploy.md).
 
 ## Decisions so far
 
-- Server: Ubuntu + nginx, systemd service (2026-10-14).
+- Server: Ubuntu + nginx, the app in Docker (2026-10-16; was a plain systemd service).
 - Client: web, designed and built separately, consuming this API.
 - Users: personal, possibly 1–2 friends → per-user API keys, shared polling.
 - Alerts: "N stops before" and "passed my stop" for now; the watch shape may still change.

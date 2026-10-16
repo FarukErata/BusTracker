@@ -79,6 +79,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     options.KnownProxies.Add(System.Net.IPAddress.Loopback);
+    foreach (var network in builder.Configuration.GetSection("TrustedProxyNetworks").Get<string[]>() ?? [])
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
 });
 
 builder.Services.ConfigureHttpJsonOptions(options =>

@@ -14,13 +14,15 @@ public static class HealthEndpoints
     }
 
     private static async Task<HealthResponse> GetHealth(
-        TimeProvider clock, FleetCallGate gate, FleetFeed fleet, BusLineMemory memory, RouteShapeRepository shapes, CancellationToken ct)
+        TimeProvider clock, IConfiguration configuration, FleetCallGate gate, FleetFeed fleet, BusLineMemory memory,
+        RouteShapeRepository shapes, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
         var source = await shapes.GetSourceStateAsync(ct);
         var calls = gate.CallsInLastHour;
         return new HealthResponse(
             Status: "ok",
+            Commit: configuration["BUSTRACKER_COMMIT"],
             StartedAt: StartedAt,
             UptimeSeconds: (long)(now - StartedAt).TotalSeconds,
             WorkingSetMb: Environment.WorkingSet / (1024 * 1024),
@@ -39,6 +41,7 @@ public sealed record RouteShapesHealth(
 
 public sealed record HealthResponse(
     string Status,
+    string? Commit,
     DateTimeOffset StartedAt,
     long UptimeSeconds,
     long WorkingSetMb,
