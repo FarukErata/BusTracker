@@ -1,5 +1,5 @@
 name: Server image
-run-name: ${{ github.event_name == 'workflow_dispatch' && 'Server image (manual)' || format('Server image {0}', github.event.head_commit.message) }}
+run-name: ${{ github.event_name == 'workflow_dispatch' && 'Server image (manual)' || 'Server image' }}
 
 on:
   push:
