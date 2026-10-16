@@ -119,12 +119,20 @@ function sameName(a: string, b: string) {
   return a.trim().toLocaleUpperCase('tr-TR') === b.trim().toLocaleUpperCase('tr-TR')
 }
 
+function waitingText(lines: StopArrivalsView['lines']) {
+  const names = [...new Set(lines.map(l => l.line))].join(', ')
+  const retries = lines.map(l => l.retryInSeconds).filter((s): s is number => s !== null)
+  if (retries.length === 0) return `Waiting for İBB: ${names}`
+  const soonest = Math.min(...retries)
+  return `Waiting for İBB: ${names} · next try ${soonest < 60 ? `in about ${soonest} s` : `in about ${Math.ceil(soonest / 60)} min`}`
+}
+
 function oldestFetch(data: StopArrivalsView) {
   return data.lines.map(l => l.data?.fetchedAt).filter((t): t is string => !!t).sort()[0]
 }
 
 function ArrivalsList({ data, selection, tracking, onSelect }: { data: StopArrivalsView } & SelectionProps) {
-  const waiting = data.lines.filter(l => l.error).map(l => l.line)
+  const waiting = data.lines.filter(l => l.error)
   const bothWays = linesInBothDirections(data)
   const isSelected = (a: StopArrivalView) =>
     selection?.line === a.line && selection.direction === a.direction && selection.doorNo === a.bus.doorNo
@@ -148,7 +156,7 @@ function ArrivalsList({ data, selection, tracking, onSelect }: { data: StopArriv
           ))}
         </ItemGroup>
       )}
-      {waiting.length > 0 && <p className="px-3 text-xs text-muted-foreground">Still loading: {[...new Set(waiting)].join(', ')}</p>}
+      {waiting.length > 0 && <p className="px-3 text-xs text-muted-foreground">{waitingText(waiting)}</p>}
       <div className="mt-auto pb-4"><UpdatedAgo fetchedAt={oldestFetch(data)} /></div>
     </>
   )

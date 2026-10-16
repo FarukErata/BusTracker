@@ -79,6 +79,7 @@ export interface LineStatusView {
   directionName: string
   data: Freshness | null
   error: string | null
+  retryInSeconds: number | null
 }
 
 export interface StopArrivalsView {
