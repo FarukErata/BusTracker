@@ -10,6 +10,7 @@ import { AndroidApp } from '@/screens/AndroidApp'
 import { Home } from '@/screens/Home'
 import { Line } from '@/screens/Line'
 import { Stop } from '@/screens/Stop'
+import { AccessGate } from '@/screens/Welcome'
 
 rememberInviteFromUrl()
 applyTheme()
@@ -19,9 +20,14 @@ const queryClient = new QueryClient({
 })
 
 const router = createBrowserRouter([
-  { path: '/', element: <Home /> },
-  { path: '/stops/:code', element: <Stop /> },
-  { path: '/lines/:code', element: <Line /> },
+  {
+    element: <AccessGate />,
+    children: [
+      { path: '/', element: <Home /> },
+      { path: '/stops/:code', element: <Stop /> },
+      { path: '/lines/:code', element: <Line /> },
+    ],
+  },
   { path: '/android', element: <AndroidApp /> },
 ])
 

@@ -34,15 +34,28 @@ export function rememberInviteFromUrl() {
 
 let registering: Promise<void> | null = null
 
-async function register() {
+export const hasDevice = () => read(KEY_STORAGE) !== null
+
+export const isInviteRequired = (error: unknown) => error instanceof ApiError && error.status === 403
+
+export async function registerWithInvite(invite: string) {
+  await register(invite.trim())
+  write(INVITE_STORAGE, invite.trim())
+}
+
+async function register(invite = read(INVITE_STORAGE)) {
   const response = await fetch('/api/devices', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ platform: 'web', name: navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser', invite: read(INVITE_STORAGE) }),
+    body: JSON.stringify({ platform: 'web', name: navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser', invite }),
   })
   const body = await response.json().catch(() => null)
-  if (!response.ok) throw new ApiError(response.status, body?.detail ?? 'You need an invite link to use this app.')
+  if (!response.ok) throw new ApiError(response.status, body?.detail ?? 'You need an invite code to use this app.')
   write(KEY_STORAGE, body.key)
+}
+
+export async function ensureRegistered() {
+  await ensureDevice()
 }
 
 function ensureDevice(): Promise<void> {
