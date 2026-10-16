@@ -49,6 +49,8 @@ cd android
 JAVA_HOME=/path/to/jdk-21 ./gradlew assembleDebug
 ```
 
+The app talks to `https://kackaldi.farukerata.com` by default. To try it against a local API in the Android emulator (which reaches the PC at `10.0.2.2`), build with `-PserverUrl=http://10.0.2.2:5080 -PallowCleartext=true`. Never use `allowCleartext` for a published build.
+
 Release builds are signed. Locally the key and its password are read from `~/.android-keys/bustracker/keystore.properties`; in GitHub Actions from the secrets `BT_KEYSTORE_BASE64` and `BT_KEYSTORE_PASSWORD`. The key is never committed, and every release must be signed with the same one.
 
 ## Releases and images
