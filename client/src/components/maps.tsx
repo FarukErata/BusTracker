@@ -101,9 +101,9 @@ export function StopMap({ lat, lng, className, tracking = null, inline = true }:
       <StopFocus lat={lat} lng={lng} tracking={tracking} />
       {tracking && (
         <>
-          <Polyline positions={tracking.path} pathOptions={{ className: 'route-line', weight: 5 }} />
+          <Polyline positions={tracking.path} className="route-line" pathOptions={{ weight: 5 }} />
           {tracking.remaining.slice(0, -1).map(stop => (
-            <CircleMarker key={stop.code} center={[stop.lat, stop.lng]} radius={STOP_DOT_RADIUS} pathOptions={{ className: 'stop-dot' }}>
+            <CircleMarker key={stop.code} center={[stop.lat, stop.lng]} radius={STOP_DOT_RADIUS} className="stop-dot">
               <Tooltip direction="top" offset={[0, -6]}>{titleCase(stop.name)}</Tooltip>
             </CircleMarker>
           ))}
@@ -111,7 +111,7 @@ export function StopMap({ lat, lng, className, tracking = null, inline = true }:
           <KeepInView lat={tracking.bus.lat} lng={tracking.bus.lng} bottomInset={0} topInset={0} edge={20} />
         </>
       )}
-      <CircleMarker center={[lat, lng]} radius={STOP_PIN_RADIUS} pathOptions={{ className: 'stop-pin' }} />
+      <CircleMarker center={[lat, lng]} radius={STOP_PIN_RADIUS} className="stop-pin" />
     </MapContainer>
   )
 }
@@ -164,15 +164,15 @@ export function LineMap({ route, stops, buses, pinnedStop, selectedBus, onStopCl
       <InitialFit bounds={initial.bounds} bottomInset={initial.inset} />
       <FitOnce points={route} fitId={fitId} bottomInset={bottomInset} />
       <KeepInView lat={selected?.lat} lng={selected?.lng} bottomInset={bottomInset} />
-      <Polyline positions={route} pathOptions={{ className: 'route-line', weight: 5 }} />
-      {busRoute && <Polyline positions={busRoute} pathOptions={{ className: 'route-variant', weight: 4, dashArray: '8 6' }} />}
-      {highlight && <Polyline positions={highlight} pathOptions={{ className: 'route-highlight', weight: 7 }} />}
+      <Polyline positions={route} className="route-line" pathOptions={{ weight: 5 }} />
+      {busRoute && <Polyline positions={busRoute} className="route-variant" pathOptions={{ weight: 4, dashArray: '8 6' }} />}
+      {highlight && <Polyline positions={highlight} className="route-highlight" pathOptions={{ weight: 7 }} />}
       {stops.map(stop => (
         <CircleMarker
-          key={stop.code}
+          key={stop.code === pinnedStop ? `${stop.code}-pin` : stop.code}
           center={[stop.lat, stop.lng]}
           radius={stop.code === pinnedStop ? STOP_PIN_RADIUS : STOP_DOT_RADIUS}
-          pathOptions={{ className: stop.code === pinnedStop ? 'stop-pin' : 'stop-dot' }}
+          className={stop.code === pinnedStop ? 'stop-pin' : 'stop-dot'}
           eventHandlers={{ click: () => onStopClick(stop.code) }}
         >
           <Tooltip direction="top" offset={[0, -6]}>{stop.seq}. {titleCase(stop.name)}</Tooltip>
