@@ -7,6 +7,7 @@ import './index.css'
 import { rememberInviteFromUrl } from '@/api/client'
 import { applyTheme } from '@/lib/theme'
 import { AndroidApp } from '@/screens/AndroidApp'
+import { Devices } from '@/screens/Devices'
 import { Home } from '@/screens/Home'
 import { Line } from '@/screens/Line'
 import { Stop } from '@/screens/Stop'
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
       { path: '/', element: <Home /> },
       { path: '/stops/:code', element: <Stop /> },
       { path: '/lines/:code', element: <Line /> },
+      { path: '/devices', element: <Devices /> },
     ],
   },
   { path: '/android', element: <AndroidApp /> },

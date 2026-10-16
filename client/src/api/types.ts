@@ -204,3 +204,22 @@ export interface BusPathResponse {
   remainingStops: PathStop[]
   data: Freshness
 }
+
+export interface DeviceView {
+  id: number
+  platform: string
+  name: string
+  createdAt: string
+  lastSeenAt: string
+  current: boolean
+}
+
+export interface MeResponse {
+  currentDeviceId: number
+  devices: DeviceView[]
+}
+
+export interface LinkCodeResponse {
+  code: string
+  expiresAt: string
+}

@@ -1,4 +1,5 @@
 const KEY_STORAGE = 'bt-device-key'
+export const ACCESS_LOST_EVENT = 'bt-access-lost'
 const INVITE_STORAGE = 'bt-invite'
 
 export class ApiError extends Error {
@@ -38,19 +39,32 @@ export const hasDevice = () => read(KEY_STORAGE) !== null
 
 export const isInviteRequired = (error: unknown) => error instanceof ApiError && error.status === 403
 
+export const isInvalidLinkCode = (error: unknown) => error instanceof ApiError && error.status === 400
+
+export async function registerWithLinkCode(code: string) {
+  await register(null, code)
+}
+
 export async function registerWithInvite(invite: string) {
   await register(invite.trim())
   write(INVITE_STORAGE, invite.trim())
 }
 
-async function register(invite = read(INVITE_STORAGE)) {
+const deviceName = () => (navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser')
+
+function registrationFailed(status: number, detail: string | undefined): ApiError {
+  if (status === 403) window.dispatchEvent(new Event(ACCESS_LOST_EVENT))
+  return new ApiError(status, detail ?? 'You need an invite code to use this app.')
+}
+
+async function register(invite = read(INVITE_STORAGE), linkCode: string | null = null) {
   const response = await fetch('/api/devices', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ platform: 'web', name: navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser', invite }),
+    body: JSON.stringify({ platform: 'web', name: deviceName(), invite, linkCode }),
   })
   const body = await response.json().catch(() => null)
-  if (!response.ok) throw new ApiError(response.status, body?.detail ?? 'You need an invite code to use this app.')
+  if (!response.ok) throw registrationFailed(response.status, body?.detail)
   write(KEY_STORAGE, body.key)
 }
 

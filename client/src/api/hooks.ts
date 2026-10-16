@@ -8,6 +8,8 @@ import type {
   LineShapesResponse,
   LineStopsResponse,
   LineSummary,
+  LinkCodeResponse,
+  MeResponse,
   StopArrivalsView,
   StopDetails,
   StopSearchResult,
@@ -102,6 +104,22 @@ export function useBusPath(line: string | null, bus: string | null, stop: string
     enabled: !!line && !!bus && !!stop,
     refetchInterval: LIVE_REFRESH_MS,
     placeholderData: keepPreviousData,
+  })
+}
+
+export function useMe() {
+  return useQuery({ queryKey: ['me'], queryFn: () => api<MeResponse>('/api/me') })
+}
+
+export function useCreateLinkCode() {
+  return useMutation({ mutationFn: () => api<LinkCodeResponse>('/api/me/link-codes', { method: 'POST' }) })
+}
+
+export function useRemoveDevice() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api(`/api/me/devices/${id}`, { method: 'DELETE' }),
+    onSettled: () => client.invalidateQueries({ queryKey: ['me'] }),
   })
 }
 

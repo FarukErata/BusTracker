@@ -19,7 +19,22 @@ export function distance(meters: number): string {
 export function ago(seconds: number): string {
   if (seconds < 10) return 'just now'
   if (seconds < 60) return `${Math.round(seconds)} s ago`
-  return `${Math.round(seconds / 60)} min ago`
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min ago`
+  if (seconds < 86400) return `${Math.round(seconds / 3600)} h ago`
+  const days = Math.round(seconds / 86400)
+  return days === 1 ? 'yesterday' : `${days} days ago`
+}
+
+export function linkCodeInput(text: string): string {
+  const compact = text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+  return compact.length > 3 ? `${compact.slice(0, 3)}-${compact.slice(3)}` : compact
+}
+
+export const isCompleteLinkCode = (code: string) => /^[A-Z0-9]{3}-[A-Z0-9]{3}$/.test(code)
+
+export function countdown(seconds: number): string {
+  const s = Math.max(0, Math.ceil(seconds))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
 export function stopsAway(count: number): string {

@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from 'react'
 import { Link } from 'react-router'
-import { ChevronRight, MapPin, Search, Smartphone, X } from 'lucide-react'
+import { ChevronRight, MapPin, Search, Smartphone, UserRound, X } from 'lucide-react'
 import { useFavorites, useLineSearch, useStopSearch } from '@/api/hooks'
 import type { FavoritesResponse, LineSummary, StopSearchResult } from '@/api/types'
 import { EmptyState, ErrorState, LineBadge, LineBadges, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards } from '@/components/bits'
@@ -20,6 +20,9 @@ export function Home() {
         <h1 className="flex-1 text-lg font-semibold tracking-tight">Kaç Kaldı</h1>
         <Link to="/android" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Get the Android app">
           <Smartphone />
+        </Link>
+        <Link to="/devices" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Your devices">
+          <UserRound />
         </Link>
         <ThemeToggle />
       </header>
