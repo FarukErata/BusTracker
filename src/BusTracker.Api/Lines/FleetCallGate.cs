@@ -21,6 +21,20 @@ public sealed class FleetCallGate(IOptions<BusTrackerOptions> options, TimeProvi
     private int _backoffLevel = -1;
     private DateTimeOffset _blockedUntil = DateTimeOffset.MinValue;
 
+    public event Action<DateTimeOffset, FleetCallKind>? CallRecorded;
+
+    public event Action<DateTimeOffset>? Blocked;
+
+    public void Restore(IEnumerable<(DateTimeOffset At, FleetCallKind Kind)> calls, DateTimeOffset? blockedUntil)
+    {
+        lock (_lock)
+        {
+            foreach (var call in calls.OrderBy(c => c.At)) _calls.Enqueue(call);
+            DropExpired(clock.GetUtcNow());
+            if (blockedUntil is { } until && until > _blockedUntil) _blockedUntil = until;
+        }
+    }
+
     public DateTimeOffset? BlockedUntil
     {
         get
@@ -43,9 +57,16 @@ public sealed class FleetCallGate(IOptions<BusTrackerOptions> options, TimeProvi
 
     public GateDecision TryAcquire(FleetCallKind kind)
     {
+        var now = clock.GetUtcNow();
+        var decision = Decide(kind, now);
+        if (decision.Allowed) CallRecorded?.Invoke(now, kind);
+        return decision;
+    }
+
+    private GateDecision Decide(FleetCallKind kind, DateTimeOffset now)
+    {
         lock (_lock)
         {
-            var now = clock.GetUtcNow();
             if (now < _blockedUntil) return GateDecision.Deny("rate-limited", _blockedUntil);
 
             DropExpired(now);
@@ -66,11 +87,14 @@ public sealed class FleetCallGate(IOptions<BusTrackerOptions> options, TimeProvi
 
     public void ReportRateLimited()
     {
+        DateTimeOffset until;
         lock (_lock)
         {
             _backoffLevel = Math.Min(_backoffLevel + 1, _polling.BackoffMinutes.Length - 1);
             _blockedUntil = clock.GetUtcNow() + TimeSpan.FromMinutes(_polling.BackoffMinutes[_backoffLevel]);
+            until = _blockedUntil;
         }
+        Blocked?.Invoke(until);
     }
 
     private DateTimeOffset? RosterLimitReached(DateTimeOffset now)

@@ -32,6 +32,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<Database>();
 builder.Services.AddHostedService<DatabaseInitializer>();
 builder.Services.AddSingleton<FleetCallGate>();
+builder.Services.AddHostedService<IbbCallLog>();
 builder.Services.AddSingleton<FleetFeed>();
 builder.Services.AddSingleton<BusLineMemory>();
 builder.Services.AddSingleton<LineDataService>();

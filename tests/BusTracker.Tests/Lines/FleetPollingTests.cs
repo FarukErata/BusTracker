@@ -45,6 +45,7 @@ public sealed class FleetPollingTests
 
         factory.Clock.Advance(TimeSpan.FromSeconds(60));
         await client.GetAsync("/api/lines/131Y/live");
+        await factory.Services.GetRequiredService<LineDataService>().WhenIdleAsync();
 
         Assert.Equal(2, factory.CallsTo(Fleet));
     }
@@ -62,6 +63,7 @@ public sealed class FleetPollingTests
 
         factory.Clock.Advance(TimeSpan.FromMinutes(1));
         await client.GetAsync("/api/lines/131Y/live");
+        await factory.Services.GetRequiredService<LineDataService>().WhenIdleAsync();
 
         Assert.Equal(2, factory.CallsTo(Roster));
     }
@@ -163,7 +165,7 @@ public sealed class FleetPollingTests
 
         Assert.Equal(11, known.Count);
         Assert.Contains(known, a => a.DoorNo == "O2031" && a.RouteCode == "131Y_D_D0");
-        Assert.Null(restarted.RosterAt("131Y"));
+        Assert.Equal(factory.Clock.GetUtcNow(), restarted.RosterAt("131Y"));
 
         factory.Clock.Advance(TimeSpan.FromHours(72));
         Assert.Empty(await restarted.OnLineAsync("131Y", CancellationToken.None));

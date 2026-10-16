@@ -130,6 +130,18 @@ public sealed class DatabaseInitializer(Database database, ILogger<DatabaseIniti
         );
         CREATE INDEX ix_bus_lines_line ON bus_lines (line_code);
         """,
+        """
+        CREATE TABLE ibb_calls (
+            at   TEXT NOT NULL,
+            kind TEXT NOT NULL
+        );
+        CREATE INDEX ix_ibb_calls_at ON ibb_calls (at);
+
+        CREATE TABLE ibb_state (
+            name  TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        """,
     ];
 
     public async Task StartAsync(CancellationToken ct)

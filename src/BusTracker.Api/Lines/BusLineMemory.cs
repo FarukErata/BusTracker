@@ -119,6 +119,8 @@ public sealed class BusLineMemory(Database database, IOptions<BusTrackerOptions>
             foreach (var row in rows)
                 _byDoor[row.DoorNo] = new BusAssignment(
                     row.DoorNo, row.LineCode, row.RouteCode, row.Destination, DbTime.Parse(row.ConfirmedAt)!.Value, null);
+            foreach (var line in _byDoor.Values.GroupBy(a => a.LineCode))
+                _rosterAt.TryAdd(line.Key, line.Max(a => a.ConfirmedAt));
             _loaded = true;
         }
         finally
