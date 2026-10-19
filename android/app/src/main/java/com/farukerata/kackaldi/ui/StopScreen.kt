@@ -9,6 +9,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.farukerata.kackaldi.data.StopFilters
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import androidx.compose.foundation.layout.Arrangement
@@ -66,7 +67,8 @@ class StopViewModel(private val api: KacKaldiApi, private val filters: StopFilte
         private set
 
     suspend fun refresh() {
-        val next = load { api.stopArrivals(code) }
+        val lines = filters.lines(code).first()
+        val next = load { api.stopArrivals(code, lines) }
         if (next is Load.Ready || arrivals !is Load.Ready) arrivals = next
     }
 
@@ -80,11 +82,17 @@ class StopViewModel(private val api: KacKaldiApi, private val filters: StopFilte
 
     fun toggleLine(line: String, all: List<String>) {
         val next = shownLines.value.let { if (line in it) it - line else it + line }
-        viewModelScope.launch { filters.save(code, if (next.containsAll(all)) emptySet() else next) }
+        viewModelScope.launch {
+            filters.save(code, if (next.containsAll(all)) emptySet() else next)
+            refresh()
+        }
     }
 
     fun showAllLines() {
-        viewModelScope.launch { filters.save(code, emptySet()) }
+        viewModelScope.launch {
+            filters.save(code, emptySet())
+            refresh()
+        }
     }
 
     fun loadFavorite() {

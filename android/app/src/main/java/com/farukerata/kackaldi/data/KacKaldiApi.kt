@@ -49,7 +49,12 @@ class KacKaldiApi(private val store: DeviceStore) {
 
     suspend fun searchLines(query: String): List<LineSummary> = authorized { auth -> get("api/lines") { auth(); parameter("q", query) } }
 
-    suspend fun stopArrivals(code: String): StopArrivalsView = authorized { auth -> get("api/stops/$code/arrivals") { auth() } }
+    suspend fun stopArrivals(code: String, lines: Set<String> = emptySet()): StopArrivalsView = authorized { auth ->
+        get("api/stops/$code/arrivals") {
+            auth()
+            if (lines.isNotEmpty()) parameter("lines", lines.sorted().joinToString(","))
+        }
+    }
 
     suspend fun lineStops(code: String): LineStopsResponse = authorized { auth -> get("api/lines/$code/stops") { auth() } }
 
