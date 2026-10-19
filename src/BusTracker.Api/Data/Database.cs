@@ -151,6 +151,29 @@ public sealed class DatabaseInitializer(Database database, ILogger<DatabaseIniti
             value TEXT NOT NULL
         );
         """,
+        """
+        CREATE TABLE hop_times (
+            route_code  TEXT NOT NULL,
+            from_stop   INTEGER NOT NULL,
+            observed_at TEXT NOT NULL,
+            seconds     REAL NOT NULL
+        );
+        CREATE INDEX ix_hop_times_route ON hop_times (route_code, from_stop, observed_at);
+        CREATE INDEX ix_hop_times_at ON hop_times (observed_at);
+        """,
+        """
+        CREATE TABLE eta_checks (
+            route_code   TEXT NOT NULL,
+            stop_index   INTEGER NOT NULL,
+            predicted_at TEXT NOT NULL,
+            actual_s     REAL NOT NULL,
+            eta_speed    INTEGER NOT NULL,
+            eta_hops     INTEGER NOT NULL,
+            distance_m   REAL NOT NULL,
+            age_s        INTEGER NOT NULL
+        );
+        CREATE INDEX ix_eta_checks_at ON eta_checks (predicted_at);
+        """,
     ];
 
     public async Task StartAsync(CancellationToken ct)

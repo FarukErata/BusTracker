@@ -8,7 +8,7 @@ public sealed record LineAtStop(StopLine Line, LiveResult? Live, string? Error, 
 
 public sealed record StopArrivalsResult(StopInfo Stop, IReadOnlyList<LineAtStop> Lines);
 
-public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataService data)
+public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataService data, TimeProvider clock)
 {
     public async Task<StopArrivalsResult?> GetAsync(string stopCode, IReadOnlySet<string>? wanted, CancellationToken ct)
     {
@@ -37,7 +37,7 @@ public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataS
         {
             var tracks = await data.GetTracksAsync(line.LineCode, ct);
             var live = await data.GetLiveAsync(line.LineCode, ct, refreshRoster);
-            var arrivals = Arrivals.ForStop(stopCode, line.Direction, live.Snapshot.Buses, tracks).Approaching;
+            var arrivals = Arrivals.ForStop(stopCode, line.Direction, live.Snapshot.Buses, tracks, data.Eta(clock.GetUtcNow())).Approaching;
             return new LineAtStop(line, live, null, arrivals);
         }
         catch (LineUnavailableException e)

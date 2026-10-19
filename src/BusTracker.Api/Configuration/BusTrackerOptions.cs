@@ -86,6 +86,11 @@ public sealed class TrackingOptions
 
     [Range(20, 1000)]
     public int TerminalMeters { get; init; } = 150;
+
+    [RegularExpression("^(speed|hops)$")]
+    public string EtaModel { get; init; } = "speed";
+
+    public bool UseHopTimes => EtaModel == "hops";
 }
 
 public sealed class StaticDataOptions

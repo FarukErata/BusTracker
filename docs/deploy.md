@@ -119,6 +119,10 @@ With `jq` installed, the slow requests of today:
 jq -c 'select(.kind == "request" and .ms > 1000) | {at, path, ms, waits, waitingLines}' data/logs/requests-$(date -u +%F).jsonl
 ```
 
+## ETA accuracy
+
+Signed in, open `https://<your domain>/api/stats/eta?days=7` to compare the two ETA models against real arrivals (see the ETA section of [server-design.md](server-design.md)). To show the newer model, set `BusTracker__Tracking__EtaModel=hops` in `.env` and restart.
+
 ## Notes
 
 - The container listens on `127.0.0.1:5080` only; nginx is the only way in.

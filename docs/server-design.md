@@ -79,6 +79,14 @@ Per bus:
 
 **ETA v1:** remaining road distance ÷ (60% observed speed over the last ~6 min + 40% scheduled speed from the variant's `UZUNLUK`/`SURE`), with a minimum of 2 m/s. Buses waiting at the first stop get no ETA ("not departed").
 
+**ETA v2 (2026-10-19), traffic from our own buses:**
+- **Hop times:** whenever a tracked bus crosses two consecutive stops, the time between the crossings is recorded for that hop (route variant + stop index). Crossing times are interpolated between the two position reports, assuming even speed in between. The hop from the first stop is skipped, since it would include waiting at the terminal. Implausible hops (under 3 s, over 30 min, faster than 30 m/s or slower than 0.2 m/s) are dropped. Hop times are kept in memory (last 8 per hop) and saved to `hop_times` for 60 days; the last 30 minutes are restored on startup.
+- **ETA:** the route between the bus and the stop is split at the stops. Each hop uses the median of its hop times from the last 30 minutes, scaled to the part still to drive. A hop with no recent data uses 60% of the bus's own speed + 40% of 4.5 m/s (16 km/h), at least 1.5 m/s. The time since the bus's last report is subtracted, never going below 0. The apps count down from there between refreshes.
+- **Why not the schedule:** İBB's route durations are a placeholder. Every main variant has exactly 6.89 m/s (24.8 km/h), so they are not used.
+- **Which ETA is shown:** `BusTracker__Tracking__EtaModel` picks `speed` (v1, the default for now) or `hops` (v2). Both are always computed; the heavy-traffic flag comes from v2 either way.
+- **Accuracy log:** once a minute, for every tracked bus on a viewed line, both models predict the arrival at the next stop and at 5, 10 and 15 stops ahead. When the bus crosses that stop (crossing time interpolated between reports), both predictions are saved to `eta_checks` with the real time, for 60 days. `GET /api/stats/eta?days=7` summarises them by distance and by hour (Istanbul time): count, bias (+ late / − early), typical miss (median) and share within 1 and 2 minutes.
+- **Heavy traffic:** buses ahead covered the stretch at under 2.2 m/s (about 8 km/h), measured over at least 400 m of hops with recent data. On a stop it covers the bus-to-stop stretch; on the line map, the next 2 km ahead of each bus. Later this can compare against the usual time for that hour from `hop_times`.
+
 Optional for v1.1: **ETA** from the median speed between snapshots along the route, falling back to `SEFER_SURESI / stop count`.
 
 ## Data model (SQLite)

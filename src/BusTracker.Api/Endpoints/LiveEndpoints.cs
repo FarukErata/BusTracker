@@ -20,8 +20,13 @@ public static class LiveEndpoints
         if (LineCode.Normalize(code) is not { } line) return LineCode.Invalid();
         if (await LineCode.LoadStopsAsync(line, data, ct) is null) return LineCode.Unknown(line);
 
+        var tracks = await data.GetTracksAsync(line, ct);
         return await WithLiveAsync(line, data, clock, ct, live =>
-            Results.Ok(new LineLiveResponse(line, Freshness.From(live, clock), live.Snapshot.Buses.Select(ToView).ToList())));
+        {
+            var now = clock.GetUtcNow();
+            var buses = live.Snapshot.Buses.Select(b => ToView(b, HeavyTrafficAhead(b, tracks, data.Hops, now))).ToList();
+            return Results.Ok(new LineLiveResponse(line, Freshness.From(live, clock), buses));
+        });
     }
 
     private static async Task<IResult> GetArrivals(
@@ -37,7 +42,7 @@ public static class LiveEndpoints
 
         return await WithLiveAsync(line, data, clock, ct, live =>
         {
-            var arrivals = Arrivals.ForStop(stop, direction, live.Snapshot.Buses, tracks);
+            var arrivals = Arrivals.ForStop(stop, direction, live.Snapshot.Buses, tracks, data.Eta(clock.GetUtcNow()));
             return Results.Ok(new StopArrivalsResponse(
                 line, direction, new StopRef(target.StopCode, target.Seq, target.Name), Freshness.From(live, clock),
                 arrivals.Approaching.Select(ToArrivalView).ToList(),
@@ -95,17 +100,24 @@ public static class LiveEndpoints
         }
     }
 
-    private static TrackedBusView ToView(TrackedBus t) =>
+    private static bool HeavyTrafficAhead(TrackedBus bus, LineTracks tracks, HopTimes hops, DateTimeOffset now) =>
+        bus is { IsUsable: true, AlongMeters: { } along }
+        && tracks.For(bus.Bus.RouteCode, bus.Bus.Direction) is { } track
+        && TravelTime.HeavyTrafficAhead(track, along, bus.SpeedMps, hops, now);
+
+    private static TrackedBusView ToView(TrackedBus t) => ToView(t, false);
+
+    private static TrackedBusView ToView(TrackedBus t, bool heavyTraffic) =>
         new(t.Bus.DoorNo, t.Bus.Lat, t.Bus.Lng, t.Bus.Direction, t.Bus.Variant, t.Bus.RouteCode, t.Bus.Destination,
             t.Bus.ReportedAt, t.AgeSeconds, t.Status, t.TripId, t.OnOwnVariant,
             Round(t.AlongMeters), Round(t.OffsetMeters), Round(t.RouteLengthMeters),
             t.LastStop?.Seq, t.NextStop?.Seq, Progress(t),
             t.SpeedMps is { } mps ? Math.Round(mps * 3.6, 1) : null,
-            t.PassedSinceLastUpdate.Select(s => s.Seq).ToList());
+            t.PassedSinceLastUpdate.Select(s => s.Seq).ToList(), heavyTraffic);
 
     internal static ArrivalView ToArrivalView(Arrival a) =>
         new(a.Bus.Bus.DoorNo, a.Bus.Bus.RouteCode, a.Bus.Bus.Variant, a.StopsAway, Math.Round(a.DistanceMeters),
-            a.EtaSeconds, a.NotDeparted, a.Bus.AgeSeconds, a.Bus.LastStop?.Seq, a.Bus.LastStop?.Name);
+            a.EtaSeconds, a.NotDeparted, a.Bus.AgeSeconds, a.Bus.LastStop?.Seq, a.Bus.LastStop?.Name, a.HeavyTraffic);
 
     private static PassedView ToView(PassedBus p) =>
         new(p.Bus.Bus.DoorNo, p.Bus.Bus.RouteCode, p.Bus.Bus.Variant, Math.Round(p.MetersPast), p.Bus.LastStop?.Seq);
@@ -131,7 +143,7 @@ public sealed record TrackedBusView(
     string DoorNo, double Lat, double Lng, string Direction, string Variant, string RouteCode, string Destination,
     DateTimeOffset ReportedAt, int AgeSeconds, string Status, string TripId, bool OnOwnVariant,
     double? AlongMeters, double? OffsetMeters, double? RouteLengthMeters,
-    int? LastStopSeq, int? NextStopSeq, double? ProgressToNext, double? SpeedKmh, IReadOnlyList<int> PassedStopSeqs);
+    int? LastStopSeq, int? NextStopSeq, double? ProgressToNext, double? SpeedKmh, IReadOnlyList<int> PassedStopSeqs, bool HeavyTraffic);
 
 public sealed record LineLiveResponse(string Line, Freshness Data, IReadOnlyList<TrackedBusView> Buses);
 
@@ -139,7 +151,7 @@ public sealed record StopRef(string Code, int Seq, string Name);
 
 public sealed record ArrivalView(
     string DoorNo, string RouteCode, string Variant, int StopsAway, double DistanceMeters, int? EtaSeconds,
-    bool NotDeparted, int AgeSeconds, int? LastStopSeq, string? LastStopName);
+    bool NotDeparted, int AgeSeconds, int? LastStopSeq, string? LastStopName, bool HeavyTraffic);
 
 public sealed record PassedView(string DoorNo, string RouteCode, string Variant, double MetersPast, int? LastStopSeq);
 

@@ -15,7 +15,7 @@ public sealed class ArrivalsTests
         _stop45 = _tracks.Main("D")!.Stops.Single(s => s.Seq == 45);
     }
 
-    private StopArrivals For45() => Arrivals.ForStop(_stop45.StopCode, "D", _tracked, _tracks);
+    private StopArrivals For45() => Arrivals.ForStop(_stop45.StopCode, "D", _tracked, _tracks, new EtaContext(new HopTimes(), SnapshotTime, false));
 
     [Fact]
     public void ApproachingBuses_AreOrderedByDistanceWithStopsAwayAndEta()
@@ -27,7 +27,7 @@ public sealed class ArrivalsTests
         Assert.Equal("O1025", nearest.Bus.Bus.DoorNo);
         Assert.InRange(nearest.StopsAway, 6, 8);
         Assert.True(nearest.DistanceMeters > 0);
-        Assert.Equal(Arrivals.EstimateSeconds(nearest.DistanceMeters, null, _tracks.Main("D")!.ScheduledSpeedMps), nearest.EtaSeconds);
+        Assert.Equal(Arrivals.SpeedEstimate(nearest.DistanceMeters, null, _tracks.Main("D")!.ScheduledSpeedMps), nearest.EtaSeconds);
     }
 
     [Fact]
@@ -63,11 +63,11 @@ public sealed class ArrivalsTests
     }
 
     [Fact]
-    public void Eta_BlendsObservedAndScheduledSpeed()
+    public void SpeedEta_BlendsObservedAndScheduledSpeed()
     {
-        Assert.Equal(1000, Arrivals.EstimateSeconds(5000, null, 5));
-        Assert.Equal(500, Arrivals.EstimateSeconds(5000, 10 * 1.0 / 0.6 - 5 * 0.4 / 0.6, 5));
-        Assert.Equal(0, Arrivals.EstimateSeconds(20, 10, 5));
-        Assert.Equal(2500, Arrivals.EstimateSeconds(5000, 0, 1));
+        Assert.Equal(1000, Arrivals.SpeedEstimate(5000, null, 5));
+        Assert.Equal(500, Arrivals.SpeedEstimate(5000, 10 * 1.0 / 0.6 - 5 * 0.4 / 0.6, 5));
+        Assert.Equal(0, Arrivals.SpeedEstimate(20, 10, 5));
+        Assert.Equal(2500, Arrivals.SpeedEstimate(5000, 0, 1));
     }
 }

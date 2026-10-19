@@ -38,6 +38,10 @@ builder.Services.AddSingleton<RequestLog>();
 builder.Services.AddHostedService(services => services.GetRequiredService<RequestLog>());
 builder.Services.AddSingleton<FleetFeed>();
 builder.Services.AddSingleton<BusLineMemory>();
+builder.Services.AddSingleton<BusTracker.Api.Tracking.HopTimes>();
+builder.Services.AddHostedService<HopTimeLog>();
+builder.Services.AddSingleton<EtaAccuracy>();
+builder.Services.AddHostedService(services => services.GetRequiredService<EtaAccuracy>());
 builder.Services.AddSingleton<LineDataService>();
 builder.Services.AddSingleton<RouteShapeRepository>();
 builder.Services.AddSingleton<RouteShapeSync>();
@@ -118,6 +122,7 @@ app.MapFavoriteEndpoints();
 app.MapStopEndpoints();
 app.MapLineEndpoints();
 app.MapLiveEndpoints();
+app.MapStatsEndpoints();
 app.MapFallbackToFile("{*path:regex(^(?!api/|dev/|health).*$)}", "index.html").AllowAnonymous();
 
 var access = app.Services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Access;

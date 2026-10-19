@@ -40,19 +40,24 @@ public sealed class LineTracker(TrackingOptions options)
     private const double MaxBusSpeedMps = 30;
     private const double WindowToleranceMeters = 50;
     private const double StraightLineOffRouteMeters = 750;
+    private const int FirstMeasuredHop = 1;
+    private const double MinHopSeconds = 3;
+    private const double MaxHopSeconds = 30 * 60;
+    private const double MinHopSpeedMps = 0.2;
 
     private readonly Dictionary<string, BusState> _states = [];
 
-    public IReadOnlyList<TrackedBus> Update(IReadOnlyList<LiveBus> buses, LineTracks tracks, DateTimeOffset now)
+    public IReadOnlyList<TrackedBus> Update(
+        IReadOnlyList<LiveBus> buses, LineTracks tracks, DateTimeOffset now, TrackerEvents? events = null)
     {
-        var tracked = buses.Select(bus => Track(bus, tracks, now)).ToList();
+        var tracked = buses.Select(bus => Track(bus, tracks, now, events)).ToList();
         Forget(now);
         return tracked;
     }
 
     public void Reset(string doorNo) => _states.Remove(doorNo);
 
-    private TrackedBus Track(LiveBus bus, LineTracks tracks, DateTimeOffset now)
+    private TrackedBus Track(LiveBus bus, LineTracks tracks, DateTimeOffset now, TrackerEvents? events)
     {
         var ageSeconds = (int)Math.Max(0, (now - bus.ReportedAt).TotalSeconds);
         var track = tracks.For(bus.RouteCode, bus.Direction);
@@ -60,7 +65,7 @@ public sealed class LineTracker(TrackingOptions options)
 
         _states.TryGetValue(bus.DoorNo, out var previous);
         var projection = Project(bus, track, previous);
-        var state = Advance(bus, track, projection, previous);
+        var state = Advance(bus, track, projection, previous, events);
         _states[bus.DoorNo] = state.Current;
 
         return new TrackedBus(
@@ -92,16 +97,39 @@ public sealed class LineTracker(TrackingOptions options)
     }
 
     private static (BusState Current, IReadOnlyList<PlacedStop> Passed) Advance(
-        LiveBus bus, RouteTrack track, Projection projection, BusState? previous)
+        LiveBus bus, RouteTrack track, Projection projection, BusState? previous, TrackerEvents? events)
     {
         if (previous is not null && bus.ReportedAt <= previous.ReportedAt) return (previous, []);
 
         if (previous is null || IsNewTrip(bus, projection, previous))
             return (BusState.Start(bus, projection.AlongMeters), []);
 
-        var passed = track.StopsPassedBetween(previous.AlongMeters, projection.AlongMeters).ToList();
-        return (previous.MoveTo(bus.ReportedAt, projection.AlongMeters, SpeedWindow), passed);
+        var passed = track.StopsPassedBetween(previous.AlongMeters, projection.AlongMeters).OrderBy(s => s.Index).ToList();
+        var moved = previous.MoveTo(bus.ReportedAt, projection.AlongMeters, SpeedWindow);
+        foreach (var stop in passed)
+            moved = Cross(moved, previous, bus, projection.AlongMeters, track, stop, events);
+        return (moved, passed);
     }
+
+    private static BusState Cross(
+        BusState state, BusState previous, LiveBus bus, double along, RouteTrack track, PlacedStop stop, TrackerEvents? events)
+    {
+        var fraction = (stop.AlongMeters - previous.AlongMeters) / (along - previous.AlongMeters);
+        var crossedAt = previous.ReportedAt + (bus.ReportedAt - previous.ReportedAt) * Math.Clamp(fraction, 0, 1);
+        events?.Crossed?.Invoke(new StopCrossing(track.RouteCode, bus.DoorNo, stop.Index, crossedAt));
+        if (state.CrossedStop == stop.Index - 1 && stop.Index - 1 >= FirstMeasuredHop && state.CrossedAt is { } since)
+        {
+            var seconds = (crossedAt - since).TotalSeconds;
+            var meters = stop.AlongMeters - track.Stops[stop.Index - 1].AlongMeters;
+            if (IsPlausibleHop(meters, seconds))
+                events?.Hop?.Invoke(new HopObservation(track.RouteCode, stop.Index - 1, crossedAt, seconds));
+        }
+        return state with { CrossedStop = stop.Index, CrossedAt = crossedAt };
+    }
+
+    private static bool IsPlausibleHop(double meters, double seconds) =>
+        meters > 0 && seconds >= MinHopSeconds && seconds <= MaxHopSeconds
+        && meters / seconds <= MaxBusSpeedMps && meters / seconds >= MinHopSpeedMps;
 
     private static bool IsNewTrip(LiveBus bus, Projection projection, BusState previous) =>
         previous.RouteCode != bus.RouteCode || projection.AlongMeters < previous.AlongMeters - NewTripBackwardsMeters;
@@ -138,7 +166,9 @@ public sealed class LineTracker(TrackingOptions options)
         string TripId,
         DateTimeOffset ReportedAt,
         double AlongMeters,
-        IReadOnlyList<(DateTimeOffset At, double Along)> Samples)
+        IReadOnlyList<(DateTimeOffset At, double Along)> Samples,
+        int? CrossedStop = null,
+        DateTimeOffset? CrossedAt = null)
     {
         public static BusState Start(LiveBus bus, double along) =>
             new(bus.RouteCode, $"{bus.DoorNo}:{bus.RouteCode}:{bus.ReportedAt:yyyyMMddHHmm}", bus.ReportedAt, along,

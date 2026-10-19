@@ -26,6 +26,8 @@ public sealed class LineDataService(
     FleetCallGate gate,
     FleetFeed fleetFeed,
     BusLineMemory memory,
+    HopTimes hops,
+    EtaAccuracy accuracy,
     RouteShapeRepository shapes,
     StopIndexRepository stopIndex,
     IOptions<BusTrackerOptions> options,
@@ -42,6 +44,8 @@ public sealed class LineDataService(
     private readonly ConcurrentDictionary<string, Lazy<Task<GateDecision?>>> _rosterRefreshes = new();
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, DateTimeOffset>> _newcomers = new();
     private readonly ConcurrentDictionary<string, DateTimeOffset> _newcomerRechecks = new();
+    private readonly TrackerEvents _events = new(hops.Record, accuracy.Crossed);
+    private static readonly int[] SampledStopsAhead = [0, 4, 9, 14];
 
     private TimeSpan StaticMaxAge => TimeSpan.FromHours(_options.StaticData.RefreshHours);
     private TimeSpan RosterMaxAge => TimeSpan.FromMinutes(_options.Polling.RosterMaxAgeMinutes);
@@ -98,6 +102,10 @@ public sealed class LineDataService(
     }
 
     public DateTimeOffset? LastFetchedAt(string lineCode) => memory.RosterAt(lineCode);
+
+    public HopTimes Hops => hops;
+
+    public EtaContext Eta(DateTimeOffset now) => new(hops, now, _options.Tracking.UseHopTimes);
 
     public Task WhenIdleAsync() =>
         Task.WhenAll(_rosterRefreshes.Values.Select(r => r.Value).Append(fleetFeed.WhenIdleAsync()))
@@ -194,13 +202,14 @@ public sealed class LineDataService(
 
         var now = clock.GetUtcNow();
         var tracker = _trackers.GetOrAdd(lineCode, _ => new LineTracker(_options.Tracking));
-        var tracked = tracker.Update(buses, tracks, now).ToList();
+        var tracked = tracker.Update(buses, tracks, now, _events).ToList();
 
         var turns = Turnarounds.Find(previous?.Snapshot.Buses ?? [], tracked, tracks, _options.Tracking);
         tracked = ApplyTurnarounds(tracked, turns, assignments, tracker, tracks, now);
 
         FlagForRecheck(lineCode, check, turns);
         FlagNewcomers(lineCode, fleet, tracks, now);
+        SamplePredictions(tracked, tracks, now);
 
         var snapshot = new LiveSnapshot(tracked, PositionsAt(lineCode, fleet, buses, now));
         _snapshots[lineCode] = new LineSnapshot(snapshot, memory.Version, fleet?.FetchedAt);
@@ -214,6 +223,24 @@ public sealed class LineDataService(
     {
         if (turns.Flipped.Count > 0 || turns.Lost.Count > 0)
             _checks[lineCode] = new LineCheck(Recheck: true, Lost: new HashSet<string>(check.Lost.Concat(turns.Lost)));
+    }
+
+    private void SamplePredictions(IReadOnlyList<TrackedBus> tracked, LineTracks tracks, DateTimeOffset now)
+    {
+        foreach (var bus in tracked)
+        {
+            if (bus is not { Status: BusStatus.Ok, AlongMeters: { } along }) continue;
+            if (tracks.For(bus.Bus.RouteCode, bus.Bus.Direction) is not { } track || track.NextStop(along) is not { } next) continue;
+
+            foreach (var ahead in SampledStopsAhead)
+            {
+                if (next.Index + ahead >= track.Stops.Count) break;
+                var stop = track.Stops[next.Index + ahead];
+                var eta = Arrivals.EstimateBoth(bus, track, stop, hops, now);
+                accuracy.Predicted(new EtaPrediction(track.RouteCode, bus.Bus.DoorNo, stop.Index, now,
+                    eta.SpeedSeconds, eta.HopSeconds, stop.AlongMeters - along, bus.AgeSeconds));
+            }
+        }
     }
 
     private void FlagNewcomers(string lineCode, FleetSnapshot? fleet, LineTracks tracks, DateTimeOffset now)
@@ -266,7 +293,7 @@ public sealed class LineDataService(
         var flippedDoors = turns.Flipped.Select(b => b.DoorNo).ToHashSet();
         return tracked
             .Where(b => !flippedDoors.Contains(b.Bus.DoorNo) && !turns.Lost.Contains(b.Bus.DoorNo))
-            .Concat(tracker.Update(turns.Flipped, tracks, now))
+            .Concat(tracker.Update(turns.Flipped, tracks, now, _events))
             .ToList();
     }
 
