@@ -17,21 +17,24 @@ public sealed class RequestLogTests
         await client.GetAsync("/health");
 
         var records = await ReadAsync(factory);
-        var arrivals = records.Single(r => (string?)r["path"] == "/api/stops/402011/arrivals");
-        Assert.Equal("request", (string?)arrivals["kind"]);
-        Assert.Equal("/api/stops/{code}/arrivals", (string?)arrivals["route"]);
-        Assert.Equal(200, (int?)arrivals["status"]);
-        Assert.NotNull(arrivals["user"]);
-        Assert.NotNull(arrivals["waits"]?["ibb"]);
-        Assert.NotNull(arrivals["waits"]?["db"]);
-        Assert.Contains(arrivals["spans"]!.AsArray(), s => (string?)s?["name"] == "ibb" && (string?)s["detail"] == "GetFiloAracKonum_json");
-        Assert.Contains(arrivals["spans"]!.AsArray(), s => (string?)s?["name"] == "wait" && ((string?)s["detail"])!.StartsWith("roster "));
+        Assert.Contains(records, IsLoggedArrivals);
         Assert.DoesNotContain(records, r => (string?)r["path"] == "/health");
 
         var roster = records.First(r => (string?)r["name"] == "roster refresh");
         Assert.Equal("background", (string?)roster["kind"]);
         Assert.Contains(roster["spans"]!.AsArray(), s => (string?)s?["name"] == "ibb" && ((string?)s["detail"])!.StartsWith("GetHatOtoKonum_json"));
     }
+
+    private static bool IsLoggedArrivals(JsonNode record) =>
+        (string?)record["path"] == "/api/stops/402011/arrivals"
+        && (string?)record["kind"] == "request"
+        && (string?)record["route"] == "/api/stops/{code}/arrivals"
+        && (int?)record["status"] == 200
+        && record["user"] is not null
+        && record["waits"]?["ibb"] is not null
+        && record["waits"]?["db"] is not null
+        && record["spans"]!.AsArray().Any(s => (string?)s?["name"] == "ibb" && (string?)s["detail"] == "GetFiloAracKonum_json")
+        && record["spans"]!.AsArray().Any(s => (string?)s?["name"] == "wait" && ((string?)s["detail"])!.StartsWith("roster "));
 
     private static async Task<IReadOnlyList<JsonNode>> ReadAsync(TestAppFactory factory)
     {

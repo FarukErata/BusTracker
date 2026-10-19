@@ -89,6 +89,10 @@ public static class LiveEndpoints
             var empty = new LiveResult(new LiveSnapshot([], clock.GetUtcNow()), false, null, null);
             return respond(empty);
         }
+        catch (Exception e) when (e is IbbException or HttpRequestException || e is OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            return LineCode.Unavailable(new LineUnavailableException("ibb-error", clock.GetUtcNow().AddMinutes(1)), clock);
+        }
     }
 
     private static TrackedBusView ToView(TrackedBus t) =>

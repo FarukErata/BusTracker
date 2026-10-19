@@ -179,7 +179,7 @@ public sealed partial class TracedCommand(TracedConnection connection, SqliteCom
         base.Dispose(disposing);
     }
 
-    private Activity? Span() => Telemetry.Span("db", Describe(inner.CommandText));
+    private Activity? Span() => Telemetry.Recording ? Telemetry.Span("db", Describe(inner.CommandText)) : null;
 
     private static string Describe(string sql)
     {

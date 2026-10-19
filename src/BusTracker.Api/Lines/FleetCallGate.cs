@@ -100,7 +100,8 @@ public sealed class FleetCallGate(IOptions<BusTrackerOptions> options, TimeProvi
     private DateTimeOffset? RosterLimitReached(DateTimeOffset now)
     {
         var rosters = _calls.Where(c => c.Kind == FleetCallKind.Roster).Select(c => c.At).ToList();
-        if (rosters.Count >= _polling.RosterCallsPerHour) return rosters[0] + Hour;
+        var rosterLimit = Math.Min(_polling.RosterCallsPerHour, _polling.CallsPerHour - _polling.FleetReservedCalls);
+        if (rosters.Count >= rosterLimit) return rosterLimit > 0 ? rosters[rosters.Count - rosterLimit] + Hour : now + Hour;
 
         var lastMinute = rosters.Where(at => now - at < Minute).ToList();
         return lastMinute.Count >= _polling.RosterCallsPerMinute ? lastMinute[0] + Minute : null;

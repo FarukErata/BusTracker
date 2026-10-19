@@ -19,6 +19,7 @@ public sealed record DataSourceState(
 public sealed class RouteShapeRepository(Database database)
 {
     public const string SourceName = "route-shapes";
+    private const int ImportBatch = 500;
 
     public async Task<int> ReplaceAllAsync(IAsyncEnumerable<RouteShape> shapes, int minimumCount, CancellationToken ct)
     {
@@ -27,7 +28,7 @@ public sealed class RouteShapeRepository(Database database)
         await connection.ExecuteAsync("DELETE FROM route_shapes;", transaction: transaction);
 
         var count = 0;
-        await foreach (var shape in shapes.WithCancellation(ct))
+        await foreach (var chunk in shapes.Chunk(ImportBatch).WithCancellation(ct))
         {
             await connection.ExecuteAsync(
                 """
@@ -35,15 +36,15 @@ public sealed class RouteShapeRepository(Database database)
                     (route_code, line_code, direction, variant, length_m, duration_s, point_count, polyline)
                 VALUES (@RouteCode, @LineCode, @Direction, @Variant, @LengthMeters, @DurationSeconds, @PointCount, @Polyline);
                 """,
-                new
+                chunk.Select(shape => new
                 {
                     shape.RouteCode, shape.LineCode, shape.Direction, shape.Variant,
                     shape.LengthMeters, shape.DurationSeconds,
                     PointCount = shape.Points.Count,
                     Polyline = PolylineCodec.Encode(shape.Points),
-                },
+                }),
                 transaction);
-            count++;
+            count += chunk.Length;
         }
 
         if (count < minimumCount)

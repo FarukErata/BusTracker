@@ -88,7 +88,10 @@ public sealed class LineTracks
     {
         _byRouteCode = byRouteCode;
         _mainByDirection = mainByDirection;
+        Mains = mainByDirection.Values.ToList();
     }
+
+    public IReadOnlyList<RouteTrack> Mains { get; }
 
     public static readonly LineTracks Empty = new([], []);
 

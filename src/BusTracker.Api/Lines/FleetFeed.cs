@@ -91,7 +91,7 @@ public sealed class FleetFeed(
         _lastCall = now;
         try
         {
-            var vehicles = await ibb.GetFleetAsync(now, ct);
+            var vehicles = await ibb.GetFleetAsync(now, CancellationToken.None);
             gate.ReportSuccess();
             _latest = new FleetSnapshot(Newest(vehicles), now);
         }
@@ -100,7 +100,7 @@ public sealed class FleetFeed(
             gate.ReportRateLimited();
             logger.LogWarning("İBB rate limit hit while fetching the fleet; backing off until {Until}", gate.BlockedUntil);
         }
-        catch (Exception e) when (e is IbbException or HttpRequestException || e is OperationCanceledException && !ct.IsCancellationRequested)
+        catch (Exception e) when (e is IbbException or HttpRequestException or OperationCanceledException or System.Text.Json.JsonException)
         {
             logger.LogWarning(e, "Fleet fetch failed; keeping the previous positions");
         }

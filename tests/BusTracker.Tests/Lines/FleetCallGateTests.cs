@@ -9,7 +9,7 @@ public sealed class FleetCallGateTests
 {
     private readonly FakeTimeProvider _clock = new(new DateTimeOffset(2026, 10, 14, 9, 0, 0, TimeSpan.Zero));
 
-    private FleetCallGate CreateGate(int perHour = 90, int rostersPerHour = 30, int rostersPerMinute = 4) =>
+    private FleetCallGate CreateGate(int perHour = 90, int rostersPerHour = 30, int rostersPerMinute = 4, int fleetReserved = 0) =>
         new(Options.Create(new BusTrackerOptions
         {
             Polling = new PollingOptions
@@ -17,6 +17,7 @@ public sealed class FleetCallGateTests
                 CallsPerHour = perHour,
                 RosterCallsPerHour = rostersPerHour,
                 RosterCallsPerMinute = rostersPerMinute,
+                FleetReservedCalls = fleetReserved,
                 BackoffMinutes = [5, 10, 20],
             },
         }), _clock);
@@ -77,6 +78,32 @@ public sealed class FleetCallGateTests
         Assert.False(gate.TryAcquire(FleetCallKind.Roster).Allowed);
         Assert.True(gate.TryAcquire(FleetCallKind.Fleet).Allowed);
         Assert.Equal(new FleetCallCounts(1, 2), gate.CallsInLastHour);
+    }
+
+    [Fact]
+    public void FleetReserve_KeepsRostersFromUsingTheFleetsShare()
+    {
+        var gate = CreateGate(perHour: 6, rostersPerHour: 10, rostersPerMinute: 10, fleetReserved: 4);
+
+        Assert.True(gate.TryAcquire(FleetCallKind.Roster).Allowed);
+        Assert.True(gate.TryAcquire(FleetCallKind.Roster).Allowed);
+        var denied = gate.TryAcquire(FleetCallKind.Roster);
+
+        Assert.False(denied.Allowed);
+        Assert.Equal(_clock.GetUtcNow().AddHours(1), denied.RetryAt);
+        Assert.All(Enumerable.Range(0, 4), _ => Assert.True(gate.TryAcquire(FleetCallKind.Fleet).Allowed));
+        Assert.False(gate.TryAcquire(FleetCallKind.Fleet).Allowed);
+    }
+
+    [Fact]
+    public void FleetReserve_LeavesRostersAloneWhileTheFleetIsBusy()
+    {
+        var gate = CreateGate(perHour: 6, rostersPerHour: 10, rostersPerMinute: 10, fleetReserved: 4);
+
+        Assert.All(Enumerable.Range(0, 4), _ => Assert.True(gate.TryAcquire(FleetCallKind.Fleet).Allowed));
+
+        Assert.True(gate.TryAcquire(FleetCallKind.Roster).Allowed);
+        Assert.True(gate.TryAcquire(FleetCallKind.Roster).Allowed);
     }
 
     [Fact]

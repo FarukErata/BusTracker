@@ -49,6 +49,7 @@ public sealed class UserRepository(Database database, ILogger<UserRepository> lo
     {
         if (now - device.LastSeenAt < TouchInterval) return;
 
+        using var detached = ExecutionContext.SuppressFlow();
         _ = Task.Run(async () =>
         {
             try

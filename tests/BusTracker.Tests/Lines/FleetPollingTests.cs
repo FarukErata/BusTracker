@@ -75,7 +75,7 @@ public sealed class FleetPollingTests
         var client = await factory.CreateUserClientAsync();
 
         await client.GetAsync("/api/lines/131Y/live");
-        factory.Clock.Advance(TimeSpan.FromMinutes(14));
+        factory.Clock.Advance(TimeSpan.FromMinutes(59));
         await client.GetAsync("/api/lines/131Y/live");
         Assert.Equal(1, factory.CallsTo(Roster));
 
@@ -94,7 +94,7 @@ public sealed class FleetPollingTests
         await client.GetAsync("/api/lines/131Y/live");
 
         factory.RosterDelay = TimeSpan.FromSeconds(3);
-        factory.Clock.Advance(TimeSpan.FromMinutes(15));
+        factory.Clock.Advance(TimeSpan.FromMinutes(60));
         var timer = System.Diagnostics.Stopwatch.StartNew();
         var live = await client.GetFromJsonAsync<LineLiveResponse>("/api/lines/131Y/live");
         timer.Stop();
@@ -124,6 +124,45 @@ public sealed class FleetPollingTests
         Assert.Equal("G", flipped.Direction);
         Assert.Equal(inbound.Stops[^1].Name, flipped.Destination);
         Assert.Equal(1, factory.CallsTo(Roster));
+    }
+
+    [Fact]
+    public async Task UnknownBusLeavingTheFirstStop_TriggersOneRosterRecheck()
+    {
+        using var factory = new TestAppFactory();
+        var client = await factory.CreateUserClientAsync();
+        var route = (await TracksAsync(factory)).Main("G")!;
+        await client.GetAsync("/api/lines/131Y/live");
+        var start = route.Stops[0].AlongMeters;
+
+        await MoveAsync(factory, client, "NEW-1", route.Geometry.PointAt(start), "13:07:50");
+        factory.Clock.Advance(TimeSpan.FromMinutes(3));
+        await RefreshedAsync(factory, client);
+        Assert.Equal(1, factory.CallsTo(Roster));
+
+        await MoveAsync(factory, client, "NEW-1", route.Geometry.PointAt(start + 400), "13:11:50");
+        factory.Clock.Advance(TimeSpan.FromMinutes(3));
+        await RefreshedAsync(factory, client);
+        Assert.Equal(2, factory.CallsTo(Roster));
+
+        await MoveAsync(factory, client, "NEW-1", route.Geometry.PointAt(start + 900), "13:15:50");
+        factory.Clock.Advance(TimeSpan.FromMinutes(3));
+        await RefreshedAsync(factory, client);
+        Assert.Equal(2, factory.CallsTo(Roster));
+    }
+
+    [Fact]
+    public async Task StopFilter_RefreshesOnlyTheChosenLines()
+    {
+        using var factory = new TestAppFactory();
+        await factory.SeedStopIndexAsync();
+        var client = await factory.CreateUserClientAsync();
+
+        var view = await client.GetFromJsonAsync<StopArrivalsView>("/api/stops/402011/arrivals?lines=131Y");
+
+        Assert.Equal(1, factory.CallsTo(Roster));
+        Assert.Equal(5, view!.Lines.Select(l => l.Line).Distinct().Count());
+        Assert.NotEmpty(view.Arrivals);
     }
 
     [Fact]

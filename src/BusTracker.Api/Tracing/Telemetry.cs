@@ -18,8 +18,11 @@ public static class Telemetry
 
     private static readonly ActivitySource Source = new(SourceName);
 
+    public static bool Recording => RootOf(Activity.Current) is not null;
+
     public static Activity? Span(string name, string? detail = null)
     {
+        if (!Recording) return null;
         var activity = Source.StartActivity(name);
         if (detail is not null) activity?.SetTag(DetailTag, detail);
         return activity;

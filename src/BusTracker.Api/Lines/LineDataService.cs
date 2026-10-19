@@ -40,18 +40,27 @@ public sealed class LineDataService(
     private readonly ConcurrentDictionary<string, LineTracker> _trackers = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _lineLocks = new();
     private readonly ConcurrentDictionary<string, Lazy<Task<GateDecision?>>> _rosterRefreshes = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, DateTimeOffset>> _newcomers = new();
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _newcomerRechecks = new();
 
     private TimeSpan StaticMaxAge => TimeSpan.FromHours(_options.StaticData.RefreshHours);
     private TimeSpan RosterMaxAge => TimeSpan.FromMinutes(_options.Polling.RosterMaxAgeMinutes);
     private TimeSpan RosterRecheck => TimeSpan.FromMinutes(_options.Polling.RosterRecheckMinutes);
+    private TimeSpan StaleAfter => TimeSpan.FromSeconds(_options.Tracking.StaleAfterSeconds);
+    private static readonly TimeSpan NewcomerMemory = TimeSpan.FromHours(6);
+    private static readonly TimeSpan NewcomerCooldown = TimeSpan.FromMinutes(20);
+    private static readonly TimeSpan RetryAfterError = TimeSpan.FromMinutes(1);
+    private const double DepartureWindowMeters = 1500;
+    private const double OnRouteMeters = 50;
 
     public async Task<IReadOnlyList<RouteStop>> GetStopsAsync(string lineCode, CancellationToken ct)
     {
         if (TryGetFresh(_stops, lineCode) is { } cached) return cached;
 
         var indexed = await stopIndex.GetRouteStopsAsync(lineCode, ct);
+        if (indexed.Count == 0 && (await stopIndex.GetStateAsync(ct)).Count > 0) return [];
         var stops = indexed.Count > 0 ? indexed : await ibb.GetRouteStopsAsync(lineCode, ct);
-        _stops[lineCode] = new Cached<IReadOnlyList<RouteStop>>(stops, clock.GetUtcNow());
+        if (stops.Count > 0) _stops[lineCode] = new Cached<IReadOnlyList<RouteStop>>(stops, clock.GetUtcNow());
         return stops;
     }
 
@@ -62,12 +71,13 @@ public sealed class LineDataService(
         var stops = await GetStopsAsync(lineCode, ct);
         var lineShapes = await shapes.GetForLineAsync(lineCode, ct);
         var tracks = stops.Count == 0 ? LineTracks.Empty : LineTracks.Build(stops, lineShapes, _options.Tracking.StopOnRouteMeters);
-        _tracks[lineCode] = new Cached<LineTracks>(tracks, clock.GetUtcNow());
+        if (stops.Count > 0 && lineShapes.Count > 0) _tracks[lineCode] = new Cached<LineTracks>(tracks, clock.GetUtcNow());
         return tracks;
     }
 
     public async Task<LiveResult> GetLiveAsync(string lineCode, CancellationToken ct, bool refreshRoster = true)
     {
+        await memory.EnsureLoadedAsync(ct);
         var tracks = await GetTracksAsync(lineCode, ct);
         var denied = refreshRoster && IsRosterDue(lineCode) ? await RefreshRosterAsync(lineCode, ct) : null;
         var lineLock = _lineLocks.GetOrAdd(lineCode, _ => new SemaphoreSlim(1, 1));
@@ -106,9 +116,6 @@ public sealed class LineDataService(
             return await refresh;
         }
 
-        _ = refresh.ContinueWith(
-            t => logger.LogWarning(t.Exception, "Background roster refresh for {Line} failed", lineCode),
-            CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
         return null;
     }
 
@@ -138,8 +145,17 @@ public sealed class LineDataService(
         {
             var buses = await ibb.GetLiveBusesAsync(lineCode, CancellationToken.None);
             gate.ReportSuccess();
-            await memory.ApplyRosterAsync(lineCode, buses, CancellationToken.None);
-            _checks.TryRemove(lineCode, out _);
+            var lineLock = _lineLocks.GetOrAdd(lineCode, _ => new SemaphoreSlim(1, 1));
+            await Telemetry.EnterAsync(lineLock, $"line {lineCode}", CancellationToken.None);
+            try
+            {
+                await memory.ApplyRosterAsync(lineCode, buses, CancellationToken.None);
+                _checks.TryRemove(lineCode, out _);
+            }
+            finally
+            {
+                lineLock.Release();
+            }
             return null;
         }
         catch (IbbRateLimitedException)
@@ -147,6 +163,12 @@ public sealed class LineDataService(
             gate.ReportRateLimited();
             logger.LogWarning("İBB rate limit hit while fetching {Line}; backing off until {Until}", lineCode, gate.BlockedUntil);
             return GateDecision.Deny("rate-limited", gate.BlockedUntil ?? clock.GetUtcNow());
+        }
+        catch (Exception e) when (e is IbbException or HttpRequestException or OperationCanceledException
+                                      or System.Text.Json.JsonException or System.Data.Common.DbException)
+        {
+            logger.LogWarning(e, "Roster refresh for {Line} failed", lineCode);
+            return GateDecision.Deny("ibb-error", clock.GetUtcNow() + RetryAfterError);
         }
     }
 
@@ -178,6 +200,7 @@ public sealed class LineDataService(
         tracked = ApplyTurnarounds(tracked, turns, assignments, tracker, tracks, now);
 
         FlagForRecheck(lineCode, check, turns);
+        FlagNewcomers(lineCode, fleet, tracks, now);
 
         var snapshot = new LiveSnapshot(tracked, PositionsAt(lineCode, fleet, buses, now));
         _snapshots[lineCode] = new LineSnapshot(snapshot, memory.Version, fleet?.FetchedAt);
@@ -191,6 +214,39 @@ public sealed class LineDataService(
     {
         if (turns.Flipped.Count > 0 || turns.Lost.Count > 0)
             _checks[lineCode] = new LineCheck(Recheck: true, Lost: new HashSet<string>(check.Lost.Concat(turns.Lost)));
+    }
+
+    private void FlagNewcomers(string lineCode, FleetSnapshot? fleet, LineTracks tracks, DateTimeOffset now)
+    {
+        if (fleet is null || tracks.Mains.Count == 0) return;
+        if (_newcomerRechecks.TryGetValue(lineCode, out var last) && now - last < NewcomerCooldown) return;
+
+        var seen = _newcomers.GetOrAdd(lineCode, _ => new ConcurrentDictionary<string, DateTimeOffset>());
+        foreach (var (door, at) in seen)
+            if (now - at > NewcomerMemory) seen.TryRemove(door, out _);
+
+        var arrived = fleet.Vehicles.Values.Where(v => IsNewcomer(v, lineCode, tracks, now)).Count(v => seen.TryAdd(v.DoorNo, now));
+        if (arrived == 0) return;
+
+        _newcomerRechecks[lineCode] = now;
+        _checks.AddOrUpdate(lineCode, _ => LineCheck.None with { Recheck = true }, (_, current) => current with { Recheck = true });
+        logger.LogInformation("{Count} unknown buses at the start of {Line}; rechecking its roster", arrived, lineCode);
+    }
+
+    private bool IsNewcomer(FleetVehicle vehicle, string lineCode, LineTracks tracks, DateTimeOffset now) =>
+        now - vehicle.ReportedAt < StaleAfter
+        && !memory.KnowsOn(vehicle.DoorNo, lineCode)
+        && tracks.Mains.Any(track => JustLeftTheStart(track, vehicle));
+
+    private bool JustLeftTheStart(RouteTrack track, FleetVehicle vehicle)
+    {
+        if (track.Stops.Count == 0) return false;
+        var start = track.Stops[0];
+        if (Geo.DistanceMeters(start.Lat, start.Lng, vehicle.Lat, vehicle.Lng) > DepartureWindowMeters + _options.Tracking.TerminalMeters) return false;
+
+        var from = start.AlongMeters + _options.Tracking.TerminalMeters;
+        var projection = track.Geometry.Project(new LatLng(vehicle.Lat, vehicle.Lng), from, start.AlongMeters + DepartureWindowMeters);
+        return projection.OffsetMeters <= OnRouteMeters && projection.AlongMeters >= from;
     }
 
     private List<TrackedBus> ApplyTurnarounds(

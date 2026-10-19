@@ -32,6 +32,11 @@ public sealed class BusLineMemory(Database database, IOptions<BusTrackerOptions>
 
     public int Count => _byDoor.Count;
 
+    public bool KnowsOn(string doorNo, string lineCode) =>
+        _byDoor.TryGetValue(doorNo, out var assignment)
+        && assignment.LineCode == lineCode
+        && clock.GetUtcNow() - assignment.ConfirmedAt < _trust;
+
     public DateTimeOffset? RosterAt(string lineCode) => _rosterAt.TryGetValue(lineCode, out var at) ? at : null;
 
     public async Task<IReadOnlyList<BusAssignment>> OnLineAsync(string lineCode, CancellationToken ct)
@@ -81,7 +86,8 @@ public sealed class BusLineMemory(Database database, IOptions<BusTrackerOptions>
         if (_byDoor.TryGetValue(assignment.DoorNo, out var current) && current.LineCode == assignment.LineCode)
             _byDoor[assignment.DoorNo] = current with { RouteCode = routeCode, Destination = destination };
         Interlocked.Increment(ref _version);
-        _ = PersistReassignAsync(assignment.DoorNo, assignment.LineCode, routeCode, destination);
+        using var detached = ExecutionContext.SuppressFlow();
+        _ = Task.Run(() => PersistReassignAsync(assignment.DoorNo, assignment.LineCode, routeCode, destination));
     }
 
     private async Task PersistReassignAsync(string doorNo, string lineCode, string routeCode, string destination)
@@ -104,7 +110,7 @@ public sealed class BusLineMemory(Database database, IOptions<BusTrackerOptions>
         }
     }
 
-    private async Task EnsureLoadedAsync(CancellationToken ct)
+    public async Task EnsureLoadedAsync(CancellationToken ct)
     {
         if (_loaded) return;
 

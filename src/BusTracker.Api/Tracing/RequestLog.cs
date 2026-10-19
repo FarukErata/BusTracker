@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -17,7 +18,7 @@ public sealed class RequestLog : BackgroundService
     private static readonly TimeSpan ShownDbSpan = TimeSpan.FromMilliseconds(1);
 
     private readonly Channel<string> _lines = Channel.CreateBounded<string>(
-        new BoundedChannelOptions(10_000) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
+        new BoundedChannelOptions(10_000) { FullMode = BoundedChannelFullMode.DropWrite, SingleReader = true });
     private readonly RequestLogOptions _options;
     private readonly ILogger<RequestLog> _logger;
     private readonly ActivityListener? _listener;
@@ -58,14 +59,13 @@ public sealed class RequestLog : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_options.Enabled) return;
-        Directory.CreateDirectory(Folder);
         Prune();
         var pruned = DateTime.UtcNow.Date;
         try
         {
             while (await _lines.Reader.WaitToReadAsync(stoppingToken))
             {
-                await WriteBatchAsync(stoppingToken);
+                await WriteBatchAsync(CancellationToken.None);
                 if (DateTime.UtcNow.Date == pruned) continue;
                 pruned = DateTime.UtcNow.Date;
                 Prune();
@@ -74,6 +74,7 @@ public sealed class RequestLog : BackgroundService
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
         }
+        while (_lines.Reader.Count > 0) await WriteBatchAsync(CancellationToken.None);
     }
 
     private void OnStopped(Activity activity)
@@ -191,6 +192,7 @@ public sealed class RequestLog : BackgroundService
         while (batch.Count < 500 && _lines.Reader.TryRead(out var line)) batch.Add(line);
         try
         {
+            Directory.CreateDirectory(Folder);
             var file = Path.Combine(Folder, $"requests-{DateTime.UtcNow:yyyy-MM-dd}.jsonl");
             await File.AppendAllLinesAsync(file, batch, ct);
         }
@@ -206,11 +208,20 @@ public sealed class RequestLog : BackgroundService
 
     private void Prune()
     {
-        var oldest = DateTime.UtcNow.Date.AddDays(-_options.RetentionDays);
-        foreach (var file in Directory.EnumerateFiles(Folder, "requests-*.jsonl"))
+        try
         {
-            if (DateTime.TryParse(Path.GetFileNameWithoutExtension(file)["requests-".Length..], out var day) && day < oldest)
-                File.Delete(file);
+            Directory.CreateDirectory(Folder);
+            var oldest = DateTime.UtcNow.Date.AddDays(-_options.RetentionDays);
+            foreach (var file in Directory.EnumerateFiles(Folder, "requests-*.jsonl"))
+            {
+                var day = Path.GetFileNameWithoutExtension(file)["requests-".Length..];
+                if (DateTime.TryParseExact(day, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) && date < oldest)
+                    File.Delete(file);
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(e, "Could not clean up old request logs in {Folder}", Folder);
         }
     }
 }

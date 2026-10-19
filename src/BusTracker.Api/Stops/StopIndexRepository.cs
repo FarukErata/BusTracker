@@ -15,6 +15,7 @@ public sealed record StopLine(string LineCode, string Direction, string Directio
 public sealed class StopIndexRepository(Database database)
 {
     public const string SourceName = "stop-index";
+    private const int ImportBatch = 1000;
 
     public async Task<int> ReplaceAllAsync(IAsyncEnumerable<RouteStop> rows, int minimumCount, DateTimeOffset now, CancellationToken ct)
     {
@@ -23,7 +24,7 @@ public sealed class StopIndexRepository(Database database)
         await connection.ExecuteAsync("DELETE FROM stop_lines; DELETE FROM stops;", transaction: transaction);
 
         var count = 0;
-        await foreach (var row in rows.WithCancellation(ct))
+        await foreach (var chunk in rows.Chunk(ImportBatch).WithCancellation(ct))
         {
             await connection.ExecuteAsync(
                 """
@@ -32,13 +33,13 @@ public sealed class StopIndexRepository(Database database)
                 INSERT OR REPLACE INTO stop_lines (stop_code, line_code, direction, direction_name, seq)
                 VALUES (@StopCode, @LineCode, @Direction, @DirectionName, @Seq);
                 """,
-                new
+                chunk.Select(row => new
                 {
                     row.StopCode, row.Name, SearchName = SearchText.Normalize(row.Name), row.District, row.Lat, row.Lng,
                     row.LineCode, row.Direction, row.DirectionName, row.Seq,
-                },
+                }),
                 transaction);
-            count++;
+            count += chunk.Length;
         }
 
         if (count < minimumCount)
@@ -113,14 +114,11 @@ public sealed class StopIndexRepository(Database database)
             """,
             new { Contains = $"%{EscapeLike(normalized)}%", Starts = $"{EscapeLike(normalized)}%", Exact = query.Trim(), limit })).ToList();
 
-        var result = new List<(StopInfo, IReadOnlyList<string>)>();
-        foreach (var stop in stops)
-        {
-            var lines = await connection.QueryAsync<string>(
-                "SELECT DISTINCT line_code FROM stop_lines WHERE stop_code = @Code ORDER BY line_code;", new { stop.Code });
-            result.Add((stop, lines.ToList()));
-        }
-        return result;
+        var lines = (await connection.QueryAsync<(string StopCode, string LineCode)>(
+                "SELECT DISTINCT stop_code, line_code FROM stop_lines WHERE stop_code IN @Codes ORDER BY line_code;",
+                new { Codes = stops.Select(s => s.Code).ToList() }))
+            .ToLookup(r => r.StopCode, r => r.LineCode);
+        return stops.Select(stop => (stop, (IReadOnlyList<string>)lines[stop.Code].ToList())).ToList();
     }
 
     public async Task<IReadOnlyList<LineSummary>> SearchLinesAsync(string query, int limit, CancellationToken ct)
@@ -137,11 +135,11 @@ public sealed class StopIndexRepository(Database database)
                    (SELECT s.name FROM stop_lines t JOIN stops s ON s.stop_code = t.stop_code
                     WHERE t.line_code = l.line_code AND t.direction = l.direction ORDER BY t.seq DESC LIMIT 1) AS ToStop
             FROM (SELECT DISTINCT line_code, direction FROM stop_lines
-                  WHERE line_code IN (SELECT DISTINCT line_code FROM stop_lines WHERE line_code LIKE @Prefix ESCAPE '\'
+                  WHERE line_code IN (SELECT DISTINCT line_code FROM stop_lines WHERE line_code >= @Prefix AND line_code < @PrefixEnd
                                       ORDER BY LENGTH(line_code), line_code LIMIT @limit)) l
             ORDER BY LENGTH(l.line_code), l.line_code, l.direction;
             """,
-            new { Prefix = $"{EscapeLike(prefix)}%", limit });
+            new { Prefix = prefix, PrefixEnd = prefix + "\U0010FFFF", limit });
         return rows.GroupBy(r => r.LineCode)
             .Select(g => new LineSummary(g.Key, g.Select(r => new LineEnds(r.Direction, r.FromStop, r.ToStop)).ToList()))
             .ToList();

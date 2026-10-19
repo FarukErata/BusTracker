@@ -50,8 +50,11 @@ public sealed class PollingOptions
     [Range(1, 20)]
     public int RosterCallsPerMinute { get; init; } = 10;
 
+    [Range(0, 100)]
+    public int FleetReservedCalls { get; init; } = 45;
+
     [Range(1, 120)]
-    public int RosterMaxAgeMinutes { get; init; } = 15;
+    public int RosterMaxAgeMinutes { get; init; } = 60;
 
     [Range(1, 168)]
     public int MemoryTrustHours { get; init; } = 72;

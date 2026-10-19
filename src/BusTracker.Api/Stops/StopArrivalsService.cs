@@ -10,7 +10,7 @@ public sealed record StopArrivalsResult(StopInfo Stop, IReadOnlyList<LineAtStop>
 
 public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataService data)
 {
-    public async Task<StopArrivalsResult?> GetAsync(string stopCode, CancellationToken ct)
+    public async Task<StopArrivalsResult?> GetAsync(string stopCode, IReadOnlySet<string>? wanted, CancellationToken ct)
     {
         if (await stopIndex.GetStopAsync(stopCode, ct) is not { } stop) return null;
 
@@ -19,9 +19,8 @@ public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataS
         foreach (var line in lines)
             fromMemory.Add(await LoadAsync(stopCode, line, refreshRoster: false, ct));
 
-        var results = new List<LineAtStop>();
-        foreach (var known in MissingThenClosest(fromMemory))
-            results.Add(await LoadAsync(stopCode, known.Line, refreshRoster: true, ct));
+        var results = await Task.WhenAll(MissingThenClosest(fromMemory).Select(known =>
+            wanted is null || wanted.Contains(known.Line.LineCode) ? LoadAsync(stopCode, known.Line, refreshRoster: true, ct) : Task.FromResult(known)));
 
         return new StopArrivalsResult(stop, results.OrderBy(r => r.Line.LineCode).ThenBy(r => r.Line.Direction).ToList());
     }
@@ -45,9 +44,9 @@ public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataS
         {
             return new LineAtStop(line, null, $"waiting for data ({e.Reason})", [], e.RetryAt);
         }
-        catch (IbbException e)
+        catch (Exception e) when (e is IbbException or HttpRequestException || e is OperationCanceledException && !ct.IsCancellationRequested)
         {
-            return new LineAtStop(line, null, e.Message, []);
+            return new LineAtStop(line, null, "waiting for data (ibb-error)", [], DateTimeOffset.UtcNow.AddMinutes(1));
         }
     }
 }

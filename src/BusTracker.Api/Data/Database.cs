@@ -17,7 +17,7 @@ public sealed class Database
             : Path.Combine(environment.ContentRootPath, options.Value.DatabasePath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         FilePath = path;
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Pooling = true }.ToString();
+        _connectionString = new SqliteConnectionStringBuilder { DataSource = path, Pooling = true, ForeignKeys = true }.ToString();
     }
 
     public string FilePath { get; }
@@ -26,8 +26,15 @@ public sealed class Database
     {
         using var span = Telemetry.Span("db", "open");
         var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync(ct);
-        await connection.ExecuteAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+        try
+        {
+            await connection.OpenAsync(ct);
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
         return new TracedConnection(connection);
     }
 }
@@ -149,6 +156,7 @@ public sealed class DatabaseInitializer(Database database, ILogger<DatabaseIniti
     public async Task StartAsync(CancellationToken ct)
     {
         await using var connection = await database.OpenAsync(ct);
+        await connection.ExecuteAsync("PRAGMA journal_mode = WAL;");
         var version = await connection.ExecuteScalarAsync<int>("PRAGMA user_version;");
 
         for (var i = version; i < Migrations.Length; i++)

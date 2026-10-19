@@ -238,9 +238,11 @@ What we will do instead, most effective first:
 
 - **What it stores:** table `bus_lines` (door number → line, route variant, destination, last confirmed). Every roster call writes it: buses in the answer are assigned to that line, buses missing from it are removed from that line.
 - **How it is used:** a line's buses come from the memory, with positions from the fleet. An assignment is trusted for `MemoryTrustHours` (12) after its last confirmation, so it survives restarts and serves last evening's buses in the morning until the first roster call corrects them.
-- **Roster role:** confirmation and discovery of new buses only, refreshed after `RosterMaxAgeMinutes` (15) or the 3-minute recheck. A line with nothing in memory still needs one roster call before it shows anything.
+- **Roster role:** confirmation and discovery of new buses only. A line someone is viewing is refreshed once an hour as a safety net (`RosterMaxAgeMinutes`, 60), and otherwise only when something happens at its ends: a bus the memory doesn't know for this line leaves the first stop along the line's own route (between 150 m and 1.5 km in, at most once per line every 20 minutes, and once per bus in 6 hours), or a turnaround or lost bus needs the 3-minute recheck. Unknown buses that just sit at a shared terminal or garage trigger nothing. A line with nothing in memory still needs one roster call before it shows anything.
+- **Fleet reserve:** rosters may use at most `CallsPerHour - FleetReservedCalls` (90 - 45) calls per hour, so busy stops can't starve the fleet call; positions refresh at least every ~80 s even on the busiest hour.
+- **Stop filter:** the apps send the lines picked on a stop (`?lines=`); only those lines get roster calls, the rest are drawn from memory.
 - **Turnarounds:** a bus that was at the end of its route and moves back more than 100 m, or jumps back more than 500 m, is checked against the opposite direction's main route. If it fits within the off-route limit and within 1.5 km of that route's start, its direction is flipped in memory (main variant, that direction's last stop as destination) with no İBB call. Otherwise it is hidden until the roster recheck.
-- **Stop screen order:** every line is first drawn from memory without any İBB call; then lines get their roster calls in order of the soonest approaching bus, then lines with nothing in memory, then the rest.
+- **Stop screen order:** every line is first drawn from memory without any İBB call; then the wanted lines are loaded in parallel, starting their roster calls in order: lines with nothing in memory first, then the soonest approaching bus, then the rest. A failing İBB call marks only that line as waiting.
 
 ### Restarts and automatic updates (implemented 2026-10-16)
 

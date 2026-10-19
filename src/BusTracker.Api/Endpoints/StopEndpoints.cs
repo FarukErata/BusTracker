@@ -19,28 +19,35 @@ public static class StopEndpoints
     private static async Task<IReadOnlyList<StopSearchResult>> Search(string? q, StopIndexRepository index, CancellationToken ct) =>
         (await index.SearchAsync(q ?? "", SearchLimit, ct)).Select(r => new StopSearchResult(r.Stop, r.Lines)).ToList();
 
+    private static IReadOnlySet<string>? WantedLines(string? lines)
+    {
+        var codes = (lines ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(LineCode.Normalize).OfType<string>().ToHashSet();
+        return codes.Count > 0 ? codes : null;
+    }
+
     private static async Task<IResult> GetStop(string code, StopIndexRepository index, CancellationToken ct)
     {
         if (await index.GetStopAsync(code.Trim(), ct) is not { } stop) return UnknownStop(code);
         return Results.Ok(new StopDetails(stop, await index.GetLinesAtStopAsync(stop.Code, ct)));
     }
 
-    private static async Task<IResult> GetArrivals(string code, StopArrivalsService arrivals, TimeProvider clock, CancellationToken ct)
+    private static async Task<IResult> GetArrivals(string code, string? lines, StopArrivalsService arrivals, TimeProvider clock, CancellationToken ct)
     {
-        if (await arrivals.GetAsync(code.Trim(), ct) is not { } result) return UnknownStop(code);
+        if (await arrivals.GetAsync(code.Trim(), WantedLines(lines), ct) is not { } result) return UnknownStop(code);
 
         var merged = result.Lines
             .SelectMany(l => l.Arrivals.Select(a => new StopArrivalView(l.Line.LineCode, l.Line.Direction, l.Line.DirectionName, LiveEndpoints.ToArrivalView(a))))
             .OrderBy(a => a.Bus.EtaSeconds ?? int.MaxValue)
             .ThenBy(a => a.Bus.DistanceMeters)
             .ToList();
-        var lines = result.Lines
+        var statuses = result.Lines
             .Select(l => new LineStatusView(l.Line.LineCode, l.Line.Direction, l.Line.DirectionName,
                 l.Live is null ? null : Freshness.From(l.Live, clock), l.Error, RetryInSeconds(l.RetryAt, clock)))
             .ToList();
-        Telemetry.Note("lines", lines.Count);
-        Telemetry.Note("waitingLines", lines.Count(l => l.Error is not null));
-        return Results.Ok(new StopArrivalsView(result.Stop, merged, lines));
+        Telemetry.Note("lines", statuses.Count);
+        Telemetry.Note("waitingLines", statuses.Count(l => l.Error is not null));
+        return Results.Ok(new StopArrivalsView(result.Stop, merged, statuses));
     }
 
     private static int? RetryInSeconds(DateTimeOffset? retryAt, TimeProvider clock) =>
