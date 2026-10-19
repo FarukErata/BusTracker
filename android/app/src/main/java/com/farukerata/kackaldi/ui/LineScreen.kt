@@ -128,7 +128,7 @@ private fun liveIn(live: LineLiveResponse?, direction: LineDirection): List<Live
     live?.buses.orEmpty().filter { it.direction == direction.direction && it.status in ShownStatuses }
 
 private fun busesFor(live: LineLiveResponse?, direction: LineDirection): List<MapBus> =
-    liveIn(live, direction).map { MapBus(it.doorNo, it.lat, it.lng, reportAge(secondsSince(it.reportedAt))) }
+    liveIn(live, direction).map { MapBus(it.doorNo, it.lat, it.lng, reportAge(secondsSince(it.reportedAt)), it.heavyTraffic) }
 
 private fun busStops(live: LineLiveResponse?, direction: LineDirection): Map<Int, ReportAge> =
     liveIn(live, direction)

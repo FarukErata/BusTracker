@@ -33,6 +33,7 @@ import org.maplibre.android.style.layers.PropertyFactory.circleRadius
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeOpacity
 import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
+import org.maplibre.android.style.layers.PropertyFactory.circleTranslate
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineJoin
@@ -43,7 +44,7 @@ import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
-data class MapBus(val doorNo: String, val lat: Double, val lng: Double, val age: ReportAge)
+data class MapBus(val doorNo: String, val lat: Double, val lng: Double, val age: ReportAge, val heavyTraffic: Boolean = false)
 
 data class LineMapData(val key: String, val route: List<List<Double>>, val stops: List<LineStop>, val buses: List<MapBus>)
 
@@ -157,6 +158,15 @@ private class LineMapController(private val colors: MapColors) {
                 circleStrokeOpacity(Expression.get(OPACITY)),
             ),
         )
+        style.addLayer(
+            CircleLayer(TRAFFIC, BUSES).withProperties(
+                circleRadius(4.5f),
+                circleColor(TrafficAmber.toArgb()),
+                circleStrokeColor(colors.outline),
+                circleStrokeWidth(1.5f),
+                circleTranslate(arrayOf(8f, -8f)),
+            ).withFilter(Expression.eq(Expression.get(TRAFFIC), true)),
+        )
         apply()
     }
 
@@ -193,6 +203,7 @@ private class LineMapController(private val colors: MapColors) {
     private fun busFeature(bus: MapBus): Feature = Feature.fromGeometry(Point.fromLngLat(bus.lng, bus.lat)).apply {
         addStringProperty(FILL, hex(if (bus.age == ReportAge.Stale) colors.staleBus else colors.bus))
         addNumberProperty(OPACITY, if (bus.age == ReportAge.Fresh) 1f else 0.55f)
+        addBooleanProperty(TRAFFIC, bus.heavyTraffic)
     }
 
     private fun frame(data: LineMapData, route: List<Point>) {
@@ -219,6 +230,7 @@ private const val BUSES = "buses"
 private const val CODE = "code"
 private const val FILL = "fill"
 private const val OPACITY = "opacity"
+private const val TRAFFIC = "traffic"
 private const val TAP_SLOP = 24f
 private const val FRAME_PADDING = 48
 private const val FAR_ZOOM = 11f

@@ -33,6 +33,7 @@ data class ArrivalView(
     val ageSeconds: Int,
     val lastStopSeq: Int? = null,
     val lastStopName: String? = null,
+    val heavyTraffic: Boolean = false,
 )
 
 @Serializable
@@ -75,6 +76,7 @@ data class LiveBus(
     val ageSeconds: Int,
     val status: String,
     val lastStopSeq: Int? = null,
+    val heavyTraffic: Boolean = false,
 )
 
 @Serializable

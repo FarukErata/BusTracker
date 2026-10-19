@@ -1,6 +1,9 @@
 package com.farukerata.kackaldi.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyRow
@@ -55,6 +58,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val REFRESH_MILLIS = 30_000L
+private const val COUNTDOWN_TICK_MILLIS = 5_000L
 
 class StopViewModel(private val api: KacKaldiApi, private val filters: StopFilters, val code: String) : ViewModel() {
     val shownLines: StateFlow<Set<String>> = filters.lines(code).stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
@@ -63,12 +67,15 @@ class StopViewModel(private val api: KacKaldiApi, private val filters: StopFilte
         private set
     var refreshing by mutableStateOf(false)
         private set
+    var receivedAt by mutableLongStateOf(0L)
+        private set
     var favoriteId by mutableStateOf<Long?>(null)
         private set
 
     suspend fun refresh() {
         val lines = filters.lines(code).first()
         val next = load { api.stopArrivals(code, lines) }
+        if (next is Load.Ready) receivedAt = System.currentTimeMillis()
         if (next is Load.Ready || arrivals !is Load.Ready) arrivals = next
     }
 
@@ -175,7 +182,7 @@ private fun ArrivalsList(data: StopArrivalsView, shown: Set<String>, viewModel: 
         items(arrivals, key = { "${it.line}-${it.bus.doorNo}" }) { arrival ->
             val fetchedAt = lines.firstOrNull { it.line == arrival.line && it.direction == arrival.direction }?.data?.fetchedAt
             val age = arrival.bus.ageSeconds + (fetchedAt?.let(::secondsSince) ?: 0L)
-            ArrivalRow(arrival, data.stop.name, arrival.line in bothWays, age) { onLine(arrival.line) }
+            ArrivalRow(arrival, data.stop.name, arrival.line in bothWays, age, viewModel.receivedAt) { onLine(arrival.line) }
         }
         if (waiting.isNotEmpty()) item {
             Text(waitingText(waiting), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -208,7 +215,7 @@ private fun LineFilter(lines: List<String>, picked: Set<String>, onToggle: (Stri
 }
 
 @Composable
-private fun ArrivalRow(arrival: StopArrivalView, stopName: String, bothWays: Boolean, ageSeconds: Long, onClick: () -> Unit) {
+private fun ArrivalRow(arrival: StopArrivalView, stopName: String, bothWays: Boolean, ageSeconds: Long, receivedAt: Long, onClick: () -> Unit) {
     val age = reportAge(ageSeconds)
     val faded = Modifier.alpha(if (age == ReportAge.Fresh) 1f else 0.55f)
     val bus = arrival.bus
@@ -224,21 +231,34 @@ private fun ArrivalRow(arrival: StopArrivalView, stopName: String, bothWays: Boo
     }
     ListItem(
         leadingContent = { Box(faded) { RowLineBadge(arrival.line) } },
-        headlineContent = { Text(where.first()) },
+        headlineContent = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(where.first())
+                if (bus.heavyTraffic) TrafficBadge()
+            }
+        },
         supportingContent = if (where.size > 1) ({ Text(where.drop(1).joinToString(" · ").replaceFirstChar { it.uppercase() }) }) else null,
-        trailingContent = { Box(faded) { Minutes(bus.etaSeconds, bus.notDeparted) } },
+        trailingContent = { Box(faded) { Minutes(bus.etaSeconds, bus.notDeparted, receivedAt) } },
         modifier = Modifier.clickable(onClick = onClick),
     )
 }
 
 @Composable
-private fun Minutes(etaSeconds: Int?, notDeparted: Boolean) {
+private fun Minutes(etaSeconds: Int?, notDeparted: Boolean, receivedAt: Long) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(receivedAt) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(COUNTDOWN_TICK_MILLIS)
+        }
+    }
     if (etaSeconds == null) {
         Text(if (notDeparted) "Not left" else "–", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy((-2).dp)) {
-        Text(minutes(etaSeconds), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        val elapsed = if (receivedAt > 0) ((now - receivedAt) / 1000).toInt().coerceAtLeast(0) else 0
+        Text(minutes((etaSeconds - elapsed).coerceAtLeast(0)), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         Text("min", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

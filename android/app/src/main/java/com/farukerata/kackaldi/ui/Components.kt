@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,15 @@ fun LineBadge(code: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun RowLineBadge(code: String) = LineBadge(code, Modifier.widthIn(min = 56.dp))
+
+@Composable
+fun TrafficBadge(modifier: Modifier = Modifier) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(6.dp), color = TrafficAmber, contentColor = Color(0xFF3B2300)) {
+        Text("Heavy traffic", Modifier.padding(horizontal = 6.dp, vertical = 1.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+val TrafficAmber = Color(0xFFF5B000)
 
 @Composable
 fun LoadingState(modifier: Modifier = Modifier) {
