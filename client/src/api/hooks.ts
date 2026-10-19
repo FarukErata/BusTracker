@@ -53,11 +53,13 @@ export function useStop(code: string) {
   })
 }
 
-export function useStopArrivals(code: string) {
+export function useStopArrivals(code: string, lines: string[] = []) {
+  const wanted = [...lines].sort().join(',')
   return useQuery({
-    queryKey: ['stop', code, 'arrivals'],
-    queryFn: () => api<StopArrivalsView>(`/api/stops/${enc(code)}/arrivals`),
+    queryKey: ['stop', code, 'arrivals', wanted],
+    queryFn: () => api<StopArrivalsView>(`/api/stops/${enc(code)}/arrivals${wanted ? `?lines=${enc(wanted)}` : ''}`),
     refetchInterval: LIVE_REFRESH_MS,
+    placeholderData: keepPreviousData,
   })
 }
 

@@ -16,14 +16,15 @@ import { cn } from '@/lib/utils'
 export function Stop() {
   const { code = '' } = useParams()
   const stop = useStop(code)
-  const arrivals = useStopArrivals(code)
+  const [picked, setPicked] = useStopLineFilter(code)
+  const arrivals = useStopArrivals(code, picked)
   const info = stop.data?.stop
   const wide = useIsWide()
   const [params, setParams] = useSearchParams()
   const selection = readSelection(params)
   const tracking = useTracking(selection, code)
   const select = (next: TrackedSelection | null) => setParams(writeSelection(next), { replace: true })
-  const region = <ArrivalsRegion arrivals={arrivals} selection={selection} tracking={tracking} onSelect={select} />
+  const region = <ArrivalsRegion arrivals={arrivals} picked={picked} onPick={setPicked} selection={selection} tracking={tracking} onSelect={select} />
 
   if (wide)
     return (
@@ -66,6 +67,8 @@ interface SelectionProps {
   selection: TrackedSelection | null
   tracking: TrackingView | null
   onSelect: (selection: TrackedSelection | null) => void
+  picked: string[]
+  onPick: (lines: string[]) => void
 }
 
 function ArrivalsRegion({ arrivals, ...selectionProps }: { arrivals: ReturnType<typeof useStopArrivals> } & SelectionProps) {
@@ -143,8 +146,7 @@ function shownLines(data: StopArrivalsView, picked: string[]) {
   return { all, visible: new Set(chosen.length > 0 ? chosen : all), filtered: chosen.length > 0 }
 }
 
-function ArrivalsList({ data, selection, tracking, onSelect }: { data: StopArrivalsView } & SelectionProps) {
-  const [picked, setPicked] = useStopLineFilter(data.stop.code)
+function ArrivalsList({ data, selection, tracking, onSelect, picked, onPick }: { data: StopArrivalsView } & SelectionProps) {
   const { all, visible, filtered } = shownLines(data, picked)
   const lines = data.lines.filter(l => visible.has(l.line))
   const arrivals = data.arrivals.filter(a => visible.has(a.line))
@@ -155,7 +157,7 @@ function ArrivalsList({ data, selection, tracking, onSelect }: { data: StopArriv
 
   return (
     <>
-      {all.length > 1 && <LineFilter lines={all} picked={filtered ? [...visible] : []} onChange={setPicked} />}
+      {all.length > 1 && <LineFilter lines={all} picked={filtered ? [...visible] : []} onChange={onPick} />}
       {arrivals.length === 0 ? (
         <EmptyState title="No bus on the way" description={`Lines here: ${[...visible].join(', ')}.`} />
       ) : (
