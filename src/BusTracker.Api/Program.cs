@@ -7,6 +7,7 @@ using BusTracker.Api.Ibb;
 using BusTracker.Api.Lines;
 using BusTracker.Api.Shapes;
 using BusTracker.Api.Stops;
+using BusTracker.Api.Tracing;
 using BusTracker.Api.Users;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -33,6 +34,8 @@ builder.Services.AddSingleton<Database>();
 builder.Services.AddHostedService<DatabaseInitializer>();
 builder.Services.AddSingleton<FleetCallGate>();
 builder.Services.AddHostedService<IbbCallLog>();
+builder.Services.AddSingleton<RequestLog>();
+builder.Services.AddHostedService(services => services.GetRequiredService<RequestLog>());
 builder.Services.AddSingleton<FleetFeed>();
 builder.Services.AddSingleton<BusLineMemory>();
 builder.Services.AddSingleton<LineDataService>();
@@ -102,6 +105,7 @@ if (app.Environment.IsDevelopment())
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseMiddleware<RequestTracingMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();

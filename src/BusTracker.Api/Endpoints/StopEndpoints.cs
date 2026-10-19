@@ -1,4 +1,5 @@
 using BusTracker.Api.Stops;
+using BusTracker.Api.Tracing;
 
 namespace BusTracker.Api.Endpoints;
 
@@ -37,6 +38,8 @@ public static class StopEndpoints
             .Select(l => new LineStatusView(l.Line.LineCode, l.Line.Direction, l.Line.DirectionName,
                 l.Live is null ? null : Freshness.From(l.Live, clock), l.Error, RetryInSeconds(l.RetryAt, clock)))
             .ToList();
+        Telemetry.Note("lines", lines.Count);
+        Telemetry.Note("waitingLines", lines.Count(l => l.Error is not null));
         return Results.Ok(new StopArrivalsView(result.Stop, merged, lines));
     }
 

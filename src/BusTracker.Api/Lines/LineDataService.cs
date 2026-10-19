@@ -4,6 +4,7 @@ using BusTracker.Api.Configuration;
 using BusTracker.Api.Ibb;
 using BusTracker.Api.Shapes;
 using BusTracker.Api.Stops;
+using BusTracker.Api.Tracing;
 using BusTracker.Api.Tracking;
 using Microsoft.Extensions.Options;
 
@@ -70,7 +71,7 @@ public sealed class LineDataService(
         var tracks = await GetTracksAsync(lineCode, ct);
         var denied = refreshRoster && IsRosterDue(lineCode) ? await RefreshRosterAsync(lineCode, ct) : null;
         var lineLock = _lineLocks.GetOrAdd(lineCode, _ => new SemaphoreSlim(1, 1));
-        await lineLock.WaitAsync(ct);
+        await Telemetry.EnterAsync(lineLock, $"line {lineCode}", ct);
         try
         {
             var assignments = await memory.OnLineAsync(lineCode, ct);
@@ -98,8 +99,12 @@ public sealed class LineDataService(
     private async Task<GateDecision?> RefreshRosterAsync(string lineCode, CancellationToken ct)
     {
         var known = memory.RosterAt(lineCode) is not null || (await memory.OnLineAsync(lineCode, ct)).Count > 0;
-        var refresh = _rosterRefreshes.GetOrAdd(lineCode, code => new Lazy<Task<GateDecision?>>(() => FetchRosterAsync(code))).Value;
-        if (!known) return await refresh;
+        var refresh = _rosterRefreshes.GetOrAdd(lineCode, code => new Lazy<Task<GateDecision?>>(() => Task.Run(() => FetchRosterAsync(code)))).Value;
+        if (!known)
+        {
+            using var wait = Telemetry.Span("wait", $"roster {lineCode}");
+            return await refresh;
+        }
 
         _ = refresh.ContinueWith(
             t => logger.LogWarning(t.Exception, "Background roster refresh for {Line} failed", lineCode),
@@ -109,6 +114,7 @@ public sealed class LineDataService(
 
     private async Task<GateDecision?> FetchRosterAsync(string lineCode)
     {
+        using var trace = Telemetry.Background("roster refresh", lineCode);
         try
         {
             return await FetchRosterCoreAsync(lineCode);
@@ -122,7 +128,11 @@ public sealed class LineDataService(
     private async Task<GateDecision?> FetchRosterCoreAsync(string lineCode)
     {
         var decision = gate.TryAcquire(FleetCallKind.Roster);
-        if (!decision.Allowed) return decision;
+        if (!decision.Allowed)
+        {
+            FleetFeed.Denied($"roster {lineCode}", decision);
+            return decision;
+        }
 
         try
         {

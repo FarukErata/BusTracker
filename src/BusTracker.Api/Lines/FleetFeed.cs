@@ -1,5 +1,6 @@
 using BusTracker.Api.Configuration;
 using BusTracker.Api.Ibb;
+using BusTracker.Api.Tracing;
 using Microsoft.Extensions.Options;
 
 namespace BusTracker.Api.Lines;
@@ -48,6 +49,7 @@ public sealed class FleetFeed(
             if (!_background.IsCompleted) return;
             _background = Task.Run(async () =>
             {
+                using var trace = Telemetry.Background("fleet refresh");
                 try
                 {
                     await RefreshUnderLockAsync(CancellationToken.None);
@@ -62,7 +64,7 @@ public sealed class FleetFeed(
 
     private async Task<FleetSnapshot?> RefreshUnderLockAsync(CancellationToken ct)
     {
-        await _lock.WaitAsync(ct);
+        await Telemetry.EnterAsync(_lock, "fleet", ct);
         try
         {
             return IsDue() ? await RefreshAsync(ct) : _latest;
@@ -79,7 +81,11 @@ public sealed class FleetFeed(
 
     private async Task<FleetSnapshot?> RefreshAsync(CancellationToken ct)
     {
-        if (!gate.TryAcquire(FleetCallKind.Fleet).Allowed) return _latest;
+        if (gate.TryAcquire(FleetCallKind.Fleet) is { Allowed: false } denied)
+        {
+            Denied("fleet", denied);
+            return _latest;
+        }
 
         var now = clock.GetUtcNow();
         _lastCall = now;
@@ -99,6 +105,12 @@ public sealed class FleetFeed(
             logger.LogWarning(e, "Fleet fetch failed; keeping the previous positions");
         }
         return _latest;
+    }
+
+    internal static void Denied(string call, GateDecision decision)
+    {
+        using var span = Telemetry.Span("gate", call);
+        span.Fail(decision.Reason ?? "denied");
     }
 
     private static Dictionary<string, FleetVehicle> Newest(IReadOnlyList<FleetVehicle> vehicles) =>

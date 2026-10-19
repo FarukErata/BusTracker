@@ -105,6 +105,20 @@ curl -s http://127.0.0.1:5080/health
 
 Pin an earlier build in `compose.yaml` (`image: ghcr.io/farukerata/bustracker:sha-<commit>`), then `docker compose up -d`. While it is pinned, automatic updates keep that build. Switch back to `latest` when the fix is out.
 
+## Request log
+
+Every `/api` request is written as one JSON line to `data/logs/requests-<UTC date>.jsonl`, kept for 14 days (`BusTracker__RequestLog__RetentionDays`; `BusTracker__RequestLog__Enabled=false` turns it off). Each line has the user and device, the route, the status, the total time, and where the time went: `waits` adds up İBB calls (`ibb`), database calls (`db`) and time spent waiting for another request's work (`wait`), and `spans` lists the individual steps. Stop requests also record how many of their lines were still waiting for İBB (`waitingLines`). Work done in the background, such as roster and fleet refreshes, gets its own lines with `"kind":"background"`.
+
+```bash
+tail -f data/logs/requests-$(date -u +%F).jsonl
+```
+
+With `jq` installed, the slow requests of today:
+
+```bash
+jq -c 'select(.kind == "request" and .ms > 1000) | {at, path, ms, waits, waitingLines}' data/logs/requests-$(date -u +%F).jsonl
+```
+
 ## Notes
 
 - The container listens on `127.0.0.1:5080` only; nginx is the only way in.

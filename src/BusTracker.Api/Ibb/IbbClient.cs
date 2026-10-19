@@ -3,6 +3,7 @@ using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using BusTracker.Api.Configuration;
+using BusTracker.Api.Tracing;
 using Microsoft.Extensions.Options;
 
 namespace BusTracker.Api.Ibb;
@@ -57,11 +58,20 @@ public sealed class IbbClient(HttpClient http, IOptions<BusTrackerOptions> optio
     private async Task<XElement> CallAsync(
         string service, string operation, Dictionary<string, string> parameters, CancellationToken ct)
     {
+        using var span = Telemetry.Span("ibb", string.Join(' ', parameters.Values.Where(v => v.Length > 0).Prepend(operation)));
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(_callTimeout);
-        using var response = await SendAsync(service, operation, parameters, HttpCompletionOption.ResponseContentRead, timeout.Token);
-        var text = await response.Content.ReadAsStringAsync(timeout.Token);
-        return SoapEnvelope.ReadResult(operation, text);
+        try
+        {
+            using var response = await SendAsync(service, operation, parameters, HttpCompletionOption.ResponseContentRead, timeout.Token);
+            var text = await response.Content.ReadAsStringAsync(timeout.Token);
+            return SoapEnvelope.ReadResult(operation, text);
+        }
+        catch (Exception e)
+        {
+            span.Fail(e.GetType().Name);
+            throw;
+        }
     }
 
     private Task<HttpResponseMessage> SendAsync(

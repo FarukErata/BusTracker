@@ -14,6 +14,17 @@ public sealed class BusTrackerOptions
     public TrackingOptions Tracking { get; init; } = new();
     public StaticDataOptions StaticData { get; init; } = new();
     public AccessOptions Access { get; init; } = new();
+    public RequestLogOptions RequestLog { get; init; } = new();
+}
+
+public sealed class RequestLogOptions
+{
+    public bool Enabled { get; init; } = true;
+
+    public string? Directory { get; init; }
+
+    [Range(1, 365)]
+    public int RetentionDays { get; init; } = 14;
 }
 
 public sealed class IbbOptions

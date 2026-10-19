@@ -1,4 +1,5 @@
 using BusTracker.Api.Configuration;
+using BusTracker.Api.Tracing;
 using Dapper;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
@@ -21,12 +22,13 @@ public sealed class Database
 
     public string FilePath { get; }
 
-    public async Task<SqliteConnection> OpenAsync(CancellationToken ct)
+    public async Task<TracedConnection> OpenAsync(CancellationToken ct)
     {
+        using var span = Telemetry.Span("db", "open");
         var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(ct);
         await connection.ExecuteAsync("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
-        return connection;
+        return new TracedConnection(connection);
     }
 }
 
