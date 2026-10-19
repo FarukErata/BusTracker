@@ -112,3 +112,19 @@ data class AddFavoriteStopRequest(val stop: String)
 
 @Serializable
 data class Problem(val detail: String? = null)
+
+@Serializable
+data class DeviceView(
+    val id: Long,
+    val platform: String,
+    val name: String,
+    val createdAt: String,
+    val lastSeenAt: String,
+    val current: Boolean,
+)
+
+@Serializable
+data class MeResponse(val currentDeviceId: Long, val devices: List<DeviceView>)
+
+@Serializable
+data class LinkCodeResponse(val code: String, val expiresAt: String)

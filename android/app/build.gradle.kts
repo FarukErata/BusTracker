@@ -1,3 +1,4 @@
+import java.net.URI
 import java.util.Properties
 
 plugins {
@@ -26,7 +27,9 @@ android {
         manifestPlaceholders["allowCleartext"] = providers.gradleProperty("allowCleartext").getOrElse("false")
         ndk { abiFilters += providers.gradleProperty("abis").getOrElse("arm64-v8a").split(",") }
         buildConfigField("String", "UPDATE_REPO", "\"FarukErata/BusTracker\"")
-        buildConfigField("String", "SERVER_URL", "\"${providers.gradleProperty("serverUrl").getOrElse("https://kackaldi.farukerata.com")}\"")
+        val serverUrl = providers.gradleProperty("serverUrl").getOrElse("https://kackaldi.farukerata.com")
+        manifestPlaceholders["linkHost"] = URI(serverUrl).host
+        buildConfigField("String", "SERVER_URL", "\"$serverUrl\"")
     }
 
     signingConfigs {

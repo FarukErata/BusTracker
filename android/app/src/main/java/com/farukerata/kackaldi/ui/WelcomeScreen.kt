@@ -15,6 +15,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -69,7 +70,7 @@ private enum class JoinMode(
 }
 
 @Composable
-fun WelcomeScreen(api: KacKaldiApi) {
+fun WelcomeScreen(api: KacKaldiApi, linkFromWeb: String?, onLinkUsed: () -> Unit) {
     var mode by rememberSaveable { mutableStateOf(JoinMode.Invite) }
     var code by rememberSaveable { mutableStateOf("") }
     var pending by remember { mutableStateOf(false) }
@@ -92,6 +93,15 @@ fun WelcomeScreen(api: KacKaldiApi) {
                 pending = false
             }
         }
+    }
+
+    LaunchedEffect(linkFromWeb) {
+        val incoming = linkFromWeb ?: return@LaunchedEffect
+        onLinkUsed()
+        mode = JoinMode.Link
+        code = linkCodeChars(incoming)
+        autoTried = true
+        if (mode.isComplete(code)) submit(code)
     }
 
     fun change(value: String) {

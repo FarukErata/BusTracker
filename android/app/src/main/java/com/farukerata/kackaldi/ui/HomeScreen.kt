@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.Close
@@ -83,7 +84,7 @@ class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel, updater: AppUpdater, onStop: (String) -> Unit, onLine: (String) -> Unit) {
+fun HomeScreen(viewModel: HomeViewModel, updater: AppUpdater, onStop: (String) -> Unit, onLine: (String) -> Unit, onDevices: () -> Unit) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -91,7 +92,16 @@ fun HomeScreen(viewModel: HomeViewModel, updater: AppUpdater, onStop: (String) -
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { viewModel.refreshFavorites() }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Kaç Kaldı") }) }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Kaç Kaldı") },
+                actions = {
+                    IconButton(onClick = onDevices) { Icon(Icons.Outlined.Devices, contentDescription = "Your devices") }
+                },
+            )
+        },
+    ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             UpdateBanner(updater)
             OutlinedTextField(

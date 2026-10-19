@@ -62,6 +62,14 @@ class KacKaldiApi(private val store: DeviceStore) {
 
     suspend fun lineLive(code: String): LineLiveResponse = authorized { auth -> get("api/lines/$code/live") { auth() } }
 
+    suspend fun me(): MeResponse = authorized { auth -> get("api/me") { auth() } }
+
+    suspend fun createLinkCode(): LinkCodeResponse = authorized { auth -> post("api/me/link-codes") { auth() } }
+
+    suspend fun removeDevice(id: Long): Unit = authorized { auth -> delete("api/me/devices/$id") { auth() } }
+
+    suspend fun signOutHere() = store.clear()
+
     suspend fun addFavoriteStop(code: String): Unit = authorized { auth -> post("api/favorites/stops") { auth(); setBody(AddFavoriteStopRequest(code)) } }
 
     suspend fun removeFavoriteStop(id: Long): Unit = authorized { auth -> delete("api/favorites/stops/$id") { auth() } }

@@ -1,5 +1,6 @@
 package com.farukerata.kackaldi.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -30,6 +31,9 @@ data class StopRoute(val code: String)
 @Serializable
 data class LineRoute(val code: String)
 
+@Serializable
+data object DevicesRoute
+
 @Composable
 fun KacKaldiRoot() {
     val app = LocalContext.current.applicationContext as KacKaldiApplication
@@ -37,10 +41,17 @@ fun KacKaldiRoot() {
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { app.updater.onAppResumed() }
     }
+    val linkFromWeb by app.pendingLinkCode.collectAsStateWithLifecycle()
     val signedIn by remember { app.deviceStore.key.map { it != null } }.collectAsStateWithLifecycle(initialValue = null)
+    val context = LocalContext.current
+    LaunchedEffect(signedIn, linkFromWeb) {
+        if (signedIn != true || linkFromWeb == null) return@LaunchedEffect
+        app.pendingLinkCode.value = null
+        Toast.makeText(context, "This phone is already signed in to Kaç Kaldı", Toast.LENGTH_LONG).show()
+    }
     when (signedIn) {
         null -> Box(Modifier.fillMaxSize())
-        false -> WelcomeScreen(app.api)
+        false -> WelcomeScreen(app.api, linkFromWeb) { app.pendingLinkCode.value = null }
         true -> AppNavigation(app)
     }
 }
@@ -55,7 +66,11 @@ private fun AppNavigation(app: KacKaldiApplication) {
                 updater = app.updater,
                 onStop = { nav.navigate(StopRoute(it)) },
                 onLine = { nav.navigate(LineRoute(it)) },
+                onDevices = { nav.navigate(DevicesRoute) },
             )
+        }
+        composable<DevicesRoute> {
+            DevicesScreen(viewModel = viewModel { DevicesViewModel(app.api) }, onBack = { nav.popBackStack() })
         }
         composable<StopRoute> { entry ->
             val code = entry.toRoute<StopRoute>().code

@@ -70,3 +70,8 @@ fun seenAgo(seconds: Long): String = "seen ${ago(seconds)}"
 
 private const val OLD_REPORT_SECONDS = 90L
 private const val STALE_REPORT_SECONDS = 180L
+
+fun countdown(seconds: Long): String {
+    val s = seconds.coerceAtLeast(0)
+    return "${s / 60}:${(s % 60).toString().padStart(2, '0')}"
+}
