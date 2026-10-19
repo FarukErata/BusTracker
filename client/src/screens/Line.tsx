@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router'
 import { ArrowLeftRight, MapPin, Star, X } from 'lucide-react'
 import { useAddFavoriteLine, useBusPath, useFavorites, useLineArrivals, useLineLive, useLineShapes, useLineStops, useRemoveFavoriteLine } from '@/api/hooks'
 import type { ArrivalView, LineDirection, LineStop, TrackedBusView } from '@/api/types'
-import { BackButton, ErrorState, LineBadge, Minutes, RowsSkeleton, UpdatedAgo } from '@/components/bits'
+import { BackButton, ErrorState, LineBadge, Minutes, RowsSkeleton, TrafficBadge, UpdatedAgo } from '@/components/bits'
 import { LineMap } from '@/components/maps'
 import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
@@ -134,6 +134,7 @@ function LinePanel({ loading, direction, buses, pinnedStop, arrivals, selectedBu
           approaching={arrivals.data?.approaching}
           passedCount={arrivals.data?.recentlyPassed.length ?? 0}
           loading={arrivals.isPending}
+          receivedAt={arrivals.dataUpdatedAt}
           onClear={() => onPin(null)}
           onSelect={onSelect}
           selectedBus={selectedBus}
@@ -206,7 +207,10 @@ function BusPositions({ buses, direction, selectedBus, onSelect, onPick }: {
           {ordered.map(bus => (
             <Item key={bus.doorNo} size="sm" className={cn('pressable cursor-pointer', bus.doorNo === selectedBus && 'bg-muted')} onClick={() => onSelect(bus.doorNo)}>
               <ItemContent>
-                <ItemTitle className={cn('tabular-nums', reportAge(secondsSince(bus.reportedAt)) !== 'fresh' && 'opacity-60')}>{bus.doorNo}</ItemTitle>
+                <ItemTitle className="tabular-nums">
+                  <span className={cn(reportAge(secondsSince(bus.reportedAt)) !== 'fresh' && 'opacity-60')}>{bus.doorNo}</span>
+                  {bus.heavyTraffic && <TrafficBadge />}
+                </ItemTitle>
                 <ItemDescription className="first-letter:uppercase">{describePosition(bus, direction)}</ItemDescription>
               </ItemContent>
             </Item>
@@ -246,9 +250,10 @@ function StopPicker({ stops, onPick }: { stops: LineStop[]; onPick: (stop: strin
   )
 }
 
-function PinnedArrivals({ stop, approaching, passedCount, loading, onClear, onSelect, selectedBus }: {
+function PinnedArrivals({ stop, approaching, passedCount, loading, receivedAt, onClear, onSelect, selectedBus }: {
   stop: LineStop | undefined; approaching: ArrivalView[] | undefined; passedCount: number; loading: boolean
   onClear: () => void; onSelect: (door: string) => void; selectedBus: string | null
+  receivedAt: number
 }) {
   return (
     <>
@@ -264,11 +269,11 @@ function PinnedArrivals({ stop, approaching, passedCount, loading, onClear, onSe
           {approaching.map(a => (
             <Item key={a.doorNo} size="sm" className={cn('pressable cursor-pointer', a.doorNo === selectedBus && 'bg-muted')} onClick={() => onSelect(a.doorNo)}>
               <ItemContent>
-                <ItemTitle className="tabular-nums">{a.doorNo}</ItemTitle>
+                <ItemTitle className="tabular-nums">{a.doorNo}{a.heavyTraffic && <TrafficBadge />}</ItemTitle>
                 <ItemDescription>{a.notDeparted ? 'At the first stop' : [stopsAway(a.stopsAway), distance(a.distanceMeters), a.lastStopName && `now at ${titleCase(a.lastStopName)}`].filter(Boolean).join(' · ')}</ItemDescription>
               </ItemContent>
               <ItemActions>
-                {a.etaSeconds != null ? <Minutes etaSeconds={a.etaSeconds} /> : <span className="text-xs text-muted-foreground">Not left</span>}
+                {a.etaSeconds != null ? <Minutes etaSeconds={a.etaSeconds} receivedAt={receivedAt} /> : <span className="text-xs text-muted-foreground">Not left</span>}
               </ItemActions>
             </Item>
           ))}

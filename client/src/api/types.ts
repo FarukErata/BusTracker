@@ -56,6 +56,7 @@ export interface ArrivalView {
   ageSeconds: number
   lastStopSeq: number | null
   lastStopName: string | null
+  heavyTraffic: boolean
 }
 
 export interface PassedView {
@@ -145,6 +146,7 @@ export interface TrackedBusView {
   progressToNext: number | null
   speedKmh: number | null
   passedStopSeqs: number[]
+  heavyTraffic: boolean
 }
 
 export interface LineLiveResponse {

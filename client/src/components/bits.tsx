@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import { ArrowLeft, ArrowRight, Moon, RotateCw, Sun } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Moon, RotateCw, Sun, TrafficCone } from 'lucide-react'
 import { Badge } from '@/components/reui/badge'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
@@ -46,13 +46,33 @@ export function BackButton() {
   )
 }
 
-export function Minutes({ etaSeconds }: { etaSeconds: number }) {
-  const value = minutes(etaSeconds)
+export function useNow(intervalMs: number) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), intervalMs)
+    return () => clearInterval(timer)
+  }, [intervalMs])
+  return now
+}
+
+export function Minutes({ etaSeconds, receivedAt }: { etaSeconds: number; receivedAt?: number }) {
+  const now = useNow(5_000)
+  const elapsed = receivedAt ? Math.max(0, (now - receivedAt) / 1000) : 0
+  const value = minutes(Math.max(0, etaSeconds - elapsed))
   return (
     <span className="flex items-baseline gap-0.5 tabular-nums">
       <span key={value} className="eta-swap text-lg font-semibold leading-none">{value}</span>
       <span className="text-xs text-muted-foreground">min</span>
     </span>
+  )
+}
+
+export function TrafficBadge() {
+  return (
+    <Badge variant="warning" className="gap-1">
+      <TrafficCone className="size-3" aria-hidden />
+      Heavy traffic
+    </Badge>
   )
 }
 

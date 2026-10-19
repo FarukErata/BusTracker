@@ -247,6 +247,20 @@
   .bus-faded {
     opacity: 0.55;
   }
+  .bus-traffic::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--color-amber-500);
+    box-shadow: 0 0 0 1.5px var(--color-white);
+  }
+  .dark .bus-traffic::after {
+    box-shadow: 0 0 0 1.5px var(--color-zinc-950);
+  }
   .bus-alt {
     outline: 2px dashed var(--color-violet-500);
     outline-offset: 1px;

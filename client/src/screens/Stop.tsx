@@ -2,7 +2,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { ArrowRight, Star } from 'lucide-react'
 import { useAddFavoriteStop, useFavorites, useRemoveFavoriteStop, useStop, useStopArrivals } from '@/api/hooks'
 import type { StopArrivalView, StopArrivalsView, StopInfo } from '@/api/types'
-import { BackButton, EmptyState, ErrorState, LineBadge, Minutes, RowsSkeleton, StopName, Towards, UpdatedAgo } from '@/components/bits'
+import { BackButton, EmptyState, ErrorState, LineBadge, Minutes, RowsSkeleton, StopName, Towards, TrafficBadge, UpdatedAgo } from '@/components/bits'
 import { MapSurface, StopMap } from '@/components/maps'
 import { Button } from '@/components/ui/button'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
@@ -24,7 +24,7 @@ export function Stop() {
   const selection = readSelection(params)
   const tracking = useTracking(selection, code)
   const select = (next: TrackedSelection | null) => setParams(writeSelection(next), { replace: true })
-  const region = <ArrivalsRegion arrivals={arrivals} picked={picked} onPick={setPicked} selection={selection} tracking={tracking} onSelect={select} />
+  const region = <ArrivalsRegion arrivals={arrivals} picked={picked} onPick={setPicked} selection={selection} tracking={tracking} onSelect={select} receivedAt={arrivals.dataUpdatedAt} />
 
   if (wide)
     return (
@@ -69,6 +69,7 @@ interface SelectionProps {
   onSelect: (selection: TrackedSelection | null) => void
   picked: string[]
   onPick: (lines: string[]) => void
+  receivedAt: number
 }
 
 function ArrivalsRegion({ arrivals, ...selectionProps }: { arrivals: ReturnType<typeof useStopArrivals> } & SelectionProps) {
@@ -146,7 +147,7 @@ function shownLines(data: StopArrivalsView, picked: string[]) {
   return { all, visible: new Set(chosen.length > 0 ? chosen : all), filtered: chosen.length > 0 }
 }
 
-function ArrivalsList({ data, selection, tracking, onSelect, picked, onPick }: { data: StopArrivalsView } & SelectionProps) {
+function ArrivalsList({ data, selection, tracking, onSelect, picked, onPick, receivedAt }: { data: StopArrivalsView } & SelectionProps) {
   const { all, visible, filtered } = shownLines(data, picked)
   const lines = data.lines.filter(l => visible.has(l.line))
   const arrivals = data.arrivals.filter(a => visible.has(a.line))
@@ -169,6 +170,7 @@ function ArrivalsList({ data, selection, tracking, onSelect, picked, onPick }: {
               stopName={data.stop.name}
               bothWays={bothWays.has(a.line)}
               ageSeconds={reportSeconds(a, lines)}
+              receivedAt={receivedAt}
               selected={isSelected(a)}
               tracking={isSelected(a) ? tracking : null}
               onToggle={() => onSelect(isSelected(a) ? null : { line: a.line, direction: a.direction, doorNo: a.bus.doorNo })}
@@ -222,8 +224,8 @@ function arrivalDetail(arrival: StopArrivalView, stopName: string, bothWays: boo
   return parts.join(' · ')
 }
 
-function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, selected, tracking, onToggle }: {
-  arrival: StopArrivalView; stopName: string; bothWays: boolean; ageSeconds: number; selected: boolean; tracking: TrackingView | null; onToggle: () => void
+function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, receivedAt, selected, tracking, onToggle }: {
+  arrival: StopArrivalView; stopName: string; bothWays: boolean; ageSeconds: number; receivedAt: number; selected: boolean; tracking: TrackingView | null; onToggle: () => void
 }) {
   const { bus } = arrival
   const detail = arrivalDetail(arrival, stopName, bothWays, ageSeconds)
@@ -237,11 +239,14 @@ function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, selected, trackin
       >
         <ItemMedia className={cn(faded)}><LineBadge code={arrival.line} /></ItemMedia>
         <ItemContent>
-          <ItemTitle>{busWhere(bus.notDeparted, bus.stopsAway)}</ItemTitle>
+          <ItemTitle>
+            {busWhere(bus.notDeparted, bus.stopsAway)}
+            {bus.heavyTraffic && <TrafficBadge />}
+          </ItemTitle>
           {detail && <ItemDescription className="first-letter:uppercase">{detail}</ItemDescription>}
         </ItemContent>
         <ItemActions className={cn(faded)}>
-          {bus.etaSeconds != null ? <Minutes etaSeconds={bus.etaSeconds} /> : <span className="text-xs text-muted-foreground">Not left</span>}
+          {bus.etaSeconds != null ? <Minutes etaSeconds={bus.etaSeconds} receivedAt={receivedAt} /> : <span className="text-xs text-muted-foreground">Not left</span>}
         </ItemActions>
       </Item>
       {selected && <TrackingDetails arrival={arrival} tracking={tracking} />}
