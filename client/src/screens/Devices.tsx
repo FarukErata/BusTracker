@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { ago, countdown, isCompleteLinkCode, linkCodeInput } from '@/lib/format'
+import { useSecondsUntil } from '@/lib/useSecondsUntil'
 
 export function Devices() {
   return (
@@ -24,16 +25,6 @@ export function Devices() {
       <JoinAnotherDevice />
     </div>
   )
-}
-
-function useSecondsUntil(iso: string | undefined) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!iso) return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [iso])
-  return iso ? (Date.parse(iso) - now) / 1000 : 0
 }
 
 function LinkCodeCard() {

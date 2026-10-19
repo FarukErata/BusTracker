@@ -11,6 +11,7 @@ import { Devices } from '@/screens/Devices'
 import { Home } from '@/screens/Home'
 import { Line } from '@/screens/Line'
 import { Stop } from '@/screens/Stop'
+import { Join } from '@/screens/Join'
 import { AccessGate } from '@/screens/Welcome'
 
 rememberInviteFromUrl()
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
     ],
   },
   { path: '/android', element: <AndroidApp /> },
+  { path: '/join/:code', element: <Join /> },
 ])
 
 createRoot(document.getElementById('root')!).render(
