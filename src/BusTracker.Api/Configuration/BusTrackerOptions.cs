@@ -15,6 +15,14 @@ public sealed class BusTrackerOptions
     public StaticDataOptions StaticData { get; init; } = new();
     public AccessOptions Access { get; init; } = new();
     public RequestLogOptions RequestLog { get; init; } = new();
+    public AndroidAppOptions AndroidApp { get; init; } = new();
+}
+
+public sealed class AndroidAppOptions
+{
+    public string PackageName { get; init; } = "com.farukerata.kackaldi";
+
+    public string[] CertificateFingerprints { get; init; } = [];
 }
 
 public sealed class RequestLogOptions
@@ -108,5 +116,11 @@ public sealed class AccessOptions
     [Range(1, 1000)]
     public int RegistrationsPerIpPer10Minutes { get; init; } = 10;
 
+    public bool AllowOpenRegistration { get; init; }
+
     public bool RequiresInvite => InviteCodes.Any(c => !string.IsNullOrWhiteSpace(c));
+
+    public static readonly string[] PlaceholderInvites = ["change-me"];
+
+    public bool HasPlaceholderInvite => InviteCodes.Any(c => PlaceholderInvites.Contains(c.Trim(), StringComparer.OrdinalIgnoreCase));
 }

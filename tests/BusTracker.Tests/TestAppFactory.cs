@@ -134,3 +134,14 @@ public sealed class StrictRateLimitAppFactory : TestAppFactory
 {
     protected override int RegistrationsPerIp => 2;
 }
+
+public sealed class ProductionAppFactory(string? invite) : TestAppFactory
+{
+    protected override string[] InviteCodes => invite is null ? [] : [invite];
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.UseEnvironment("Production");
+    }
+}

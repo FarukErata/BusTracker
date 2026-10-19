@@ -5,6 +5,8 @@ namespace BusTracker.Api.Users;
 
 public sealed record Device(long Id, long UserId, string Platform, string Name, DateTimeOffset CreatedAt, DateTimeOffset LastSeenAt);
 
+public enum DeviceRemoval { Removed, NotFound, LastDevice }
+
 public sealed class UserRepository(Database database, ILogger<UserRepository> logger)
 {
     private static readonly TimeSpan TouchInterval = TimeSpan.FromMinutes(5);
@@ -72,11 +74,20 @@ public sealed class UserRepository(Database database, ILogger<UserRepository> lo
         return rows.Select(r => r.ToDevice()).ToList();
     }
 
-    public async Task<bool> DeleteDeviceAsync(long userId, long deviceId, CancellationToken ct)
+    public async Task<DeviceRemoval> DeleteDeviceAsync(long userId, long deviceId, CancellationToken ct)
     {
         await using var connection = await database.OpenAsync(ct);
-        return await connection.ExecuteAsync("DELETE FROM devices WHERE id = @deviceId AND user_id = @userId;",
-            new { deviceId, userId }) > 0;
+        var deleted = await connection.ExecuteAsync(
+            """
+            DELETE FROM devices
+            WHERE id = @deviceId AND user_id = @userId AND (SELECT COUNT(*) FROM devices WHERE user_id = @userId) > 1;
+            """,
+            new { deviceId, userId });
+        if (deleted > 0) return DeviceRemoval.Removed;
+
+        var exists = await connection.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM devices WHERE id = @deviceId AND user_id = @userId;", new { deviceId, userId });
+        return exists > 0 ? DeviceRemoval.LastDevice : DeviceRemoval.NotFound;
     }
 
     public async Task CreateLinkCodeAsync(long userId, string codeHash, DateTimeOffset now, DateTimeOffset expiresAt, CancellationToken ct)

@@ -38,23 +38,39 @@ public sealed class StaticDataSyncService(
     {
         if (!options.Value.StaticData.SyncEnabled) return;
 
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(1), clock);
-        do
+        var failures = 0;
+        try
         {
-            await RunAsync("stop index", stopIndex.SyncAsync, stoppingToken);
-            await RunAsync("route shapes", shapes.SyncAsync, stoppingToken);
-        } while (await timer.WaitForNextTickAsync(stoppingToken));
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                var stopsDone = await RunAsync("stop index", stopIndex.SyncAsync, stoppingToken);
+                var shapesDone = await RunAsync("route shapes", shapes.SyncAsync, stoppingToken);
+                failures = stopsDone && shapesDone ? 0 : failures + 1;
+                var wait = failures == 0 ? Every : RetryAfter[Math.Min(failures, RetryAfter.Length) - 1];
+                await Task.Delay(wait, clock, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
     }
 
-    private async Task RunAsync(string name, Func<CancellationToken, Task<SyncOutcome>> sync, CancellationToken ct)
+    private static readonly TimeSpan Every = TimeSpan.FromHours(1);
+
+    private static readonly TimeSpan[] RetryAfter =
+        [TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(30)];
+
+    private async Task<bool> RunAsync(string name, Func<CancellationToken, Task<SyncOutcome>> sync, CancellationToken ct)
     {
         try
         {
             await sync(ct);
+            return true;
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             logger.LogError(e, "Sync of {Name} failed; keeping the existing data", name);
+            return false;
         }
     }
 }

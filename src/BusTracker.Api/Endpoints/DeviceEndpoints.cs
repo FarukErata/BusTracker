@@ -89,7 +89,14 @@ public static class DeviceEndpoints
     }
 
     private static async Task<IResult> DeleteDevice(long id, ClaimsPrincipal user, UserRepository users, CancellationToken ct) =>
-        await users.DeleteDeviceAsync(user.UserId(), id, ct) ? Results.NoContent() : Results.NotFound();
+        await users.DeleteDeviceAsync(user.UserId(), id, ct) switch
+        {
+            DeviceRemoval.Removed => Results.NoContent(),
+            DeviceRemoval.LastDevice => Results.Problem(
+                "This is your only device. Link another device first, or you would lose access to your saved stops.",
+                statusCode: StatusCodes.Status409Conflict),
+            _ => Results.NotFound(),
+        };
 }
 
 public sealed record RegisterDeviceRequest(string? Platform, string? Name, string? Invite, string? LinkCode);

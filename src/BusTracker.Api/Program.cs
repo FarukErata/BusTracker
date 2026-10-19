@@ -112,6 +112,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapHealthEndpoints();
+app.MapAppLinkEndpoints();
 app.MapDeviceEndpoints();
 app.MapFavoriteEndpoints();
 app.MapStopEndpoints();
@@ -119,8 +120,17 @@ app.MapLineEndpoints();
 app.MapLiveEndpoints();
 app.MapFallbackToFile("{*path:regex(^(?!api/|dev/|health).*$)}", "index.html").AllowAnonymous();
 
-if (!app.Environment.IsDevelopment() && !app.Services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Access.RequiresInvite)
-    app.Logger.LogWarning("No invite codes configured: anyone who can reach this server can create a user");
+var access = app.Services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Access;
+if (!app.Environment.IsDevelopment())
+{
+    if (access.HasPlaceholderInvite)
+        throw new InvalidOperationException("Replace the example invite code (change-me) in .env with your own codes.");
+    if (!access.RequiresInvite && !access.AllowOpenRegistration)
+        throw new InvalidOperationException(
+            "No invite codes configured. Set BusTracker__Access__InviteCodes__0, or BusTracker__Access__AllowOpenRegistration=true to let anyone register.");
+    if (!access.RequiresInvite)
+        app.Logger.LogWarning("Open registration: anyone who can reach this server can create a user");
+}
 
 app.Run();
 

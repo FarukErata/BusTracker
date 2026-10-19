@@ -83,3 +83,19 @@ public sealed class AppShellTests(TestAppFactory factory) : IClassFixture<TestAp
         Assert.Contains("<title>Buses</title>", await response.Content.ReadAsStringAsync());
     }
 }
+
+public sealed class AppLinkTests(TestAppFactory factory) : IClassFixture<TestAppFactory>
+{
+    [Fact]
+    public async Task AssetLinks_AreServedWithoutSigningIn()
+    {
+        var response = await factory.CreateClient().GetAsync("/.well-known/assetlinks.json");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"package_name\":\"com.farukerata.kackaldi\"", body);
+        Assert.Contains("\"namespace\":\"android_app\"", body);
+        Assert.Contains("2F:3B:75:15", body);
+    }
+}

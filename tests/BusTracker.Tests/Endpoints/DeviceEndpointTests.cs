@@ -107,6 +107,18 @@ public sealed class DeviceEndpointTests(TestAppFactory factory) : IClassFixture<
     }
 
     [Fact]
+    public async Task OnlyDevice_CannotBeDeleted()
+    {
+        var registered = await RegisterAsync();
+        var phone = factory.WithKey(registered.Key);
+
+        var response = await phone.DeleteAsync($"/api/me/devices/{registered.DeviceId}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await phone.GetAsync("/api/me")).StatusCode);
+    }
+
+    [Fact]
     public async Task CannotDeleteAnotherUsersDevice()
     {
         var mine = factory.WithKey((await RegisterAsync()).Key);
@@ -160,5 +172,28 @@ public sealed class RegistrationRateLimitTests(StrictRateLimitAppFactory factory
             statuses.Add((await client.PostAsJsonAsync("/api/devices", new RegisterDeviceRequest("web", null, null, null))).StatusCode);
 
         Assert.Equal([HttpStatusCode.Created, HttpStatusCode.Created, HttpStatusCode.TooManyRequests], statuses);
+    }
+}
+
+public sealed class ProductionStartupTests
+{
+    [Theory]
+    [InlineData(null)]
+    [InlineData("change-me")]
+    public void Production_RefusesToStartWithoutRealInviteCodes(string? invite)
+    {
+        using var factory = new ProductionAppFactory(invite);
+
+        var error = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
+
+        Assert.Contains("invite", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Production_StartsWithAnInviteCode()
+    {
+        using var factory = new ProductionAppFactory("a-real-code");
+
+        Assert.Equal(HttpStatusCode.OK, (await factory.CreateClient().GetAsync("/health")).StatusCode);
     }
 }
