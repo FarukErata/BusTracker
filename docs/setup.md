@@ -57,7 +57,7 @@ Release builds are signed. Locally the key and its password are read from `~/.an
 
 | What | How |
 |---|---|
-| Android app | Actions → Android release → Run workflow → `prepare`, review the draft, then `publish` |
+| Android app | Actions → Android release → Run workflow → `prepare` (builds the APK and drafts the release), review the draft, then `publish`. Publishing reuses the prepared APK; it is rebuilt only if the version was raised on the draft |
 | Server image | Built and published to `ghcr.io/farukerata/bustracker` on every push to `main` that touches the server or web app. The server picks it up within five minutes (see [deploy.md](deploy.md)) |
 
 Commit titles follow `Area - Feature|Fix|Chore: what changed`; Android release versions and notes are built from them.

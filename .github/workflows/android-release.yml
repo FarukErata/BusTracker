@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: "prepare: draft with suggested version and notes. publish: build and publish the draft."
+        description: "prepare: build the APK and draft the release with suggested version and notes. publish: publish the draft."
         type: choice
         options: [prepare, publish]
         default: prepare
@@ -34,7 +34,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create draft release
+      - name: Version and notes
+        id: version
         env:
           BUMP: ${{ inputs.bump }}
         run: |
@@ -48,17 +49,35 @@ jobs:
             exit 1
           fi
           name=$(bash .github/scripts/android-next-version.sh "$BUMP")
-          tag="android-v$name"
-          bash .github/scripts/android-release-notes.sh HEAD "$GITHUB_REPOSITORY" "$tag" > notes.md
-          printf '\n<!-- prepared-version: %s -->\n' "$name" >> notes.md
-          gh release create "$tag" --draft --target "$(git rev-parse HEAD)" --title "Kaç Kaldı $name" --notes-file notes.md
+          bash .github/scripts/android-release-notes.sh HEAD "$GITHUB_REPOSITORY" "android-v$name" > "$RUNNER_TEMP/notes.md"
+          printf '\n<!-- prepared-version: %s -->\n' "$name" >> "$RUNNER_TEMP/notes.md"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build signed APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.BT_KEYSTORE_BASE64 }}
+          BT_KEYSTORE_PASSWORD: ${{ secrets.BT_KEYSTORE_PASSWORD }}
+        run: bash .github/scripts/android-build.sh "${{ steps.version.outputs.name }}"
+
+      - name: Create draft release
+        env:
+          NAME: ${{ steps.version.outputs.name }}
+        run: |
+          gh release create "android-v$NAME" kackaldi.apk --draft --target "$(git rev-parse HEAD)" --title "Kaç Kaldı $NAME" --notes-file "$RUNNER_TEMP/notes.md"
           {
-            echo "### Draft Kaç Kaldı $name is ready"
+            echo "### Draft Kaç Kaldı $NAME is ready, with its APK"
             echo
             echo "Review or edit it on https://github.com/$GITHUB_REPOSITORY/releases, then run this workflow again with **publish**."
-            echo "The version can be raised by renaming the tag, but not lowered below $name."
+            echo "The version can be raised by renaming the tag (the APK is then rebuilt), but not lowered below $NAME."
             echo
-            cat notes.md
+            cat "$RUNNER_TEMP/notes.md"
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish:
@@ -70,22 +89,38 @@ jobs:
       - name: Find release
         id: find
         run: |
+          release="$RUNNER_TEMP/release.json"
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            echo "mode=tag" >> "$GITHUB_OUTPUT"
-            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
-            echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            exit 0
+            mode=tag
+            tag="$GITHUB_REF_NAME"
+            sha="$GITHUB_SHA"
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" > "$release" 2>/dev/null || echo '{}' > "$release"
+          else
+            drafts=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '[.[] | select(.draft and (.tag_name | startswith("android-v")))]')
+            count=$(echo "$drafts" | jq length)
+            if [ "$count" != "1" ]; then
+              echo "Expected exactly one Android draft release, found $count. Run prepare first." >&2
+              exit 1
+            fi
+            echo "$drafts" | jq '.[0]' > "$release"
+            mode=draft
+            tag=$(jq -r '.tag_name' "$release")
+            sha=$(jq -r '.target_commitish' "$release")
           fi
-          drafts=$(gh api "repos/$GITHUB_REPOSITORY/releases" --jq '[.[] | select(.draft and (.tag_name | startswith("android-v")))]')
-          count=$(echo "$drafts" | jq length)
-          if [ "$count" != "1" ]; then
-            echo "Expected exactly one Android draft release, found $count. Run prepare first." >&2
-            exit 1
-          fi
-          echo "$drafts" | jq -r '.[0].body' > "$RUNNER_TEMP/draft-notes.md"
-          echo "mode=draft" >> "$GITHUB_OUTPUT"
-          echo "tag=$(echo "$drafts" | jq -r '.[0].tag_name')" >> "$GITHUB_OUTPUT"
-          echo "sha=$(echo "$drafts" | jq -r '.[0].target_commitish')" >> "$GITHUB_OUTPUT"
+          jq -r '.body // ""' "$release" > "$RUNNER_TEMP/draft-notes.md"
+          prepared=$(sed -n 's/.*<!-- prepared-version: \([0-9.]*\) -->.*/\1/p' "$RUNNER_TEMP/draft-notes.md" | head -1)
+          apks=$(jq '[.assets[]? | select(.name == "kackaldi.apk")] | length' "$release")
+          build=true
+          if [ "$apks" != "0" ] && [ "${tag#android-v}" = "$prepared" ]; then build=false; fi
+          {
+            echo "mode=$mode"
+            echo "tag=$tag"
+            echo "sha=$sha"
+            echo "prepared=$prepared"
+            echo "exists=$(jq -r 'if .id then "true" else "false" end' "$release")"
+            echo "build=$build"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release $tag: prepared $prepared, APK attached: $apks, build: $build"
 
       - uses: actions/checkout@v7
         with:
@@ -97,60 +132,47 @@ jobs:
         env:
           MODE: ${{ steps.find.outputs.mode }}
           TAG: ${{ steps.find.outputs.tag }}
+          PREPARED: ${{ steps.find.outputs.prepared }}
         run: |
           name="${TAG#android-v}"
           if [ "$MODE" = "draft" ]; then
-            minimum=$(sed -n 's/.*<!-- prepared-version: \([0-9.]*\) -->.*/\1/p' "$RUNNER_TEMP/draft-notes.md" | head -1)
+            minimum="$PREPARED"
             [ -z "$minimum" ] && minimum=$(bash .github/scripts/android-next-version.sh auto)
             bash .github/scripts/android-check-version.sh "$name" "$minimum"
           fi
-          if ! [[ "$name" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "Version must look like 1.2.3, got $name" >&2
-            exit 1
-          fi
-          code=$(( BASH_REMATCH[1] * 10000 + BASH_REMATCH[2] * 100 + BASH_REMATCH[3] ))
           echo "name=$name" >> "$GITHUB_OUTPUT"
-          echo "code=$code" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v6
+        if: steps.find.outputs.build == 'true'
         with:
           distribution: temurin
           java-version: "21"
 
       - uses: gradle/actions/setup-gradle@v6
-
-      - name: Restore signing key
-        env:
-          KEYSTORE_BASE64: ${{ secrets.BT_KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+        if: steps.find.outputs.build == 'true'
 
       - name: Build signed APK
-        working-directory: android
+        if: steps.find.outputs.build == 'true'
         env:
-          BT_KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          KEYSTORE_BASE64: ${{ secrets.BT_KEYSTORE_BASE64 }}
           BT_KEYSTORE_PASSWORD: ${{ secrets.BT_KEYSTORE_PASSWORD }}
-          BT_KEY_ALIAS: bustracker
-          BT_KEY_PASSWORD: ${{ secrets.BT_KEYSTORE_PASSWORD }}
-        run: ./gradlew assembleRelease -PversionName=${{ steps.version.outputs.name }} -PversionCode=${{ steps.version.outputs.code }}
+        run: bash .github/scripts/android-build.sh "${{ steps.version.outputs.name }}"
 
       - name: Publish release
         env:
-          MODE: ${{ steps.find.outputs.mode }}
+          EXISTS: ${{ steps.find.outputs.exists }}
+          BUILD: ${{ steps.find.outputs.build }}
           TAG: ${{ steps.find.outputs.tag }}
           NAME: ${{ steps.version.outputs.name }}
         run: |
-          cp android/app/build/outputs/apk/release/app-release.apk kackaldi.apk
-          if [ "$MODE" = "tag" ] && gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .body > existing-notes.md 2>/dev/null; then
-            sed '/<!-- prepared-version: /d' existing-notes.md > notes.md
+          if [ "$EXISTS" = "true" ]; then
+            sed '/<!-- prepared-version: /d' "$RUNNER_TEMP/draft-notes.md" > notes.md
             gh release edit "$TAG" --title "Kaç Kaldı $NAME" --notes-file notes.md
-          elif [ "$MODE" = "tag" ]; then
+          else
             git fetch --force --quiet origin "refs/tags/$TAG:refs/tags/$TAG"
             bash .github/scripts/android-release-notes.sh "$TAG" "$GITHUB_REPOSITORY" "$TAG" > notes.md
             gh release create "$TAG" --draft --title "Kaç Kaldı $NAME" --notes-file notes.md
-          else
-            sed '/<!-- prepared-version: /d' "$RUNNER_TEMP/draft-notes.md" > notes.md
-            gh release edit "$TAG" --title "Kaç Kaldı $NAME" --notes-file notes.md
           fi
           cat notes.md
-          gh release upload "$TAG" kackaldi.apk
+          if [ "$BUILD" = "true" ]; then gh release upload "$TAG" kackaldi.apk --clobber; fi
           gh release edit "$TAG" --draft=false --latest
