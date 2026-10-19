@@ -7,8 +7,9 @@ import { MapSurface, StopMap } from '@/components/maps'
 import { Button } from '@/components/ui/button'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { Skeleton } from '@/components/ui/skeleton'
-import { busWhere, titleCase } from '@/lib/format'
+import { busWhere, reportAge, secondsSince, seenAgo, titleCase } from '@/lib/format'
 import { useIsWide } from '@/lib/media'
+import { useStopLineFilter } from '@/lib/stopFilters'
 import { useTracking, type TrackedSelection, type TrackingView } from '@/lib/tracking'
 import { cn } from '@/lib/utils'
 
@@ -127,28 +128,45 @@ function waitingText(lines: StopArrivalsView['lines']) {
   return `Waiting for İBB: ${names} · next try ${soonest < 60 ? `in about ${soonest} s` : `in about ${Math.ceil(soonest / 60)} min`}`
 }
 
-function oldestFetch(data: StopArrivalsView) {
-  return data.lines.map(l => l.data?.fetchedAt).filter((t): t is string => !!t).sort()[0]
+function oldestFetch(lines: StopArrivalsView['lines']) {
+  return lines.map(l => l.data?.fetchedAt).filter((t): t is string => !!t).sort()[0]
+}
+
+function reportSeconds(arrival: StopArrivalView, lines: StopArrivalsView['lines']) {
+  const fetchedAt = lines.find(l => l.line === arrival.line && l.direction === arrival.direction)?.data?.fetchedAt
+  return arrival.bus.ageSeconds + (fetchedAt ? secondsSince(fetchedAt) : 0)
+}
+
+function shownLines(data: StopArrivalsView, picked: string[]) {
+  const all = [...new Set(data.lines.map(l => l.line))]
+  const chosen = all.filter(line => picked.includes(line))
+  return { all, visible: new Set(chosen.length > 0 ? chosen : all), filtered: chosen.length > 0 }
 }
 
 function ArrivalsList({ data, selection, tracking, onSelect }: { data: StopArrivalsView } & SelectionProps) {
-  const waiting = data.lines.filter(l => l.error)
-  const bothWays = linesInBothDirections(data)
+  const [picked, setPicked] = useStopLineFilter(data.stop.code)
+  const { all, visible, filtered } = shownLines(data, picked)
+  const lines = data.lines.filter(l => visible.has(l.line))
+  const arrivals = data.arrivals.filter(a => visible.has(a.line))
+  const waiting = lines.filter(l => l.error)
+  const bothWays = linesInBothDirections(lines)
   const isSelected = (a: StopArrivalView) =>
     selection?.line === a.line && selection.direction === a.direction && selection.doorNo === a.bus.doorNo
 
   return (
     <>
-      {data.arrivals.length === 0 ? (
-        <EmptyState title="No bus on the way" description={`Lines here: ${[...new Set(data.lines.map(l => l.line))].join(', ')}.`} />
+      {all.length > 1 && <LineFilter lines={all} picked={filtered ? [...visible] : []} onChange={setPicked} />}
+      {arrivals.length === 0 ? (
+        <EmptyState title="No bus on the way" description={`Lines here: ${[...visible].join(', ')}.`} />
       ) : (
         <ItemGroup>
-          {data.arrivals.map(a => (
+          {arrivals.map(a => (
             <ArrivalRow
               key={`${a.line}-${a.bus.doorNo}`}
               arrival={a}
               stopName={data.stop.name}
               bothWays={bothWays.has(a.line)}
+              ageSeconds={reportSeconds(a, lines)}
               selected={isSelected(a)}
               tracking={isSelected(a) ? tracking : null}
               onToggle={() => onSelect(isSelected(a) ? null : { line: a.line, direction: a.direction, doorNo: a.bus.doorNo })}
@@ -157,32 +175,57 @@ function ArrivalsList({ data, selection, tracking, onSelect }: { data: StopArriv
         </ItemGroup>
       )}
       {waiting.length > 0 && <p className="px-3 text-xs text-muted-foreground">{waitingText(waiting)}</p>}
-      <div className="mt-auto pb-4"><UpdatedAgo fetchedAt={oldestFetch(data)} /></div>
+      <div className="mt-auto pb-4"><UpdatedAgo fetchedAt={oldestFetch(lines)} /></div>
     </>
   )
 }
 
-function linesInBothDirections(data: StopArrivalsView) {
+function LineFilter({ lines, picked, onChange }: { lines: string[]; picked: string[]; onChange: (lines: string[]) => void }) {
+  const toggle = (line: string) => {
+    const next = picked.includes(line) ? picked.filter(l => l !== line) : [...picked, line]
+    onChange(next.length === lines.length ? [] : next)
+  }
+  return (
+    <div role="group" aria-label="Lines to show" className="flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
+      <FilterChip active={picked.length === 0} onClick={() => onChange([])}>All</FilterChip>
+      {lines.map(line => (
+        <FilterChip key={line} active={picked.includes(line)} onClick={() => toggle(line)}>{line}</FilterChip>
+      ))}
+    </div>
+  )
+}
+
+function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+  return (
+    <Button size="sm" variant={active ? 'secondary' : 'outline'} aria-pressed={active} className="pressable shrink-0 rounded-full" onClick={onClick}>
+      {children}
+    </Button>
+  )
+}
+
+function linesInBothDirections(lines: StopArrivalsView['lines']) {
   const directions = new Map<string, Set<string>>()
-  for (const l of data.lines) directions.set(l.line, (directions.get(l.line) ?? new Set()).add(l.direction))
+  for (const l of lines) directions.set(l.line, (directions.get(l.line) ?? new Set()).add(l.direction))
   return new Set([...directions].filter(([, dirs]) => dirs.size > 1).map(([line]) => line))
 }
 
-function arrivalDetail(arrival: StopArrivalView, stopName: string, bothWays: boolean) {
+function arrivalDetail(arrival: StopArrivalView, stopName: string, bothWays: boolean, ageSeconds: number) {
   const { bus } = arrival
   const parts = [
     sameName(arrival.directionName, stopName) && 'Ends here',
     bothWays && !sameName(arrival.directionName, stopName) && `To ${titleCase(arrival.directionName)}`,
     !bus.notDeparted && bus.lastStopName && `now at ${titleCase(bus.lastStopName)}`,
+    reportAge(ageSeconds) !== 'fresh' && seenAgo(ageSeconds),
   ].filter(Boolean)
   return parts.join(' · ')
 }
 
-function ArrivalRow({ arrival, stopName, bothWays, selected, tracking, onToggle }: {
-  arrival: StopArrivalView; stopName: string; bothWays: boolean; selected: boolean; tracking: TrackingView | null; onToggle: () => void
+function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, selected, tracking, onToggle }: {
+  arrival: StopArrivalView; stopName: string; bothWays: boolean; ageSeconds: number; selected: boolean; tracking: TrackingView | null; onToggle: () => void
 }) {
   const { bus } = arrival
-  const detail = arrivalDetail(arrival, stopName, bothWays)
+  const detail = arrivalDetail(arrival, stopName, bothWays, ageSeconds)
+  const faded = reportAge(ageSeconds) !== 'fresh' && 'opacity-60'
   return (
     <div className={cn('transition-colors', selected && 'bg-muted/60')}>
       <Item
@@ -190,12 +233,12 @@ function ArrivalRow({ arrival, stopName, bothWays, selected, tracking, onToggle 
         render={<button type="button" aria-expanded={selected} />}
         onClick={onToggle}
       >
-        <ItemMedia><LineBadge code={arrival.line} /></ItemMedia>
+        <ItemMedia className={cn(faded)}><LineBadge code={arrival.line} /></ItemMedia>
         <ItemContent>
           <ItemTitle>{busWhere(bus.notDeparted, bus.stopsAway)}</ItemTitle>
           {detail && <ItemDescription className="first-letter:uppercase">{detail}</ItemDescription>}
         </ItemContent>
-        <ItemActions>
+        <ItemActions className={cn(faded)}>
           {bus.etaSeconds != null ? <Minutes etaSeconds={bus.etaSeconds} /> : <span className="text-xs text-muted-foreground">Not left</span>}
         </ItemActions>
       </Item>

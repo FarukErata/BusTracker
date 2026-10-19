@@ -8,7 +8,7 @@ import { LineMap } from '@/components/maps'
 import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
-import { distance, stopsAway, titleCase } from '@/lib/format'
+import { distance, reportAge, secondsSince, seenAgo, stopsAway, titleCase } from '@/lib/format'
 import { useIsWide } from '@/lib/media'
 import { cn } from '@/lib/utils'
 
@@ -206,8 +206,8 @@ function BusPositions({ buses, direction, selectedBus, onSelect, onPick }: {
           {ordered.map(bus => (
             <Item key={bus.doorNo} size="sm" className={cn('pressable cursor-pointer', bus.doorNo === selectedBus && 'bg-muted')} onClick={() => onSelect(bus.doorNo)}>
               <ItemContent>
-                <ItemTitle className="tabular-nums">{bus.doorNo}</ItemTitle>
-                <ItemDescription>{describePosition(bus, direction)}</ItemDescription>
+                <ItemTitle className={cn('tabular-nums', reportAge(secondsSince(bus.reportedAt)) !== 'fresh' && 'opacity-60')}>{bus.doorNo}</ItemTitle>
+                <ItemDescription className="first-letter:uppercase">{describePosition(bus, direction)}</ItemDescription>
               </ItemContent>
             </Item>
           ))}
@@ -219,11 +219,15 @@ function BusPositions({ buses, direction, selectedBus, onSelect, onPick }: {
 }
 
 function describePosition(bus: TrackedBusView, direction: LineDirection | undefined) {
+  const age = secondsSince(bus.reportedAt)
+  return [busPlace(bus, direction), reportAge(age) !== 'fresh' && seenAgo(age)].filter(Boolean).join(' · ')
+}
+
+function busPlace(bus: TrackedBusView, direction: LineDirection | undefined) {
   if (bus.status === 'at-terminal') return `Waiting at ${stopName(direction, direction?.stops[0]?.seq ?? null) ?? 'the first stop'}`
   const after = stopName(direction, bus.lastStopSeq)
   const next = stopName(direction, bus.nextStopSeq)
-  const where = [after && `after ${after}`, next && `next ${next}`].filter(Boolean).join(' · ')
-  return bus.status === 'stale' ? `${where} · no signal for a while` : where
+  return [after && `after ${after}`, next && `next ${next}`].filter(Boolean).join(' · ')
 }
 
 function StopPicker({ stops, onPick }: { stops: LineStop[]; onPick: (stop: string) => void }) {

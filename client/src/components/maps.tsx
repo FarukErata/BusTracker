@@ -3,7 +3,7 @@ import L from 'leaflet'
 import { AttributionControl, CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import type { LineStop, TrackedBusView } from '@/api/types'
 import type { TrackingView } from '@/lib/tracking'
-import { titleCase } from '@/lib/format'
+import { reportAge, secondsSince, titleCase } from '@/lib/format'
 
 const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 const ISTANBUL: [number, number] = [41.015, 28.979]
@@ -117,7 +117,8 @@ export function StopMap({ lat, lng, className, tracking = null, inline = true }:
 }
 
 function busIcon(bus: TrackedBusView, selected: boolean) {
-  const classes = ['bus-marker', `bus-${bus.status}`, bus.variant !== 'D0' ? 'bus-alt' : '', selected ? 'bus-selected' : ''].join(' ')
+  const faded = reportAge(secondsSince(bus.reportedAt)) !== 'fresh'
+  const classes = ['bus-marker', `bus-${bus.status}`, bus.variant !== 'D0' ? 'bus-alt' : '', faded ? 'bus-faded' : '', selected ? 'bus-selected' : ''].join(' ')
   return L.divIcon({ className: '', html: `<span class="${classes}">${bus.doorNo}</span>`, iconSize: [0, 0], iconAnchor: [0, 0] })
 }
 

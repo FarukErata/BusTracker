@@ -244,6 +244,9 @@
   .bus-stale {
     background: var(--color-amber-600);
   }
+  .bus-faded {
+    opacity: 0.55;
+  }
   .bus-alt {
     outline: 2px dashed var(--color-violet-500);
     outline-offset: 1px;

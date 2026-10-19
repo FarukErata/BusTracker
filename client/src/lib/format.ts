@@ -49,3 +49,17 @@ export function busWhere(notDeparted: boolean, stops: number): string {
 export function directionLabel(from: string, to: string): string {
   return `${titleCase(from)} → ${titleCase(to)}`
 }
+
+export type ReportAge = 'fresh' | 'old' | 'stale'
+
+const OLD_REPORT_SECONDS = 90
+const STALE_REPORT_SECONDS = 180
+
+export function reportAge(seconds: number): ReportAge {
+  if (seconds >= STALE_REPORT_SECONDS) return 'stale'
+  return seconds >= OLD_REPORT_SECONDS ? 'old' : 'fresh'
+}
+
+export const secondsSince = (iso: string, now = Date.now()) => Math.max(0, (now - Date.parse(iso)) / 1000)
+
+export const seenAgo = (seconds: number) => `seen ${ago(seconds)}`
