@@ -53,6 +53,10 @@ class KacKaldiApi(private val store: DeviceStore) {
 
     suspend fun lineStops(code: String): LineStopsResponse = authorized { auth -> get("api/lines/$code/stops") { auth() } }
 
+    suspend fun lineShapes(code: String): LineShapesResponse = authorized { auth -> get("api/lines/$code/shapes") { auth() } }
+
+    suspend fun lineLive(code: String): LineLiveResponse = authorized { auth -> get("api/lines/$code/live") { auth() } }
+
     suspend fun addFavoriteStop(code: String): Unit = authorized { auth -> post("api/favorites/stops") { auth(); setBody(AddFavoriteStopRequest(code)) } }
 
     suspend fun removeFavoriteStop(id: Long): Unit = authorized { auth -> delete("api/favorites/stops/$id") { auth() } }

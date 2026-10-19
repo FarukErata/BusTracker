@@ -1,6 +1,16 @@
 package com.farukerata.kackaldi.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.draw.alpha
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.farukerata.kackaldi.data.StopFilters
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,7 +55,9 @@ import kotlinx.coroutines.launch
 
 private const val REFRESH_MILLIS = 30_000L
 
-class StopViewModel(private val api: KacKaldiApi, val code: String) : ViewModel() {
+class StopViewModel(private val api: KacKaldiApi, private val filters: StopFilters, val code: String) : ViewModel() {
+    val shownLines: StateFlow<Set<String>> = filters.lines(code).stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
     var arrivals by mutableStateOf<Load<StopArrivalsView>>(Load.Loading)
         private set
     var refreshing by mutableStateOf(false)
@@ -64,6 +76,15 @@ class StopViewModel(private val api: KacKaldiApi, val code: String) : ViewModel(
             refresh()
             refreshing = false
         }
+    }
+
+    fun toggleLine(line: String, all: List<String>) {
+        val next = shownLines.value.let { if (line in it) it - line else it + line }
+        viewModelScope.launch { filters.save(code, if (next.containsAll(all)) emptySet() else next) }
+    }
+
+    fun showAllLines() {
+        viewModelScope.launch { filters.save(code, emptySet()) }
     }
 
     fun loadFavorite() {
@@ -96,6 +117,7 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String) ->
         }
     }
     val stop = viewModel.arrivals.valueOrNull?.stop
+    val shown by viewModel.shownLines.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -121,27 +143,36 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String) ->
             when (val state = viewModel.arrivals) {
                 Load.Loading -> LoadingState()
                 is Load.Failed -> ErrorState(state.message, viewModel::pullToRefresh)
-                is Load.Ready -> ArrivalsList(state.value, onLine)
+                is Load.Ready -> ArrivalsList(state.value, shown, viewModel, onLine)
             }
         }
     }
 }
 
 @Composable
-private fun ArrivalsList(data: StopArrivalsView, onLine: (String) -> Unit) {
-    val bothWays = data.lines.groupBy { it.line }.filterValues { it.size > 1 }.keys
-    val waiting = data.lines.filter { it.error != null }
+private fun ArrivalsList(data: StopArrivalsView, shown: Set<String>, viewModel: StopViewModel, onLine: (String) -> Unit) {
+    val allLines = data.lines.map { it.line }.distinct()
+    val visible = shown.intersect(allLines.toSet()).ifEmpty { allLines.toSet() }
+    val lines = data.lines.filter { it.line in visible }
+    val arrivals = data.arrivals.filter { it.line in visible }
+    val bothWays = lines.groupBy { it.line }.filterValues { it.size > 1 }.keys
+    val waiting = lines.filter { it.error != null }
     LazyColumn(Modifier.fillMaxSize()) {
-        if (data.arrivals.isEmpty()) item {
-            MessageState("No bus on the way", "Lines here: ${data.lines.map { it.line }.distinct().joinToString(", ")}.")
+        if (allLines.size > 1) item {
+            LineFilter(allLines, visible.takeIf { it.size < allLines.size }.orEmpty(), { viewModel.toggleLine(it, allLines) }, viewModel::showAllLines)
         }
-        items(data.arrivals, key = { "${it.line}-${it.bus.doorNo}" }) { arrival ->
-            ArrivalRow(arrival, data.stop.name, arrival.line in bothWays) { onLine(arrival.line) }
+        if (arrivals.isEmpty()) item {
+            MessageState("No bus on the way", "Lines here: ${visible.joinToString(", ")}.")
+        }
+        items(arrivals, key = { "${it.line}-${it.bus.doorNo}" }) { arrival ->
+            val fetchedAt = lines.firstOrNull { it.line == arrival.line && it.direction == arrival.direction }?.data?.fetchedAt
+            val age = arrival.bus.ageSeconds + (fetchedAt?.let(::secondsSince) ?: 0L)
+            ArrivalRow(arrival, data.stop.name, arrival.line in bothWays, age) { onLine(arrival.line) }
         }
         if (waiting.isNotEmpty()) item {
             Text(waitingText(waiting), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        oldestFetch(data)?.let { fetchedAt ->
+        oldestFetch(lines)?.let { fetchedAt ->
             item {
                 Text(
                     "Updated ${ago(secondsSince(fetchedAt))}",
@@ -156,7 +187,22 @@ private fun ArrivalsList(data: StopArrivalsView, onLine: (String) -> Unit) {
 }
 
 @Composable
-private fun ArrivalRow(arrival: StopArrivalView, stopName: String, bothWays: Boolean, onClick: () -> Unit) {
+private fun LineFilter(lines: List<String>, picked: Set<String>, onToggle: (String) -> Unit, onAll: () -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item { FilterChip(selected = picked.isEmpty(), onClick = onAll, label = { Text("All") }) }
+        items(lines, key = { it }) { line ->
+            FilterChip(selected = line in picked, onClick = { onToggle(line) }, label = { Text(line) })
+        }
+    }
+}
+
+@Composable
+private fun ArrivalRow(arrival: StopArrivalView, stopName: String, bothWays: Boolean, ageSeconds: Long, onClick: () -> Unit) {
+    val age = reportAge(ageSeconds)
+    val faded = Modifier.alpha(if (age == ReportAge.Fresh) 1f else 0.55f)
     val bus = arrival.bus
     val endsHere = arrival.directionName.equals(stopName, ignoreCase = true)
     val where = buildList {
@@ -166,12 +212,13 @@ private fun ArrivalRow(arrival: StopArrivalView, stopName: String, bothWays: Boo
             bothWays -> add("to ${titleCase(arrival.directionName)}")
         }
         if (!bus.notDeparted && bus.stopsAway > 0) bus.lastStopName?.let { add("now at ${titleCase(it)}") }
+        if (age != ReportAge.Fresh) add(seenAgo(ageSeconds))
     }
     ListItem(
-        leadingContent = { RowLineBadge(arrival.line) },
+        leadingContent = { Box(faded) { RowLineBadge(arrival.line) } },
         headlineContent = { Text(where.first()) },
         supportingContent = if (where.size > 1) ({ Text(where.drop(1).joinToString(" · ").replaceFirstChar { it.uppercase() }) }) else null,
-        trailingContent = { Minutes(bus.etaSeconds, bus.notDeparted) },
+        trailingContent = { Box(faded) { Minutes(bus.etaSeconds, bus.notDeparted) } },
         modifier = Modifier.clickable(onClick = onClick),
     )
 }
@@ -195,4 +242,4 @@ private fun waitingText(lines: List<LineStatusView>): String {
     return "Waiting for İBB: $names · next try $next"
 }
 
-private fun oldestFetch(data: StopArrivalsView): String? = data.lines.mapNotNull { it.data?.fetchedAt }.minOrNull()
+private fun oldestFetch(lines: List<LineStatusView>): String? = lines.mapNotNull { it.data?.fetchedAt }.minOrNull()

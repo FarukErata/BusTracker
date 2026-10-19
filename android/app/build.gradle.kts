@@ -24,6 +24,8 @@ android {
         versionCode = providers.gradleProperty("versionCode").map(String::toInt).getOrElse(1)
         versionName = providers.gradleProperty("versionName").getOrElse("0.1.0-dev")
         manifestPlaceholders["allowCleartext"] = providers.gradleProperty("allowCleartext").getOrElse("false")
+        ndk { abiFilters += providers.gradleProperty("abis").getOrElse("arm64-v8a").split(",") }
+        buildConfigField("String", "UPDATE_REPO", "\"FarukErata/BusTracker\"")
         buildConfigField("String", "SERVER_URL", "\"${providers.gradleProperty("serverUrl").getOrElse("https://kackaldi.farukerata.com")}\"")
     }
 
@@ -43,6 +45,10 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             signingConfig = signingConfigs.getByName("release")
         }
+    }
+
+    packaging {
+        jniLibs.useLegacyPackaging = true
     }
 
     buildFeatures {
@@ -67,5 +73,6 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.json)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.maplibre.android)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

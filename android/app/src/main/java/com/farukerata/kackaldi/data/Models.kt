@@ -55,13 +55,36 @@ data class LineStatusView(
 data class StopArrivalsView(val stop: StopInfo, val arrivals: List<StopArrivalView>, val lines: List<LineStatusView>)
 
 @Serializable
-data class LineStop(val seq: Int, val code: String, val name: String, val district: String = "")
+data class LineStop(val seq: Int, val code: String, val name: String, val district: String = "", val lat: Double = 0.0, val lng: Double = 0.0)
 
 @Serializable
 data class LineDirection(val direction: String, val name: String, val stops: List<LineStop>)
 
 @Serializable
 data class LineStopsResponse(val line: String, val directions: List<LineDirection>)
+
+@Serializable
+data class LiveBus(
+    val doorNo: String,
+    val lat: Double,
+    val lng: Double,
+    val direction: String,
+    val variant: String,
+    val routeCode: String,
+    val reportedAt: String,
+    val ageSeconds: Int,
+    val status: String,
+    val lastStopSeq: Int? = null,
+)
+
+@Serializable
+data class LineLiveResponse(val line: String, val data: Freshness, val buses: List<LiveBus>)
+
+@Serializable
+data class RouteShape(val routeCode: String, val direction: String, val variant: String, val points: List<List<Double>>)
+
+@Serializable
+data class LineShapesResponse(val line: String, val shapes: List<RouteShape>)
 
 @Serializable
 data class FavoriteStop(val id: Long, val stopCode: String, val stopName: String, val label: String? = null)

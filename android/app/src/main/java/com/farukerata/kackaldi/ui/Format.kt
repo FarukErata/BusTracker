@@ -57,3 +57,16 @@ object LinkCodeTransformation : VisualTransformation {
         return TransformedText(AnnotatedString(linkCodeInput(raw)), mapping)
     }
 }
+
+enum class ReportAge { Fresh, Old, Stale }
+
+fun reportAge(seconds: Long): ReportAge = when {
+    seconds >= STALE_REPORT_SECONDS -> ReportAge.Stale
+    seconds >= OLD_REPORT_SECONDS -> ReportAge.Old
+    else -> ReportAge.Fresh
+}
+
+fun seenAgo(seconds: Long): String = "seen ${ago(seconds)}"
+
+private const val OLD_REPORT_SECONDS = 90L
+private const val STALE_REPORT_SECONDS = 180L

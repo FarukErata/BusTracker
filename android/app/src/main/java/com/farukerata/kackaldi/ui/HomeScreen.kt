@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
@@ -40,6 +41,7 @@ import com.farukerata.kackaldi.data.FavoritesResponse
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineSummary
 import com.farukerata.kackaldi.data.StopSearchResult
+import com.farukerata.kackaldi.update.AppUpdater
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,7 +83,7 @@ class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel, onStop: (String) -> Unit, onLine: (String) -> Unit) {
+fun HomeScreen(viewModel: HomeViewModel, updater: AppUpdater, onStop: (String) -> Unit, onLine: (String) -> Unit) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -91,6 +93,7 @@ fun HomeScreen(viewModel: HomeViewModel, onStop: (String) -> Unit, onLine: (Stri
 
     Scaffold(topBar = { TopAppBar(title = { Text("Kaç Kaldı") }) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            UpdateBanner(updater)
             OutlinedTextField(
                 value = query,
                 onValueChange = { viewModel.query.value = it },
@@ -108,6 +111,7 @@ fun HomeScreen(viewModel: HomeViewModel, onStop: (String) -> Unit, onLine: (Stri
                 val current = results
                 if (query.isBlank() || current == null) favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine)
                 else resultsSection(current, onStop, onLine)
+                item { VersionFooter(updater.currentVersion) }
             }
         }
     }
@@ -169,6 +173,17 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
             }
         }
     }
+}
+
+@Composable
+private fun VersionFooter(version: String) {
+    Text(
+        "Kaç Kaldı $version",
+        Modifier.fillMaxWidth().padding(24.dp),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable
