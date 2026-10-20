@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.view.Gravity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -39,7 +40,6 @@ import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
-import org.maplibre.android.style.layers.PropertyFactory.iconOpacity
 import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineDasharray
@@ -109,6 +109,7 @@ fun TransitMap(
                     isTiltGesturesEnabled = false
                     isCompassEnabled = false
                     isLogoEnabled = false
+                    attributionGravity = Gravity.BOTTOM or Gravity.END
                 }
                 map.addOnMapClickListener { point ->
                     controller.busAt(point)?.let { currentOnBus(it); return@addOnMapClickListener true }
@@ -191,7 +192,6 @@ private class MapController(private val palette: Palette, private val density: F
         style.addLayer(
             SymbolLayer(BUSES, BUSES).withProperties(
                 iconImage(Expression.get(ICON)),
-                iconOpacity(Expression.get(OPACITY)),
                 iconAllowOverlap(true),
                 iconIgnorePlacement(true),
                 symbolSortKey(Expression.get(ORDER)),
@@ -222,6 +222,7 @@ private class MapController(private val palette: Palette, private val density: F
     private fun apply() {
         val style = style ?: return
         val scene = scene ?: return
+        placeAttribution(scene)
         style.source(ROUTE).setGeoJson(lineFeature(scene.route))
         style.source(VARIANT).setGeoJson(lineFeature(scene.variant))
         style.source(HIGHLIGHT).setGeoJson(lineFeature(scene.highlight))
@@ -229,6 +230,13 @@ private class MapController(private val palette: Palette, private val density: F
         style.source(PIN).setGeoJson(FeatureCollection.fromFeatures(listOfNotNull(scene.pinned).map(::stopFeature)))
         style.source(BUSES).setGeoJson(FeatureCollection.fromFeatures(scene.buses.map { busFeature(style, it, it.doorNo == scene.selectedBus) }))
         frame(scene)
+    }
+
+    private fun placeAttribution(scene: MapScene) {
+        val map = map ?: return
+        val edge = (ATTRIBUTION_MARGIN * density).toInt()
+        val bottom = ((scene.bottomInsetDp + ATTRIBUTION_MARGIN) * density).toInt()
+        map.uiSettings.setAttributionMargins(0, 0, edge, bottom)
     }
 
     private fun Style.source(id: String): GeoJsonSource = getSourceAs(id)!!
@@ -244,28 +252,27 @@ private class MapController(private val palette: Palette, private val density: F
     private fun busFeature(style: Style, bus: MapBus, selected: Boolean): Feature {
         val color = when {
             selected -> palette.busSelected
-            bus.age == ReportAge.Stale -> palette.busStale
             bus.waiting -> palette.busWaiting
             else -> palette.busMoving
         }
-        val icon = "bus:${bus.doorNo}:${color.toArgb()}:${bus.heavyTraffic}:$selected"
-        if (style.getImage(icon) == null) style.addImage(icon, busLabel(bus.doorNo, color.toArgb(), bus.heavyTraffic, selected))
+        val ring = if (bus.age == ReportAge.Fresh) palette.busOutline else palette.seen
+        val icon = "bus:${bus.doorNo}:${color.toArgb()}:${ring.toArgb()}:${bus.heavyTraffic}:$selected"
+        if (style.getImage(icon) == null) style.addImage(icon, busLabel(bus.doorNo, color.toArgb(), ring.toArgb(), bus.heavyTraffic, selected))
         return Feature.fromGeometry(Point.fromLngLat(bus.lng, bus.lat)).apply {
             addStringProperty(CODE, bus.doorNo)
             addStringProperty(ICON, icon)
-            addNumberProperty(OPACITY, if (bus.age == ReportAge.Fresh || selected) 1f else 0.55f)
             addNumberProperty(ORDER, if (selected) 1 else 0)
         }
     }
 
-    private fun busLabel(text: String, color: Int, traffic: Boolean, selected: Boolean): Bitmap {
+    private fun busLabel(text: String, color: Int, ring: Int, traffic: Boolean, selected: Boolean): Bitmap {
         val scale = density * if (selected) 1.2f else 1f
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             this.typeface = this@MapController.typeface
             textSize = 11f * scale
             this.color = android.graphics.Color.WHITE
         }
-        val outline = 1.5f * scale
+        val outline = (if (ring == palette.busOutline.toArgb()) 1.5f else 2f) * scale
         val padX = 5f * scale
         val padY = 1.5f * scale
         val dot = if (traffic) 4.5f * scale else 0f
@@ -276,7 +283,7 @@ private class MapController(private val palette: Palette, private val density: F
         val top = dot
         val radius = 6f * scale
         val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-        fill.color = palette.busOutline.toArgb()
+        fill.color = ring
         canvas.drawRoundRect(RectF(0f, top, width, top + height), radius + outline, radius + outline, fill)
         fill.color = color
         canvas.drawRoundRect(RectF(outline, top + outline, width - outline, top + height - outline), radius, radius, fill)
@@ -322,7 +329,7 @@ private const val PIN = "pin"
 private const val BUSES = "buses"
 private const val CODE = "code"
 private const val ICON = "icon"
-private const val OPACITY = "opacity"
 private const val ORDER = "order"
 private const val FRAME_PADDING = 28
+private const val ATTRIBUTION_MARGIN = 6
 private const val MAX_FIT_ZOOM = 17.0

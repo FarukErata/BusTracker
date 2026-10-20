@@ -44,7 +44,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -369,7 +368,7 @@ private fun LazyListScope.busPositions(viewModel: LineViewModel, direction: Line
         val age = secondsSince(bus.reportedAt)
         ItemRow(onClick = { viewModel.select(bus.doorNo) }, selected = bus.doorNo == viewModel.selectedBus) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ItemTitle(bus.doorNo, Modifier.alpha(if (reportAge(age) == ReportAge.Fresh) 1f else 0.6f))
+                ItemTitle(bus.doorNo, Modifier.ageRing(reportAge(age), RoundedCornerShape(6.dp)).padding(horizontal = 4.dp))
                 if (bus.heavyTraffic) TrafficBadge()
             }
             ItemDescription(describePosition(bus, direction, age))

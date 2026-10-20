@@ -42,9 +42,9 @@ data class Palette(
     val pinStroke: Color,
     val busMoving: Color,
     val busWaiting: Color,
-    val busStale: Color,
     val busSelected: Color,
     val busOutline: Color,
+    val seen: Color = Color(0x8071717A),
 )
 
 private val LightPalette = Palette(
@@ -70,7 +70,6 @@ private val LightPalette = Palette(
     pinStroke = Color(0xFFFFFFFF),
     busMoving = Color(0xFF047857),
     busWaiting = Color(0xFF71717A),
-    busStale = Color(0xFFD97706),
     busSelected = Color(0xFF0369A1),
     busOutline = Color(0xFFFFFFFF),
 )
@@ -98,7 +97,6 @@ private val DarkPalette = Palette(
     pinStroke = Color(0xFF09090B),
     busMoving = Color(0xFF047857),
     busWaiting = Color(0xFF71717A),
-    busStale = Color(0xFFD97706),
     busSelected = Color(0xFF0369A1),
     busOutline = Color(0xFF09090B),
 )

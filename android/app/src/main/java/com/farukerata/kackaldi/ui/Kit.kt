@@ -50,6 +50,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -185,14 +186,17 @@ fun Chevron() {
 }
 
 @Composable
-fun LineBadge(code: String, modifier: Modifier = Modifier, minWidth: Dp = 0.dp) {
+fun LineBadge(code: String, modifier: Modifier = Modifier, minWidth: Dp = 0.dp, age: ReportAge = ReportAge.Fresh) {
     Box(
-        modifier.widthIn(min = minWidth).height(20.dp).clip(BadgeShape).background(Kit.colors.secondary).padding(horizontal = 5.dp),
+        modifier.widthIn(min = minWidth).height(20.dp).clip(BadgeShape).background(Kit.colors.secondary).ageRing(age, BadgeShape).padding(horizontal = 5.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(code, style = Kit.xs.copy(fontWeight = FontWeight.SemiBold), color = Kit.colors.foreground, maxLines = 1)
     }
 }
+
+@Composable
+fun Modifier.ageRing(age: ReportAge, shape: Shape): Modifier = if (age == ReportAge.Fresh) this else border(2.dp, Kit.colors.seen, shape)
 
 @Composable
 fun OutlineBadge(text: String) {

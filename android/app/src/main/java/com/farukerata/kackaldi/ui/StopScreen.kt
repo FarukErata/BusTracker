@@ -40,7 +40,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -222,7 +221,7 @@ private fun StopMapCard(viewModel: StopViewModel, lat: Double?, lng: Double?) {
                 route = tracking.path,
                 stops = tracking.remainingStops.dropLast(1).map { MapStop(it.code, it.lat, it.lng) },
                 pinned = stop,
-                buses = listOf(MapBus(tracking.bus.doorNo, tracking.bus.lat, tracking.bus.lng, heavyTraffic = tracking.bus.heavyTraffic)),
+                buses = listOf(MapBus(tracking.bus.doorNo, tracking.bus.lat, tracking.bus.lng, age = reportAge(secondsSince(tracking.bus.reportedAt)), heavyTraffic = tracking.bus.heavyTraffic)),
                 selectedBus = tracking.bus.doorNo,
             )
         } else {
@@ -279,7 +278,6 @@ private fun ArrivalRow(
     arrival: StopArrivalView, stopName: String, bothWays: Boolean, ageSeconds: Long, receivedAt: Long, selected: Boolean, onClick: () -> Unit,
 ) {
     val age = reportAge(ageSeconds)
-    val faded = Modifier.alpha(if (age == ReportAge.Fresh) 1f else 0.6f)
     val bus = arrival.bus
     val endsHere = arrival.directionName.equals(stopName, ignoreCase = true)
     val detail = buildList {
@@ -291,12 +289,10 @@ private fun ArrivalRow(
     ItemRow(
         onClick = onClick,
         selected = selected,
-        leading = { Box(faded) { LineBadge(arrival.line) } },
+        leading = { LineBadge(arrival.line, age = age) },
         trailing = {
-            Box(faded) {
-                val eta = bus.etaSeconds
-                if (eta != null) Minutes(eta, receivedAt) else NotLeft()
-            }
+            val eta = bus.etaSeconds
+            if (eta != null) Minutes(eta, receivedAt) else NotLeft()
         },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
