@@ -51,7 +51,7 @@ JAVA_HOME=/path/to/jdk-21 ./gradlew assembleDebug
 
 The app talks to `https://kackaldi.farukerata.com` by default. To try it against a local API in the Android emulator (which reaches the PC at `10.0.2.2`), build with `-PserverUrl=http://10.0.2.2:5080 -PallowCleartext=true -Pabis=x86_64`. Never use `allowCleartext` for a published build. Published builds contain only `arm64-v8a` code, which is what phones need; `abis` adds `x86_64` for the emulator.
 
-Release builds are signed. Locally the key and its password are read from `~/.android-keys/bustracker/keystore.properties`; in GitHub Actions from the secrets `BT_KEYSTORE_BASE64` and `BT_KEYSTORE_PASSWORD`. The key is never committed, and every release must be signed with the same one.
+Release builds are signed. Locally the key and its password are read from `~/.android-keys/bustracker/keystore.properties`; in GitHub Actions from the secrets `BT_KEYSTORE_BASE64` and `BT_KEYSTORE_PASSWORD`. The key is never committed, and every release must be signed with the same one. Its certificate's SHA-256 fingerprint is in `appsettings.json` under `BusTracker:AndroidApp`, so the server can vouch for the app's sign-in links; it is public by design, but must change if the key ever does.
 
 ## Releases and images
 

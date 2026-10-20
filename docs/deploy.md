@@ -29,7 +29,7 @@ kackaldi/
    curl -fsSL -o .env https://raw.githubusercontent.com/FarukErata/BusTracker/main/deploy/.env.example
    ```
 
-2. Edit `.env` and set a real invite code. People need it to create a user. More codes go on further lines (`BusTracker__Access__InviteCodes__1=…`). Other settings follow the same pattern, `BusTracker__Section__Key=value`. To keep the log quiet, add `Logging__LogLevel__System.Net.Http.HttpClient=Warning`.
+2. Edit `.env` and set a real invite code. People need it to create a user, and the server refuses to start without one (or with the example `change-me`); to let anyone register instead, set `BusTracker__Access__AllowOpenRegistration=true`. More codes go on further lines (`BusTracker__Access__InviteCodes__1=…`). Other settings follow the same pattern, `BusTracker__Section__Key=value`. To keep the log quiet, add `Logging__LogLevel__System.Net.Http.HttpClient=Warning`.
 
 3. Create the data folder. The container runs as user 1654, which must be able to write it:
 

@@ -1,4 +1,4 @@
-# BusTracker server — design (v1 draft)
+# Kaç Kaldı server: design
 
 Based on the tested API behaviour in [api-endpoints.md](api-endpoints.md).
 
@@ -114,8 +114,10 @@ Personal, with room for 1–2 friends: a tiny `users` table from day one. Each u
 No login or registration form; one model for web and Android.
 
 - **Anonymous user + per-device key.** `POST /api/devices {platform, name?, invite?, linkCode?}` creates a user and returns a random device key (shown once, stored hashed). Every client sends `Authorization: Bearer <key>`: browser storage on web, encrypted storage on Android.
-- **Invite codes** (`BusTracker:Access:InviteCodes`) are required to create a *new* user. Empty list = open; that's fine on a dev PC, and the server logs a warning when it starts in production that way. Share `https://…/?invite=CODE` once.
-- **Link codes** (`POST /api/me/link-codes` → e.g. `XRE-D3Z`, 10 min, single use) add another device to the same user without an invite. They're also the recovery path.
+- **Invite codes** (`BusTracker:Access:InviteCodes`) are required to create a *new* user. In production the server refuses to start without one, or with the example `change-me`, unless `BusTracker:Access:AllowOpenRegistration` is `true`. An empty list is fine on a dev PC. Share `https://…/?invite=CODE` once.
+- **Link codes** (`POST /api/me/link-codes` → e.g. `XRE-D3Z`, 10 min, single use, only the newest is valid) add another device to the same user without an invite. They're also the recovery path.
+- **Sign-in links:** the signed-in web Android page shows a QR for `https://<host>/join/<code>?e=<expiry ms>`. The Android app claims that path as a verified App Link (the server serves `/.well-known/assetlinks.json` with the signing certificate's SHA-256 from `BusTracker:AndroidApp`), so scanning it opens the app, which joins with the code. Without the app, the public `/join` page offers the download and an `intent://join/<code>` button (`kackaldi://join/<code>`).
+- **Removing devices:** `DELETE /api/me/devices/{id}` refuses the user's only device (409), so nobody locks themselves out.
 - Registration is rate-limited per IP (10 per 10 min). All other `/api` routes need a device key; `/health` is public.
 - Devices are separate records, so each can later carry its own notification target (FCM token, web push, ntfy).
 - Favourites belong to the user and come in two kinds: a **line** with an optional direction (no route variant), or a **stop** on its own. A stop favourite covers every line serving it. `GET /api/favorites` makes no İBB calls; live data loads only when an item is opened (on demand, to save the call budget).
@@ -130,24 +132,25 @@ No login or registration form; one model for web and Android.
 
 
 
-## HTTP API (v1)
+## HTTP API
 
-All under `/api`, header `Authorization: Bearer <key>` (the user's key) except `/health`. The web client is developed separately (own chat/tests) and consumes this API; the server can host its built files from `wwwroot` so everything is same-origin and needs no CORS.
+All under `/api` with `Authorization: Bearer <device key>`, except `POST /api/devices`, `/health` and `/.well-known/assetlinks.json`. The server also hosts the built web app from `wwwroot`, so everything is same-origin and needs no CORS. Clients poll live data every 30 s; that reads cached state and never triggers an İBB call on its own.
 
 | Method & path | Purpose |
 |---|---|
-| `GET /lines?q=50` | Search the cached line list (code or name, Turkish-aware case folding) |
-| `GET /lines/{code}` | Line info + both directions with their destination names |
-| `GET /lines/{code}/stops?dir=G` | Ordered stops for a direction |
-| `GET /lines/{code}/live` | Buses with position, stops away to each favourite stop on that line, and data age. Marks the line hot for 5 min |
-| `GET /stops?q=` / `GET /stops/near?lat=&lng=` | Stop search by name / nearest stops (for adding a favourite) |
-| `GET /board` | **Home screen in one call**: every favourite with its next 2–3 buses (stops away, ETA when available, stale flag) |
-| `GET/POST/PUT/DELETE /favourites` | Favourites CRUD |
-| `GET/POST/PUT/DELETE /watches` | Watches CRUD |
-| `GET/POST/DELETE /notify-targets`, `POST /notify-targets/{id}/test` | Notification destinations + test message |
-| `GET /health` | Uptime, hot lines, calls in the last minute, backoff state, cache ages |
-
-Clients poll `/board` or `/live` every 30 s. That's cheap, because it reads from `LiveCache` and never triggers an İBB call by itself. Server-Sent Events can come later if needed.
+| `POST /api/devices` | Register a device with an invite or link code; returns the device key once |
+| `GET /api/me`, `POST /api/me/link-codes`, `DELETE /api/me/devices/{id}` | Your devices, a link code for another device, remove a device |
+| `GET /api/favorites`, `POST/DELETE /api/favorites/lines…`, `POST/DELETE /api/favorites/stops…` | Favourite lines (optional direction) and stops |
+| `GET /api/lines?q=` | Line search (code prefix) with each direction's end stops |
+| `GET /api/lines/{code}/stops` | Ordered stops for both directions |
+| `GET /api/lines/{code}/shapes[?all=true]` | Road geometry of the main variants (or all of them) |
+| `GET /api/lines/{code}/live` | Tracked buses: position, status, last and next stop, speed, report age, heavy traffic ahead |
+| `GET /api/lines/{code}/arrivals?stop=&dir=` | Buses approaching one stop (stops away, distance, ETA, heavy traffic) and recently passed |
+| `GET /api/lines/{code}/path?bus=&stop=` | Road path and remaining stops from a bus to a stop |
+| `GET /api/stops?q=`, `GET /api/stops/{code}` | Stop search (Turkish-aware), stop details with its lines |
+| `GET /api/stops/{code}/arrivals[?lines=a,b]` | Arrivals across every line at the stop; `lines` limits which lines get roster refreshes |
+| `GET /api/stats/eta?days=7` | ETA accuracy of both models against real arrivals |
+| `GET /health` | Status, running commit, memory, İBB calls in the last hour, fleet and route data state |
 
 ## Notifications (pluggable, decided later)
 
