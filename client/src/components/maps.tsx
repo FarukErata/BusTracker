@@ -117,8 +117,8 @@ export function StopMap({ lat, lng, className, tracking = null, inline = true }:
 }
 
 function busIcon(bus: TrackedBusView, selected: boolean) {
-  const faded = reportAge(secondsSince(bus.reportedAt)) !== 'fresh'
-  const classes = ['bus-marker', `bus-${bus.status}`, bus.variant !== 'D0' ? 'bus-alt' : '', faded ? 'bus-faded' : '', bus.heavyTraffic ? 'bus-traffic' : '', selected ? 'bus-selected' : ''].join(' ')
+  const age = reportAge(secondsSince(bus.reportedAt))
+  const classes = ['bus-marker', `bus-${bus.status}`, bus.variant !== 'D0' ? 'bus-alt' : '', age !== 'fresh' ? 'bus-seen' : '', bus.heavyTraffic ? 'bus-traffic' : '', selected ? 'bus-selected' : ''].join(' ')
   return L.divIcon({ className: '', html: `<span class="${classes}">${bus.doorNo}</span>`, iconSize: [0, 0], iconAnchor: [0, 0] })
 }
 

@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router'
 import { ArrowLeftRight, MapPin, Star, X } from 'lucide-react'
 import { useAddFavoriteLine, useBusPath, useFavorites, useLineArrivals, useLineLive, useLineShapes, useLineStops, useRemoveFavoriteLine } from '@/api/hooks'
 import type { ArrivalView, LineDirection, LineStop, TrackedBusView } from '@/api/types'
-import { BackButton, ErrorState, LineBadge, Minutes, RowsSkeleton, TrafficBadge, UpdatedAgo } from '@/components/bits'
+import { ageRing, BackButton, ErrorState, LineBadge, Minutes, RowsSkeleton, TrafficBadge, UpdatedAgo } from '@/components/bits'
 import { LineMap } from '@/components/maps'
 import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
@@ -208,7 +208,7 @@ function BusPositions({ buses, direction, selectedBus, onSelect, onPick }: {
             <Item key={bus.doorNo} size="sm" className={cn('pressable cursor-pointer', bus.doorNo === selectedBus && 'bg-muted')} onClick={() => onSelect(bus.doorNo)}>
               <ItemContent>
                 <ItemTitle className="tabular-nums">
-                  <span className={cn(reportAge(secondsSince(bus.reportedAt)) !== 'fresh' && 'opacity-60')}>{bus.doorNo}</span>
+                  <span className={cn('-mx-1 rounded-md px-1', ageRing(reportAge(secondsSince(bus.reportedAt))))}>{bus.doorNo}</span>
                   {bus.heavyTraffic && <TrafficBadge />}
                 </ItemTitle>
                 <ItemDescription className="first-letter:uppercase">{describePosition(bus, direction)}</ItemDescription>

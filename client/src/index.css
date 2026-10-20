@@ -244,8 +244,8 @@
   .bus-stale {
     background: var(--color-amber-600);
   }
-  .bus-faded {
-    opacity: 0.55;
+  .bus-marker.bus-seen {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-zinc-500) 50%, transparent);
   }
   .bus-traffic::after {
     content: '';

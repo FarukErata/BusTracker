@@ -2,7 +2,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { ArrowRight, Star } from 'lucide-react'
 import { useAddFavoriteStop, useFavorites, useRemoveFavoriteStop, useStop, useStopArrivals } from '@/api/hooks'
 import type { StopArrivalView, StopArrivalsView, StopInfo } from '@/api/types'
-import { BackButton, EmptyState, ErrorState, LineBadge, Minutes, RowsSkeleton, StopName, Towards, TrafficBadge, UpdatedAgo } from '@/components/bits'
+import { ageRing, BackButton, EmptyState, ErrorState, LineBadge, Minutes, RowsSkeleton, StopName, Towards, TrafficBadge, UpdatedAgo } from '@/components/bits'
 import { MapSurface, StopMap } from '@/components/maps'
 import { Button } from '@/components/ui/button'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
@@ -229,7 +229,6 @@ function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, receivedAt, selec
 }) {
   const { bus } = arrival
   const detail = arrivalDetail(arrival, stopName, bothWays, ageSeconds)
-  const faded = reportAge(ageSeconds) !== 'fresh' && 'opacity-60'
   return (
     <div className={cn('transition-colors', selected && 'bg-muted/60')}>
       <Item
@@ -237,7 +236,7 @@ function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, receivedAt, selec
         render={<button type="button" aria-expanded={selected} />}
         onClick={onToggle}
       >
-        <ItemMedia className={cn(faded)}><LineBadge code={arrival.line} /></ItemMedia>
+        <ItemMedia><LineBadge code={arrival.line} className={ageRing(reportAge(ageSeconds))} /></ItemMedia>
         <ItemContent>
           <ItemTitle>
             {busWhere(bus.notDeparted, bus.stopsAway)}
@@ -245,7 +244,7 @@ function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, receivedAt, selec
           </ItemTitle>
           {detail && <ItemDescription className="first-letter:uppercase">{detail}</ItemDescription>}
         </ItemContent>
-        <ItemActions className={cn(faded)}>
+        <ItemActions>
           {bus.etaSeconds != null ? <Minutes etaSeconds={bus.etaSeconds} receivedAt={receivedAt} /> : <span className="text-xs text-muted-foreground">Not left</span>}
         </ItemActions>
       </Item>

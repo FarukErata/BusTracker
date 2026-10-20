@@ -5,16 +5,19 @@ import { Badge } from '@/components/reui/badge'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ago, minutes, titleCase } from '@/lib/format'
+import { ago, minutes, titleCase, type ReportAge } from '@/lib/format'
 import { useTheme } from '@/lib/theme'
+import { cn } from '@/lib/utils'
 
-export function LineBadge({ code }: { code: string }) {
+export function LineBadge({ code, className }: { code: string; className?: string }) {
   return (
-    <Badge variant="secondary" className="font-semibold tabular-nums">
+    <Badge variant="secondary" className={cn('font-semibold tabular-nums', className)}>
       {code}
     </Badge>
   )
 }
+
+export const ageRing = (age: ReportAge) => (age === 'fresh' ? '' : 'ring-2 ring-zinc-500/50')
 
 export function LineBadges({ lines, max = 4 }: { lines: string[]; max?: number }) {
   const shown = lines.slice(0, max)
