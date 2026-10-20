@@ -15,15 +15,7 @@ if [ -z "$commits" ]; then
   exit 1
 fi
 
-if [ "$bump" = "auto" ]; then
-  bump="patch"
-  for sha in $commits; do
-    if git log -1 --format='%s' "$sha" | grep -qE ' - Feature: '; then
-      bump="minor"
-      break
-    fi
-  done
-fi
+[ "$bump" = "auto" ] && bump="patch"
 
 case "$bump" in
   major) echo "$((major + 1)).0.0" ;;

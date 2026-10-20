@@ -12,7 +12,7 @@ on:
         options: [prepare, publish]
         default: prepare
       bump:
-        description: "Version bump for prepare (auto: minor if any Feature commit, otherwise patch)"
+        description: "Version bump for prepare (auto: next patch version; pick minor or major for a bigger step)"
         type: choice
         options: [auto, patch, minor, major]
         default: auto
