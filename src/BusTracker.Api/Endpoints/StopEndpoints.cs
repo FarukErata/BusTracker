@@ -47,6 +47,7 @@ public static class StopEndpoints
             .ToList();
         Telemetry.Note("lines", statuses.Count);
         Telemetry.Note("waitingLines", statuses.Count(l => l.Error is not null));
+        Telemetry.Note("waiting", string.Join(", ", statuses.Where(l => l.Error is not null).Select(l => $"{l.Line} {l.Error}")));
         return Results.Ok(new StopArrivalsView(result.Stop, merged, statuses));
     }
 

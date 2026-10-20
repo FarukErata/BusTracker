@@ -1,5 +1,6 @@
 using BusTracker.Api.Ibb;
 using BusTracker.Api.Lines;
+using BusTracker.Api.Tracing;
 using BusTracker.Api.Tracking;
 
 namespace BusTracker.Api.Stops;
@@ -46,6 +47,7 @@ public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataS
         }
         catch (Exception e) when (e is IbbException or HttpRequestException || e is OperationCanceledException && !ct.IsCancellationRequested)
         {
+            using (var span = Telemetry.Span("failed", $"{line.LineCode} {e.GetType().Name}")) span.Fail(e.Message);
             return new LineAtStop(line, null, "waiting for data (ibb-error)", [], DateTimeOffset.UtcNow.AddMinutes(1));
         }
     }
