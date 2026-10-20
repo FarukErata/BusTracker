@@ -54,6 +54,8 @@ class WatchService : Service() {
     private var step: WatchStep? = null
     private var phase = Phase.Watching
     private var hidden = false
+    private var shownId = ONGOING_ID
+    private var ringing = false
     private val app get() = application as KacKaldiApplication
     private val notifications get() = getSystemService(NotificationManager::class.java)
 
@@ -84,12 +86,7 @@ class WatchService : Service() {
         step = null
         phase = Phase.Watching
         hidden = false
-        val first = watching(next, "Looking for ${next.lineNames}…")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(ONGOING_ID, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(ONGOING_ID, first)
-        }
+        showFresh(watching(next, "Looking for ${next.lineNames}…"))
         notifications.cancel(ENDED_ID)
         app.watch.value = next
         follow()
@@ -132,8 +129,11 @@ class WatchService : Service() {
                     showGone(watch, gone, next.next)
                     return
                 }
-                if (next.fire != null) hidden = false
-                post(watching(watch, null, loud = next.fire != null))
+                when {
+                    next.fire != null -> showFresh(watching(watch, null, loud = true)).also { ringing = true }
+                    ringing -> showFresh(watching(watch, null)).also { ringing = false }
+                    else -> post(watching(watch, null))
+                }
             }
             val close = state?.following != null || step?.shown?.let { watch.trigger.near(it.bus) } == true
             delay(if (close) NEAR_REFRESH_MILLIS else FAR_REFRESH_MILLIS)
@@ -144,13 +144,26 @@ class WatchService : Service() {
         phase = Phase.Gone
         hidden = false
         releaseCpu()
-        notifications.notify(ONGOING_ID, goneNotification(watch, gone, next))
+        ringing = false
+        showFresh(goneNotification(watch, gone, next))
         delay(GONE_MILLIS)
         finish()
     }
 
     private fun post(notification: Notification) {
-        if (!hidden) notifications.notify(ONGOING_ID, notification)
+        if (!hidden) notifications.notify(shownId, notification)
+    }
+
+    private fun showFresh(notification: Notification) {
+        val previous = shownId
+        shownId = if (previous == ONGOING_ID) SWAP_ID else ONGOING_ID
+        hidden = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(shownId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(shownId, notification)
+        }
+        notifications.cancel(previous)
     }
 
     private class Seen(val buses: List<SeenBus>, val passed: Set<String>)
@@ -198,11 +211,11 @@ class WatchService : Service() {
             .setOnlyAlertOnce(!loud)
             .setSilent(!loud)
             .setPriority(if (alerted) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_LOW)
-            .setCategory(if (alerted) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_PROGRESS)
+            .setCategory(if (alerted) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_PROGRESS)
         if (alerted) builder.addAction(0, "Missed it", serviceIntent(ACTION_MISSED, 2))
         builder.addAction(0, "Stop", serviceIntent(ACTION_STOP, 1))
         countdown(builder, seen?.takeIf { problem == null })
-        return builder.build()
+        return builder.build().apply { if (loud) flags = flags or Notification.FLAG_INSISTENT }
     }
 
     private fun watchingText(watch: Watch, alerted: Boolean): String {
@@ -312,10 +325,12 @@ class WatchService : Service() {
                 description = "Live countdown while you wait for a bus"
             },
         )
+        notifications.deleteNotificationChannel(OLD_ALERT_CHANNEL)
         notifications.createNotificationChannel(
-            NotificationChannel(ALERT_CHANNEL, "Bus alerts", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Tells you when it is time to go"
+            NotificationChannel(ALERT_CHANNEL, "Time to go", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Rings until you look, when it is time to leave for your bus"
                 enableVibration(true)
+                vibrationPattern = LEAVE_VIBRATION
             },
         )
     }
@@ -328,8 +343,11 @@ class WatchService : Service() {
         private const val ACTION_MISSED = "com.farukerata.kackaldi.action.MISSED_BUS"
         private const val ACTION_HIDE = "com.farukerata.kackaldi.action.HIDE_WATCH"
         private const val ONGOING_CHANNEL = "watch"
-        private const val ALERT_CHANNEL = "alerts"
+        private const val ALERT_CHANNEL = "leave"
+        private const val OLD_ALERT_CHANNEL = "alerts"
         private const val ONGOING_ID = 41
+        private const val SWAP_ID = 44
+        private val LEAVE_VIBRATION = longArrayOf(0, 700, 300, 700, 300, 700)
         private const val ENDED_ID = 43
         private const val NEAR_REFRESH_MILLIS = 30_000L
         private const val FAR_REFRESH_MILLIS = 60_000L
