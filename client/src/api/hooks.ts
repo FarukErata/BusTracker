@@ -53,12 +53,21 @@ export function useStop(code: string) {
   })
 }
 
+const WAITING_RETRY_MIN_MS = 5_000
+
+function stopRefreshMs(data: StopArrivalsView | undefined): number {
+  const waiting = data?.lines.filter(l => l.error) ?? []
+  if (waiting.length === 0) return LIVE_REFRESH_MS
+  const soonest = Math.min(...waiting.map(l => (l.retryInSeconds ?? 0) * 1000))
+  return Math.min(LIVE_REFRESH_MS, Math.max(WAITING_RETRY_MIN_MS, soonest))
+}
+
 export function useStopArrivals(code: string, lines: string[] = []) {
   const wanted = [...lines].sort().join(',')
   return useQuery({
     queryKey: ['stop', code, 'arrivals', wanted],
     queryFn: () => api<StopArrivalsView>(`/api/stops/${enc(code)}/arrivals${wanted ? `?lines=${enc(wanted)}` : ''}`),
-    refetchInterval: LIVE_REFRESH_MS,
+    refetchInterval: query => stopRefreshMs(query.state.data),
     placeholderData: keepPreviousData,
   })
 }
