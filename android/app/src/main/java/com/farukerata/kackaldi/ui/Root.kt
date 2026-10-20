@@ -21,7 +21,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.farukerata.kackaldi.KacKaldiApplication
+import com.farukerata.kackaldi.data.BusAlert
 import com.farukerata.kackaldi.watch.AlertScheduler
+import com.farukerata.kackaldi.watch.WatchService
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
@@ -37,6 +39,9 @@ data class LineRoute(val code: String, val direction: String? = null, val stop: 
 
 @Serializable
 data object DevicesRoute
+
+@Serializable
+data object AlertsRoute
 
 @Composable
 fun KacKaldiRoot(dark: Boolean, onToggleTheme: () -> Unit) {
@@ -66,6 +71,9 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val alerts by app.alerts.alerts.collectAsStateWithLifecycle(initialValue = emptyList())
+    val running by app.watch.collectAsStateWithLifecycle()
+    val setEnabled = { alert: BusAlert, enabled: Boolean -> scope.launch { AlertScheduler.save(context, app.alerts, alert.copy(enabled = enabled)) }; Unit }
+    val remove = { alert: BusAlert -> scope.launch { AlertScheduler.remove(context, app.alerts, alert.id) }; Unit }
     val openStop by app.pendingStop.collectAsStateWithLifecycle()
     LaunchedEffect(openStop) {
         val code = openStop ?: return@LaunchedEffect
@@ -82,9 +90,22 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
                 onStop = { nav.navigate(StopRoute(it)) },
                 onLine = { code, direction -> nav.navigate(LineRoute(code, direction)) },
                 onDevices = { nav.navigate(DevicesRoute) },
+                onAlerts = { nav.navigate(AlertsRoute) },
+                alertRunning = running != null,
                 alerts = alerts,
-                onAlertEnabled = { alert, enabled -> scope.launch { AlertScheduler.save(context, app.alerts, alert.copy(enabled = enabled)) } },
-                onAlertRemove = { alert -> scope.launch { AlertScheduler.remove(context, app.alerts, alert.id) } },
+                onAlertEnabled = setEnabled,
+                onAlertRemove = remove,
+            )
+        }
+        composable<AlertsRoute> {
+            AlertsScreen(
+                running = running,
+                alerts = alerts,
+                onBack = { nav.popBackStack() },
+                onStop = { nav.navigate(StopRoute(it)) },
+                onStopRunning = { WatchService.stop(context) },
+                onEnabled = setEnabled,
+                onRemove = remove,
             )
         }
         composable<DevicesRoute> {

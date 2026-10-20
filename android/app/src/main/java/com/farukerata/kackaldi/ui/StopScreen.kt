@@ -90,6 +90,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 private const val REFRESH_MILLIS = 30_000L
+private const val WAITING_RETRY_MILLIS = 5_000L
 
 data class TrackedSelection(val line: String, val direction: String, val doorNo: String)
 
@@ -178,7 +179,7 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, St
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 viewModel.refresh()
-                delay(REFRESH_MILLIS)
+                delay(nextRefreshMillis(viewModel.arrivals.valueOrNull))
             }
         }
     }
@@ -284,6 +285,13 @@ private fun askForAlarms(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
     Toast.makeText(context, "Allow alarms so your alert starts on time", Toast.LENGTH_LONG).show()
     context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, "package:${context.packageName}".toUri()))
+}
+
+private fun nextRefreshMillis(data: StopArrivalsView?): Long {
+    val waiting = data?.lines?.filter { it.error != null }.orEmpty()
+    if (waiting.isEmpty()) return REFRESH_MILLIS
+    val soonest = waiting.minOf { (it.retryInSeconds ?: 0) * 1000L }
+    return soonest.coerceIn(WAITING_RETRY_MILLIS, REFRESH_MILLIS)
 }
 
 private fun needsNotificationPermission(context: Context): Boolean =
