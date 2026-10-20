@@ -75,3 +75,6 @@ fun countdown(seconds: Long): String {
     val s = seconds.coerceAtLeast(0)
     return "${s / 60}:${(s % 60).toString().padStart(2, '0')}"
 }
+
+fun distance(meters: Double): String =
+    if (meters < 1000) "${(Math.round(meters / 10) * 10)} m" else String.format(java.util.Locale.ROOT, "%.1f km", meters / 1000)

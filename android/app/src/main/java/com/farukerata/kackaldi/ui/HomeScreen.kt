@@ -1,29 +1,29 @@
 package com.farukerata.kackaldi.ui
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Place
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,6 +38,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
+import com.farukerata.kackaldi.data.FavoriteLineEntry
+import com.farukerata.kackaldi.data.FavoriteStopEntry
 import com.farukerata.kackaldi.data.FavoritesResponse
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineSummary
@@ -68,7 +70,10 @@ class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun refreshFavorites() {
-        viewModelScope.launch { favorites = load { api.favorites() } }
+        viewModelScope.launch {
+            val next = load { api.favorites() }
+            if (next is Load.Ready || favorites !is Load.Ready) favorites = next
+        }
     }
 
     private suspend fun search(text: String): Load<SearchResults>? {
@@ -82,9 +87,16 @@ class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel, updater: AppUpdater, onStop: (String) -> Unit, onLine: (String) -> Unit, onDevices: () -> Unit) {
+fun HomeScreen(
+    viewModel: HomeViewModel,
+    updater: AppUpdater,
+    dark: Boolean,
+    onToggleTheme: () -> Unit,
+    onStop: (String) -> Unit,
+    onLine: (String, String?) -> Unit,
+    onDevices: () -> Unit,
+) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -92,90 +104,75 @@ fun HomeScreen(viewModel: HomeViewModel, updater: AppUpdater, onStop: (String) -
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { viewModel.refreshFavorites() }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Kaç Kaldı") },
-                actions = {
-                    IconButton(onClick = onDevices) { Icon(Icons.Outlined.Devices, contentDescription = "Your devices") }
-                },
-            )
-        },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            UpdateBanner(updater)
-            OutlinedTextField(
-                value = query,
-                onValueChange = { viewModel.query.value = it },
-                placeholder = { Text("Stop or line, like Fabrikalar or 500T") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) IconButton(onClick = { viewModel.query.value = "" }) {
-                        Icon(Icons.Rounded.Close, contentDescription = "Clear search")
-                    }
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            )
-            LazyColumn(Modifier.fillMaxSize()) {
-                val current = results
-                if (query.isBlank() || current == null) favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine)
-                else resultsSection(current, onStop, onLine)
-                item { VersionFooter(updater.currentVersion) }
-            }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Kit.colors.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+    ) {
+        Header(
+            actions = {
+                GhostIcon(Icons.Outlined.PersonOutline, "Your devices", onDevices)
+                GhostIcon(if (dark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, if (dark) "Light theme" else "Dark theme", onToggleTheme)
+            },
+        ) { HeaderTitle("Kaç Kaldı") }
+        UpdateBanner(updater)
+        SearchField(
+            value = query,
+            onChange = { viewModel.query.value = it },
+            placeholder = "Stop or line, like Fabrikalar or 500T",
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+        )
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = WindowInsets.navigationBars.asPaddingValues(),
+        ) {
+            val current = results
+            if (query.isBlank() || current == null) favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine)
+            else resultsSection(current, onStop, onLine)
+            item { VersionFooter(updater.currentVersion) }
         }
     }
 }
 
 private fun LazyListScope.favoritesSection(
-    favorites: Load<FavoritesResponse>, onRetry: () -> Unit, onStop: (String) -> Unit, onLine: (String) -> Unit,
+    favorites: Load<FavoritesResponse>, onRetry: () -> Unit, onStop: (String) -> Unit, onLine: (String, String?) -> Unit,
 ) {
     when (favorites) {
-        Load.Loading -> item { LoadingState() }
+        Load.Loading -> item { RowsSkeleton() }
         is Load.Failed -> item { ErrorState(favorites.message, onRetry) }
         is Load.Ready -> {
             val (lines, stops) = favorites.value
             if (lines.isEmpty() && stops.isEmpty()) {
-                item { MessageState("Save the stops and lines you use", "Search above, open a stop, and tap the star.") }
+                item { EmptyState("Save the stops and lines you use", "Search above, open a stop or a line, and tap the star.") }
                 return
             }
             if (stops.isNotEmpty()) item { SectionTitle("Your stops") }
-            items(stops, key = { "stop-${it.favorite.id}" }) { entry ->
-                StopRow(entry.stop?.name ?: entry.favorite.stopName, entry.stop?.district, entry.stop?.towards, entry.lines) {
-                    onStop(entry.favorite.stopCode)
-                }
-            }
+            items(stops, key = { "stop-${it.favorite.id}" }) { entry -> FavoriteStopRow(entry, onStop) }
             if (lines.isNotEmpty()) item { SectionTitle("Your lines") }
-            items(lines, key = { "line-${it.favorite.id}" }) { entry ->
-                val direction = entry.favorite.direction?.let { entry.directions[it] }
-                ListItem(
-                    leadingContent = { RowLineBadge(entry.favorite.lineCode) },
-                    headlineContent = { Text(entry.favorite.label ?: direction?.let(::titleCase) ?: "Both directions") },
-                    modifier = Modifier.clickable { onLine(entry.favorite.lineCode) },
-                )
-            }
+            items(lines, key = { "line-${it.favorite.id}" }) { entry -> FavoriteLineRow(entry, onLine) }
         }
     }
 }
 
-private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (String) -> Unit, onLine: (String) -> Unit) {
+private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (String) -> Unit, onLine: (String, String?) -> Unit) {
     when (results) {
-        Load.Loading -> item { LoadingState() }
-        is Load.Failed -> item { MessageState("Search isn’t available right now", results.message) }
+        Load.Loading -> item { RowsSkeleton(rows = 3) }
+        is Load.Failed -> item { EmptyState("Search isn’t available right now", results.message) }
         is Load.Ready -> {
             val (lines, stops) = results.value
             if (lines.isEmpty() && stops.isEmpty()) {
-                item { MessageState("Nothing found", "Try part of a stop name or a line code.") }
+                item { EmptyState("Nothing found", "Try part of a stop name or a line code.") }
                 return
             }
             if (lines.isNotEmpty()) item { SectionTitle("Lines") }
             items(lines, key = { "line-${it.lineCode}" }) { line ->
                 val first = line.directions.firstOrNull()
-                ListItem(
-                    leadingContent = { RowLineBadge(line.lineCode) },
-                    headlineContent = { Text(first?.let { directionLabel(it.from, it.to) } ?: line.lineCode) },
-                    modifier = Modifier.clickable { onLine(line.lineCode) },
-                )
+                ItemRow(
+                    onClick = { onLine(line.lineCode, null) },
+                    leading = { LineBadge(line.lineCode) },
+                    trailing = { Chevron() },
+                ) { ItemTitle(first?.let { directionLabel(it.from, it.to) } ?: line.lineCode) }
             }
             if (stops.isNotEmpty()) item { SectionTitle("Stops") }
             items(stops, key = { "stop-${it.stop.code}" }) { result ->
@@ -186,31 +183,50 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
 }
 
 @Composable
+private fun FavoriteStopRow(entry: FavoriteStopEntry, onStop: (String) -> Unit) {
+    StopRow(entry.stop?.name ?: entry.favorite.stopName, entry.stop?.district, entry.stop?.towards, entry.lines, entry.favorite.label) {
+        onStop(entry.favorite.stopCode)
+    }
+}
+
+@Composable
+private fun FavoriteLineRow(entry: FavoriteLineEntry, onLine: (String, String?) -> Unit) {
+    val direction = entry.favorite.direction?.let { entry.directions[it] }
+    ItemRow(
+        onClick = { onLine(entry.favorite.lineCode, entry.favorite.direction) },
+        leading = { LineBadge(entry.favorite.lineCode) },
+        trailing = { Chevron() },
+    ) { ItemTitle(entry.favorite.label ?: direction?.let(::titleCase) ?: "Both directions") }
+}
+
+@Composable
+private fun StopRow(name: String, district: String?, towards: String?, lines: List<String>, label: String? = null, onClick: () -> Unit) {
+    ItemRow(
+        onClick = onClick,
+        alignTop = true,
+        leading = { Icon(Icons.Outlined.Place, null, Modifier.padding(top = 1.dp).size(18.dp), tint = Kit.colors.mutedForeground) },
+        trailing = { Box(Modifier.padding(top = 20.dp)) { Chevron() } },
+    ) {
+        if (label != null) {
+            ItemTitle(label)
+            StopName(name, district, Kit.sm)
+        } else {
+            StopName(name, district)
+        }
+        Towards(towards)
+        if (lines.isNotEmpty()) {
+            Box(Modifier.padding(top = 4.dp)) { LineBadges(lines) }
+        }
+    }
+}
+
+@Composable
 private fun VersionFooter(version: String) {
     Text(
         "Kaç Kaldı $version",
         Modifier.fillMaxWidth().padding(24.dp),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = Kit.xs,
+        color = Kit.colors.mutedForeground,
         textAlign = TextAlign.Center,
-    )
-}
-
-@Composable
-private fun StopRow(name: String, district: String?, towards: String?, lines: List<String>, onClick: () -> Unit) {
-    ListItem(
-        leadingContent = { Icon(Icons.Outlined.Place, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-        headlineContent = { Text(titleCase(name)) },
-        supportingContent = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                val place = listOfNotNull(district?.takeIf { it.isNotBlank() }?.let(::titleCase), towards?.let { "→ ${titleCase(it)}" })
-                if (place.isNotEmpty()) Text(place.joinToString("  ·  "))
-                if (lines.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    lines.take(6).forEach { LineBadge(it) }
-                    if (lines.size > 6) Text("+${lines.size - 6}", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        },
-        modifier = Modifier.clickable(onClick = onClick),
     )
 }

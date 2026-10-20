@@ -1,19 +1,23 @@
 package com.farukerata.kackaldi.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,12 +28,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import com.farukerata.kackaldi.data.ApiException
 import com.farukerata.kackaldi.data.KacKaldiApi
 import kotlinx.coroutines.launch
@@ -42,6 +49,7 @@ private enum class JoinMode(
     val wrong: String,
     val other: String,
     val wrongStatus: Int,
+    val placeholder: String,
 ) {
     Invite(
         lead = "This server is private. Enter the invite code you were given.",
@@ -51,6 +59,7 @@ private enum class JoinMode(
         wrong = "That code doesn’t work. Check it and try again.",
         other = "Already using Kaç Kaldı on another device? Enter a link code",
         wrongStatus = 403,
+        placeholder = "Invite code",
     ),
     Link(
         lead = "On your other device, open Devices and tap Get a link code. Enter the code here.",
@@ -60,6 +69,7 @@ private enum class JoinMode(
         wrong = "That code doesn’t work or has expired. Get a new one on the other device.",
         other = "I have an invite code instead",
         wrongStatus = 400,
+        placeholder = "ABC-123",
     );
 
     fun format(value: String) = if (this == Link) linkCodeChars(value) else value
@@ -112,41 +122,83 @@ fun WelcomeScreen(api: KacKaldiApi, linkFromWeb: String?, onLinkUsed: () -> Unit
         submit(code)
     }
 
-    Scaffold { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text("Kaç Kaldı", style = MaterialTheme.typography.headlineMedium)
-            Text(mode.lead, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            OutlinedTextField(
+    val colors = Kit.colors
+    val link = mode == JoinMode.Link
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(colors.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .imePadding()
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Column(Modifier.widthIn(max = 384.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Kaç Kaldı", style = Kit.xl2.copy(fontWeight = FontWeight.SemiBold, letterSpacing = Kit.tight), color = colors.foreground)
+            Text(mode.lead, style = Kit.sm, color = colors.mutedForeground, textAlign = TextAlign.Center)
+        }
+        Column(Modifier.widthIn(max = 384.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            BasicTextField(
                 value = code,
                 onValueChange = ::change,
-                label = { Text(mode.label) },
                 singleLine = true,
-                visualTransformation = if (mode == JoinMode.Link) LinkCodeTransformation else VisualTransformation.None,
-                isError = error != null,
-                supportingText = error?.let { { Text(it) } },
-                textStyle = if (mode == JoinMode.Link) MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center) else MaterialTheme.typography.bodyLarge,
+                visualTransformation = if (link) LinkCodeTransformation else VisualTransformation.None,
+                textStyle = if (link) {
+                    Kit.lg.copy(fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center, letterSpacing = 0.2.em, color = colors.foreground)
+                } else {
+                    Kit.base.copy(color = colors.foreground)
+                },
+                cursorBrush = SolidColor(colors.foreground),
                 keyboardOptions = KeyboardOptions(
-                    capitalization = if (mode == JoinMode.Link) KeyboardCapitalization.Characters else KeyboardCapitalization.None,
+                    capitalization = if (link) KeyboardCapitalization.Characters else KeyboardCapitalization.None,
                     autoCorrectEnabled = false,
                     imeAction = ImeAction.Go,
                 ),
                 keyboardActions = KeyboardActions(onGo = { if (mode.isComplete(code) && !pending) submit(code) }),
                 modifier = Modifier.fillMaxWidth(),
+                decorationBox = { field ->
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .border(1.dp, if (error != null) colors.destructive else colors.input, FieldShape)
+                            .padding(horizontal = 10.dp),
+                        contentAlignment = if (link) Alignment.Center else Alignment.CenterStart,
+                    ) {
+                        if (code.isEmpty()) {
+                            Text(
+                                mode.placeholder,
+                                style = if (link) Kit.lg.copy(fontFamily = FontFamily.Monospace, letterSpacing = 0.2.em) else Kit.base,
+                                color = colors.mutedForeground,
+                            )
+                        }
+                        field()
+                    }
+                },
             )
-            Button(onClick = { submit(code) }, enabled = !pending && mode.isComplete(code), modifier = Modifier.fillMaxWidth()) {
-                Text(if (pending) mode.busy else mode.action)
-            }
-            TextButton(onClick = {
+            error?.let { Text(it, Modifier.fillMaxWidth(), style = Kit.sm, color = colors.destructive, textAlign = TextAlign.Center) }
+            KitButton(
+                if (pending) mode.busy else mode.action,
+                { submit(code) },
+                Modifier.fillMaxWidth(),
+                enabled = !pending && mode.isComplete(code),
+                large = true,
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LinkText(mode.other, {
                 mode = if (mode == JoinMode.Invite) JoinMode.Link else JoinMode.Invite
                 code = ""
                 error = null
-            }) {
-                Text(mode.other, textAlign = TextAlign.Center)
-            }
+            })
+            Text(
+                "Scanned a sign-in QR code? Go back to the browser and tap Open Kaç Kaldı.",
+                Modifier.widthIn(max = 320.dp),
+                style = Kit.xs,
+                color = colors.mutedForeground,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }

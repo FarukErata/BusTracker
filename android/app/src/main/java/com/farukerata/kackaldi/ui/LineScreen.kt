@@ -1,36 +1,52 @@
 package com.farukerata.kackaldi.ui
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.DirectionsBus
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -38,7 +54,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
+import com.farukerata.kackaldi.data.ArrivalView
+import com.farukerata.kackaldi.data.BusPathResponse
 import com.farukerata.kackaldi.data.KacKaldiApi
+import com.farukerata.kackaldi.data.LineArrivalsResponse
 import com.farukerata.kackaldi.data.LineDirection
 import com.farukerata.kackaldi.data.LineLiveResponse
 import com.farukerata.kackaldi.data.LineStopsResponse
@@ -49,29 +68,106 @@ import kotlinx.coroutines.launch
 
 private const val LIVE_REFRESH_MILLIS = 30_000L
 private val ShownStatuses = setOf("ok", "at-terminal", "stale")
+private val PeekHeight = 180.dp
 
-class LineViewModel(private val api: KacKaldiApi, val code: String) : ViewModel() {
+class LineViewModel(private val api: KacKaldiApi, val code: String, initialDirection: String?, initialStop: String?) : ViewModel() {
     var stops by mutableStateOf<Load<LineStopsResponse>>(Load.Loading)
         private set
     var shapes by mutableStateOf<List<RouteShape>>(emptyList())
         private set
     var live by mutableStateOf<LineLiveResponse?>(null)
         private set
-    var direction by mutableIntStateOf(0)
+    var arrivals by mutableStateOf<Load<LineArrivalsResponse>?>(null)
+        private set
+    var arrivalsReceivedAt by mutableLongStateOf(0L)
+        private set
+    var busPath by mutableStateOf<BusPathResponse?>(null)
+        private set
+    var directionCode by mutableStateOf(initialDirection)
+        private set
+    var pinnedStop by mutableStateOf(initialStop)
+        private set
+    var selectedBus by mutableStateOf<String?>(null)
+        private set
+    var favoriteId by mutableStateOf<Long?>(null)
+        private set
+
+    fun direction(): LineDirection? {
+        val all = stops.valueOrNull?.directions.orEmpty()
+        return all.firstOrNull { it.direction == directionCode } ?: all.firstOrNull()
+    }
 
     fun reload() {
-        viewModelScope.launch { stops = load { api.lineStops(code) } }
+        viewModelScope.launch {
+            stops = load { api.lineStops(code) }
+            refreshPinned()
+        }
         viewModelScope.launch { load { api.lineShapes(code) }.valueOrNull?.let { shapes = it.shapes } }
+        loadFavorite()
     }
 
     suspend fun refreshLive() {
         load { api.lineLive(code) }.valueOrNull?.let { live = it }
+        refreshPinned()
+    }
+
+    private suspend fun refreshPinned() {
+        val stop = pinnedStop ?: return
+        val dir = direction()?.direction ?: return
+        val next = load { api.lineArrivals(code, stop, dir) }
+        if (pinnedStop != stop) return
+        if (next is Load.Ready) arrivalsReceivedAt = System.currentTimeMillis()
+        if (next is Load.Ready || arrivals !is Load.Ready) arrivals = next
+        val bus = selectedBus
+        busPath = if (bus == null) null else load { api.busPath(code, bus, stop) }.valueOrNull?.takeIf { it.bus.doorNo == selectedBus }
+    }
+
+    fun pin(stop: String?) {
+        pinnedStop = stop
+        arrivals = if (stop == null) null else Load.Loading
+        busPath = null
+        viewModelScope.launch { refreshPinned() }
+    }
+
+    fun select(door: String?) {
+        selectedBus = if (selectedBus == door) null else door
+        busPath = null
+        viewModelScope.launch { refreshPinned() }
+    }
+
+    fun toggleDirection() {
+        val all = stops.valueOrNull?.directions.orEmpty()
+        if (all.size < 2) return
+        val index = all.indexOfFirst { it.direction == direction()?.direction }
+        directionCode = all[(index + 1) % all.size].direction
+        pinnedStop = null
+        selectedBus = null
+        arrivals = null
+        busPath = null
+        loadFavorite()
+    }
+
+    private fun loadFavorite() {
+        viewModelScope.launch {
+            val favorites = load { api.favorites() }.valueOrNull ?: return@launch
+            val dir = direction()?.direction ?: directionCode
+            favoriteId = favorites.lines.firstOrNull { it.favorite.lineCode == code && it.favorite.direction == dir }?.favorite?.id
+        }
+    }
+
+    fun toggleFavorite() {
+        val dir = direction()?.direction ?: return
+        viewModelScope.launch {
+            val id = favoriteId
+            load { if (id == null) api.addFavoriteLine(code, dir) else api.removeFavoriteLine(id) }
+            loadFavorite()
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LineScreen(viewModel: LineViewModel, onBack: () -> Unit, onStop: (String) -> Unit) {
+fun LineScreen(viewModel: LineViewModel, onBack: () -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel.code) {
         if (viewModel.stops !is Load.Ready) viewModel.reload()
@@ -82,96 +178,235 @@ fun LineScreen(viewModel: LineViewModel, onBack: () -> Unit, onStop: (String) ->
             }
         }
     }
+    val colors = Kit.colors
+    val sheet = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded, skipHiddenState = true)
+    val scaffold = rememberBottomSheetScaffoldState(sheet)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { LineBadge(viewModel.code) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
-            )
-        },
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
-            when (val state = viewModel.stops) {
-                Load.Loading -> LoadingState()
-                is Load.Failed -> ErrorState(state.message, viewModel::reload)
-                is Load.Ready -> LineContent(viewModel, state.value.directions, onStop)
+    BoxWithConstraints(Modifier.fillMaxSize().background(colors.background)) {
+        val fullHeight = maxHeight
+        val pinnedPeek = fullHeight * 0.5f
+        val peek = if (viewModel.pinnedStop != null) pinnedPeek else PeekHeight
+        BottomSheetScaffold(
+            scaffoldState = scaffold,
+            sheetPeekHeight = peek,
+            sheetContainerColor = colors.background,
+            sheetContentColor = colors.foreground,
+            sheetShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            sheetShadowElevation = 8.dp,
+            sheetDragHandle = {
+                Box(Modifier.padding(vertical = 10.dp).width(36.dp).height(4.dp).background(colors.border, CircleShape))
+            },
+            containerColor = colors.background,
+            sheetContent = {
+                LinePanel(viewModel, Modifier.height(fullHeight * 0.92f))
+            },
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                when (val state = viewModel.stops) {
+                    is Load.Failed -> ErrorState(state.message, viewModel::reload, Modifier.padding(top = 120.dp))
+                    else -> LineMapLayer(viewModel, peek.value.toInt())
+                }
+                LineHeaderCard(viewModel, onBack)
             }
         }
     }
 }
 
 @Composable
-private fun ColumnScope.LineContent(viewModel: LineViewModel, directions: List<LineDirection>, onStop: (String) -> Unit) {
-    val current = directions.getOrNull(viewModel.direction) ?: return
-    val buses = busesFor(viewModel.live, current)
-    LineMap(
-        data = LineMapData(
-            key = "${viewModel.code}-${current.direction}-${viewModel.shapes.isNotEmpty()}",
-            route = routeFor(viewModel.shapes, current),
-            stops = current.stops,
-            buses = buses,
+private fun LineMapLayer(viewModel: LineViewModel, bottomInsetDp: Int) {
+    val direction = viewModel.direction()
+    val route = routeFor(viewModel.shapes, direction)
+    val buses = busesIn(viewModel.live, direction)
+    val selected = buses.firstOrNull { it.doorNo == viewModel.selectedBus }
+    val variant = selected?.takeIf { it.variant != "D0" }?.let { bus -> viewModel.shapes.firstOrNull { it.routeCode == bus.routeCode }?.points }.orEmpty()
+    val path = viewModel.busPath?.takeIf { !it.passed && it.bus.doorNo == viewModel.selectedBus }?.path.orEmpty()
+    val stops = direction?.stops.orEmpty()
+    val pinned = stops.firstOrNull { it.code == viewModel.pinnedStop }
+    TransitMap(
+        MapScene(
+            frame = MapFrame.Fit("${viewModel.code}-${direction?.direction}-${route.size}", route),
+            route = route,
+            variant = variant,
+            highlight = path,
+            stops = stops.filter { it.lat != 0.0 }.map { MapStop(it.code, it.lat, it.lng) },
+            pinned = pinned?.let { MapStop(it.code, it.lat, it.lng) },
+            buses = buses.map { MapBus(it.doorNo, it.lat, it.lng, it.status == "at-terminal", reportAge(secondsSince(it.reportedAt)), it.heavyTraffic) },
+            selectedBus = viewModel.selectedBus,
+            bottomInsetDp = bottomInsetDp,
+            topInsetDp = 64,
         ),
-        onStop = onStop,
-        modifier = Modifier.fillMaxWidth().weight(0.42f),
+        Modifier.fillMaxSize(),
+        onStop = viewModel::pin,
+        onBus = viewModel::select,
     )
-    if (directions.size > 1) DirectionChooser(directions, viewModel.direction) { viewModel.direction = it }
-    StopList(current, busStops(viewModel.live, current), onStop, Modifier.weight(0.58f))
 }
 
-private fun routeFor(shapes: List<RouteShape>, direction: LineDirection): List<List<Double>> {
+@Composable
+private fun LineHeaderCard(viewModel: LineViewModel, onBack: () -> Unit) {
+    val colors = Kit.colors
+    val direction = viewModel.direction()
+    val canToggle = (viewModel.stops.valueOrNull?.directions?.size ?: 0) > 1
+    val first = direction?.stops?.firstOrNull()
+    val last = direction?.stops?.lastOrNull()
+    val saved = viewModel.favoriteId != null
+    Row(
+        Modifier
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .padding(8.dp)
+            .fillMaxWidth()
+            .border(1.dp, colors.border, CardShape)
+            .background(colors.background.copy(alpha = 0.95f), CardShape)
+            .padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        GhostIcon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
+        LineBadge(viewModel.code)
+        Row(
+            Modifier.weight(1f).pressable(viewModel::toggleDirection, enabled = canToggle).padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                if (first != null && last != null) "${titleCase(first.name)} → ${titleCase(last.name)}" else "Loading…",
+                Modifier.weight(1f, fill = false),
+                style = Kit.sm,
+                color = colors.foreground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (canToggle) Icon(Icons.Outlined.SwapHoriz, "Switch direction", Modifier.size(16.dp), tint = colors.mutedForeground)
+        }
+        GhostIcon(
+            if (saved) Icons.Rounded.Star else Icons.Outlined.StarOutline,
+            if (saved) "Remove from your lines" else "Save this direction to your lines",
+            viewModel::toggleFavorite,
+            tint = if (saved) colors.star else colors.foreground,
+        )
+    }
+}
+
+@Composable
+private fun LinePanel(viewModel: LineViewModel, modifier: Modifier) {
+    val direction = viewModel.direction()
+    val loading = viewModel.stops is Load.Loading || viewModel.live == null
+    LazyColumn(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)) {
+        val pinned = viewModel.pinnedStop
+        if (pinned != null && direction != null) pinnedArrivals(viewModel, direction, pinned)
+        else busPositions(viewModel, direction, loading)
+        item { UpdatedAgo(viewModel.live?.data?.fetchedAt) }
+    }
+}
+
+private fun LazyListScope.pinnedArrivals(viewModel: LineViewModel, direction: LineDirection, pinned: String) {
+    val stop = direction.stops.firstOrNull { it.code == pinned }
+    item {
+        val colors = Kit.colors
+        Row(
+            Modifier
+                .padding(horizontal = 12.dp)
+                .fillMaxWidth()
+                .background(colors.pinFill.copy(alpha = 0.12f), RowShape)
+                .padding(start = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(Icons.Outlined.Place, null, Modifier.size(14.dp), tint = colors.pinFill)
+            Text("To ${stop?.let { titleCase(it.name) } ?: "this stop"}", Modifier.weight(1f), style = Kit.sm, color = colors.pinFill, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            GhostIcon(Icons.Outlined.Close, "Clear stop", { viewModel.pin(null) }, tint = colors.pinFill)
+        }
+    }
+    when (val state = viewModel.arrivals) {
+        null, Load.Loading -> item { RowsSkeleton(rows = 3) }
+        is Load.Failed -> item { ErrorState(state.message, { viewModel.pin(pinned) }) }
+        is Load.Ready -> {
+            val approaching = state.value.approaching
+            if (approaching.isEmpty()) item {
+                Text("No bus on the way to this stop.", Modifier.fillMaxWidth().padding(16.dp), style = Kit.sm, color = Kit.colors.mutedForeground, textAlign = TextAlign.Center)
+            }
+            items(approaching, key = { "arrival-${it.doorNo}" }) { arrival ->
+                ApproachingRow(arrival, viewModel.arrivalsReceivedAt, arrival.doorNo == viewModel.selectedBus) { viewModel.select(arrival.doorNo) }
+            }
+            val passed = state.value.recentlyPassed.size
+            if (passed > 0) item {
+                Text("$passed recently passed this stop", Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = Kit.xs, color = Kit.colors.mutedForeground)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ApproachingRow(arrival: ArrivalView, receivedAt: Long, selected: Boolean, onClick: () -> Unit) {
+    val detail = if (arrival.notDeparted) {
+        "At the first stop"
+    } else {
+        listOfNotNull(stopsAway(arrival.stopsAway), distance(arrival.distanceMeters), arrival.lastStopName?.let { "now at ${titleCase(it)}" }).joinToString(" · ")
+    }
+    ItemRow(
+        onClick = onClick,
+        selected = selected,
+        trailing = { arrival.etaSeconds?.let { Minutes(it, receivedAt) } ?: NotLeft() },
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ItemTitle(arrival.doorNo)
+            if (arrival.heavyTraffic) TrafficBadge()
+        }
+        ItemDescription(detail)
+    }
+}
+
+private fun LazyListScope.busPositions(viewModel: LineViewModel, direction: LineDirection?, loading: Boolean) {
+    item { Hint("Tap a stop to see arrival times", Icons.Outlined.Place) }
+    if (loading) {
+        item { RowsSkeleton(rows = 3) }
+        return
+    }
+    val buses = busesIn(viewModel.live, direction).sortedByDescending { it.alongMeters ?: 0.0 }
+    if (buses.isEmpty()) item {
+        Text("No bus is running in this direction right now.", Modifier.fillMaxWidth().padding(16.dp), style = Kit.sm, color = Kit.colors.mutedForeground, textAlign = TextAlign.Center)
+    }
+    items(buses, key = { "bus-${it.doorNo}" }) { bus ->
+        val age = secondsSince(bus.reportedAt)
+        ItemRow(onClick = { viewModel.select(bus.doorNo) }, selected = bus.doorNo == viewModel.selectedBus) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ItemTitle(bus.doorNo, Modifier.alpha(if (reportAge(age) == ReportAge.Fresh) 1f else 0.6f))
+                if (bus.heavyTraffic) TrafficBadge()
+            }
+            ItemDescription(describePosition(bus, direction, age))
+        }
+    }
+    if (direction != null) {
+        item { SectionTitle("Stops") }
+        items(direction.stops, key = { "stop-${direction.direction}-${it.seq}-${it.code}" }) { stop ->
+            Row(
+                Modifier.fillMaxWidth().pressable({ viewModel.pin(stop.code) }).padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("${stop.seq}", Modifier.width(24.dp), style = Kit.xs, color = Kit.colors.mutedForeground, textAlign = TextAlign.End)
+                Text(titleCase(stop.name), style = Kit.sm, color = Kit.colors.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+private fun describePosition(bus: LiveBus, direction: LineDirection?, ageSeconds: Long): String {
+    fun name(seq: Int?) = seq?.let { s -> direction?.stops?.firstOrNull { it.seq == s } }?.let { titleCase(it.name) }
+    val place = if (bus.status == "at-terminal") {
+        "Waiting at ${name(direction?.stops?.firstOrNull()?.seq) ?: "the first stop"}"
+    } else {
+        listOfNotNull(name(bus.lastStopSeq)?.let { "after $it" }, name(bus.nextStopSeq)?.let { "next $it" }).joinToString(" · ")
+    }
+    val seen = if (reportAge(ageSeconds) != ReportAge.Fresh) seenAgo(ageSeconds) else null
+    return listOfNotNull(place.ifBlank { null }, seen).joinToString(" · ").replaceFirstChar { it.uppercase() }
+}
+
+private fun routeFor(shapes: List<RouteShape>, direction: LineDirection?): List<List<Double>> {
+    if (direction == null) return emptyList()
     val own = shapes.filter { it.direction == direction.direction }
-    return (own.firstOrNull { it.variant == "D0" } ?: own.firstOrNull())?.points.orEmpty()
+    val shape = own.firstOrNull { it.variant == "D0" } ?: own.firstOrNull()
+    return shape?.points ?: direction.stops.filter { it.lat != 0.0 }.map { listOf(it.lat, it.lng) }
 }
 
-private fun liveIn(live: LineLiveResponse?, direction: LineDirection): List<LiveBus> =
-    live?.buses.orEmpty().filter { it.direction == direction.direction && it.status in ShownStatuses }
-
-private fun busesFor(live: LineLiveResponse?, direction: LineDirection): List<MapBus> =
-    liveIn(live, direction).map { MapBus(it.doorNo, it.lat, it.lng, reportAge(secondsSince(it.reportedAt)), it.heavyTraffic) }
-
-private fun busStops(live: LineLiveResponse?, direction: LineDirection): Map<Int, ReportAge> =
-    liveIn(live, direction)
-        .mapNotNull { bus -> bus.lastStopSeq?.let { it to reportAge(secondsSince(bus.reportedAt)) } }
-        .groupBy({ it.first }, { it.second })
-        .mapValues { (_, ages) -> ages.minBy { it.ordinal } }
-
-@Composable
-private fun DirectionChooser(directions: List<LineDirection>, selected: Int, onSelect: (Int) -> Unit) {
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        directions.forEachIndexed { index, direction ->
-            SegmentedButton(
-                selected = index == selected,
-                onClick = { onSelect(index) },
-                shape = SegmentedButtonDefaults.itemShape(index, directions.size),
-                label = { Text("To ${titleCase(direction.stops.lastOrNull()?.name ?: direction.name)}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun StopList(direction: LineDirection, busAt: Map<Int, ReportAge>, onStop: (String) -> Unit, modifier: Modifier) {
-    LazyColumn(modifier.fillMaxSize()) {
-        items(direction.stops, key = { "${direction.direction}-${it.seq}-${it.code}" }) { stop ->
-            val bus = busAt[stop.seq]
-            ListItem(
-                leadingContent = { Text("${stop.seq}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                headlineContent = { Text(titleCase(stop.name)) },
-                supportingContent = stop.district.takeIf { it.isNotBlank() }?.let { { Text(titleCase(it)) } },
-                trailingContent = bus?.let { { BusHere(it) } },
-                modifier = Modifier.clickable { onStop(stop.code) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun BusHere(age: ReportAge) {
-    Icon(
-        Icons.Rounded.DirectionsBus,
-        contentDescription = if (age == ReportAge.Fresh) "Bus just left this stop" else "Bus left this stop, last seen a while ago",
-        tint = if (age == ReportAge.Stale) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
-        modifier = Modifier.size(20.dp).alpha(if (age == ReportAge.Fresh) 1f else 0.55f),
-    )
-}
+private fun busesIn(live: LineLiveResponse?, direction: LineDirection?): List<LiveBus> =
+    live?.buses.orEmpty().filter { it.direction == direction?.direction && it.status in ShownStatuses }

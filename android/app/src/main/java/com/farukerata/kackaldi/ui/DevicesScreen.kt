@@ -1,41 +1,45 @@
 package com.farukerata.kackaldi.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.outlined.Computer
-import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.Smartphone
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -60,6 +64,9 @@ class DevicesViewModel(private val api: KacKaldiApi) : ViewModel() {
         private set
     var message by mutableStateOf<String?>(null)
         private set
+    var confirming by mutableStateOf<Long?>(null)
+    var removing by mutableStateOf(false)
+        private set
 
     fun reload() {
         viewModelScope.launch { me = load { api.me() } }
@@ -80,145 +87,136 @@ class DevicesViewModel(private val api: KacKaldiApi) : ViewModel() {
 
     fun remove(device: DeviceView) {
         viewModelScope.launch {
+            removing = true
             message = null
             try {
                 api.removeDevice(device.id)
-                if (device.current) api.signOutHere() else reload()
+                reload()
             } catch (e: ApiException) {
                 message = e.message
             } catch (e: Exception) {
                 message = "Can’t reach the server. Check your connection."
+            } finally {
+                removing = false
+                confirming = null
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DevicesScreen(viewModel: DevicesViewModel, onBack: () -> Unit) {
     LaunchedEffect(Unit) { viewModel.reload() }
-    var confirming by remember { mutableStateOf<DeviceView?>(null) }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Your devices") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
-            )
-        },
-    ) { padding ->
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Kit.colors.background)
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+    ) {
+        Header(onBack = onBack) { Box(Modifier.padding(horizontal = 4.dp)) { HeaderTitle("Devices") } }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
             item { SectionTitle("Add a device") }
             item { LinkCodeCard(viewModel.linkCode, viewModel.creating, viewModel::createLinkCode) }
-            viewModel.message?.let { item { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.error) } }
-            item { SectionTitle("Signed in") }
+            viewModel.message?.let { item { Text(it, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = Kit.sm, color = Kit.colors.destructive) } }
+            item { SectionTitle("Your devices") }
             when (val state = viewModel.me) {
-                Load.Loading -> item { LoadingState() }
+                Load.Loading -> item { RowsSkeleton(rows = 2) }
                 is Load.Failed -> item { ErrorState(state.message, viewModel::reload) }
-                is Load.Ready -> {
-                    val devices = state.value.devices
-                    items(devices, key = { it.id }) { device ->
-                        DeviceRow(device, canRemove = devices.size > 1) { confirming = device }
-                    }
-                }
+                is Load.Ready -> items(state.value.devices, key = { it.id }) { device -> DeviceRow(device, viewModel) }
             }
         }
-    }
-
-    confirming?.let { device ->
-        AlertDialog(
-            onDismissRequest = { confirming = null },
-            title = { Text(if (device.current) "Sign out this phone?" else "Remove ${device.name}?") },
-            text = {
-                Text(
-                    if (device.current) "You’ll need a link code from another device to sign in again."
-                    else "It will be signed out. Your saved stops stay on your other devices.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirming = null
-                    viewModel.remove(device)
-                }) { Text(if (device.current) "Sign out" else "Remove") }
-            },
-            dismissButton = { TextButton(onClick = { confirming = null }) { Text("Cancel") } },
-        )
     }
 }
 
 @Composable
 private fun LinkCodeCard(code: LinkCodeResponse?, creating: Boolean, onCreate: () -> Unit) {
+    val colors = Kit.colors
     val remaining = secondsLeft(code?.expiresAt)
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
+    if (code != null && remaining > 0) {
         Column(
-            Modifier.padding(20.dp),
+            Modifier.padding(horizontal = 12.dp).fillMaxWidth().border(1.dp, colors.border, RoundedCornerShape(14.dp)).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (code != null && remaining > 0) {
-                Text(
-                    linkCodeInput(code.code),
-                    style = MaterialTheme.typography.displaySmall,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text("Expires in ${countdown(remaining)} · works once", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    "On the other device, open Kaç Kaldı and choose Enter a link code.",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                OutlinedButton(onClick = onCreate, enabled = !creating) { Text("New code") }
-            } else {
-                Text(
-                    if (code != null) "That code expired. Get a new one when the other device is ready."
-                    else "Sign in on another phone or browser with your saved stops: get a code here and type it there.",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(onClick = onCreate, enabled = !creating) { Text(if (creating) "Getting a code…" else "Get a link code") }
-            }
+            MonoCode(linkCodeInput(code.code))
+            Text("Expires in ${countdown(remaining)} · works once", style = Kit.sm, color = colors.mutedForeground)
+            Text(
+                "On the other device, open Kaç Kaldı and choose Enter a link code.",
+                style = Kit.sm,
+                color = colors.mutedForeground,
+                textAlign = TextAlign.Center,
+            )
+            CopyButton(linkCodeInput(code.code))
         }
+        return
+    }
+    Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            if (code != null) "That code has expired. Get a new one when the other device is ready."
+            else "Get a short code and enter it on your other device. It will share your stops and lines.",
+            style = Kit.sm,
+            color = colors.mutedForeground,
+        )
+        KitButton(if (creating) "Getting a code…" else if (code != null) "Get a new code" else "Get a link code", onCreate, enabled = !creating)
     }
 }
 
 @Composable
-private fun secondsLeft(expiresAt: String?): Long {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(expiresAt) {
-        while (expiresAt != null) {
-            now = System.currentTimeMillis()
-            delay(1_000)
-        }
+private fun CopyButton(text: String) {
+    val context = LocalContext.current
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (!copied) return@LaunchedEffect
+        delay(1_500)
+        copied = false
     }
+    KitButton(
+        if (copied) "Copied" else "Copy",
+        {
+            (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Link code", text))
+            copied = true
+        },
+        kind = ButtonKind.Outline,
+        icon = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
+    )
+}
+
+@Composable
+private fun secondsLeft(expiresAt: String?): Long {
+    val now = rememberNow(1_000)
     val until = expiresAt?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() } ?: return 0
     return (until.toEpochMilli() - Instant.ofEpochMilli(now).toEpochMilli()) / 1000
 }
 
 @Composable
-private fun DeviceRow(device: DeviceView, canRemove: Boolean, onRemove: () -> Unit) {
-    ListItem(
-        leadingContent = {
-            Icon(
-                if (device.platform == "android" || device.platform == "ios") Icons.Outlined.Smartphone else Icons.Outlined.Computer,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        headlineContent = { Text(device.name) },
-        supportingContent = { Text(if (device.current) "This device" else "Last used ${ago(secondsSince(device.lastSeenAt))}") },
-        trailingContent = if (canRemove) {
-            {
-                IconButton(onClick = onRemove) {
-                    Icon(Icons.Outlined.DeleteOutline, contentDescription = if (device.current) "Sign out this phone" else "Remove ${device.name}")
+private fun DeviceRow(device: DeviceView, viewModel: DevicesViewModel) {
+    val colors = Kit.colors
+    val phone = device.platform == "android" || device.platform == "ios" || device.name.contains("Phone", ignoreCase = true)
+    ItemRow(
+        onClick = null,
+        leading = { Icon(if (phone) Icons.Outlined.Smartphone else Icons.Outlined.DesktopWindows, null, Modifier.size(18.dp), tint = colors.mutedForeground) },
+        trailing = if (device.current) null else ({ RemoveControls(device, viewModel) }),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ItemTitle(device.name, Modifier.weight(1f, fill = false))
+            if (device.current) {
+                Box(Modifier.height(18.dp).border(1.dp, colors.border, RowShape).background(colors.secondary, RowShape).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+                    Text("This device", style = Kit.xs.copy(fontWeight = FontWeight.Medium), color = colors.foreground)
                 }
             }
-        } else null,
-    )
+        }
+        ItemDescription(if (device.current) "In use now" else "Last used ${ago(secondsSince(device.lastSeenAt))}")
+    }
+}
+
+@Composable
+private fun RemoveControls(device: DeviceView, viewModel: DevicesViewModel) {
+    if (viewModel.confirming != device.id) {
+        KitButton("Remove", { viewModel.confirming = device.id }, kind = ButtonKind.Ghost)
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        KitButton("Cancel", { viewModel.confirming = null }, kind = ButtonKind.Ghost)
+        KitButton("Remove", { viewModel.remove(device) }, kind = ButtonKind.Destructive, enabled = !viewModel.removing)
+    }
 }

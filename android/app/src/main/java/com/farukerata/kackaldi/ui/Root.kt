@@ -1,6 +1,7 @@
 package com.farukerata.kackaldi.ui
 
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -29,13 +30,13 @@ data object HomeRoute
 data class StopRoute(val code: String)
 
 @Serializable
-data class LineRoute(val code: String)
+data class LineRoute(val code: String, val direction: String? = null, val stop: String? = null)
 
 @Serializable
 data object DevicesRoute
 
 @Composable
-fun KacKaldiRoot() {
+fun KacKaldiRoot(dark: Boolean, onToggleTheme: () -> Unit) {
     val app = LocalContext.current.applicationContext as KacKaldiApplication
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(Unit) {
@@ -50,22 +51,24 @@ fun KacKaldiRoot() {
         Toast.makeText(context, "This phone is already signed in to Kaç Kaldı", Toast.LENGTH_LONG).show()
     }
     when (signedIn) {
-        null -> Box(Modifier.fillMaxSize())
+        null -> Box(Modifier.fillMaxSize().background(Kit.colors.background))
         false -> WelcomeScreen(app.api, linkFromWeb) { app.pendingLinkCode.value = null }
-        true -> AppNavigation(app)
+        true -> AppNavigation(app, dark, onToggleTheme)
     }
 }
 
 @Composable
-private fun AppNavigation(app: KacKaldiApplication) {
+private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme: () -> Unit) {
     val nav = rememberNavController()
     NavHost(nav, startDestination = HomeRoute) {
         composable<HomeRoute> {
             HomeScreen(
                 viewModel = viewModel { HomeViewModel(app.api) },
                 updater = app.updater,
+                dark = dark,
+                onToggleTheme = onToggleTheme,
                 onStop = { nav.navigate(StopRoute(it)) },
-                onLine = { nav.navigate(LineRoute(it)) },
+                onLine = { code, direction -> nav.navigate(LineRoute(code, direction)) },
                 onDevices = { nav.navigate(DevicesRoute) },
             )
         }
@@ -77,15 +80,14 @@ private fun AppNavigation(app: KacKaldiApplication) {
             StopScreen(
                 viewModel = viewModel { StopViewModel(app.api, app.stopFilters, code) },
                 onBack = { nav.popBackStack() },
-                onLine = { nav.navigate(LineRoute(it)) },
+                onLine = { code, direction, stop -> nav.navigate(LineRoute(code, direction, stop)) },
             )
         }
         composable<LineRoute> { entry ->
-            val code = entry.toRoute<LineRoute>().code
+            val route = entry.toRoute<LineRoute>()
             LineScreen(
-                viewModel = viewModel { LineViewModel(app.api, code) },
+                viewModel = viewModel { LineViewModel(app.api, route.code, route.direction, route.stop) },
                 onBack = { nav.popBackStack() },
-                onStop = { nav.navigate(StopRoute(it)) },
             )
         }
     }

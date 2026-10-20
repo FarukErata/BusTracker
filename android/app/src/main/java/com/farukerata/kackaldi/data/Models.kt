@@ -76,8 +76,44 @@ data class LiveBus(
     val ageSeconds: Int,
     val status: String,
     val lastStopSeq: Int? = null,
+    val nextStopSeq: Int? = null,
+    val alongMeters: Double? = null,
     val heavyTraffic: Boolean = false,
 )
+
+@Serializable
+data class StopRef(val code: String, val seq: Int, val name: String)
+
+@Serializable
+data class PassedView(val doorNo: String, val metersPast: Double)
+
+@Serializable
+data class LineArrivalsResponse(
+    val line: String,
+    val direction: String,
+    val stop: StopRef,
+    val data: Freshness,
+    val approaching: List<ArrivalView>,
+    val recentlyPassed: List<PassedView>,
+)
+
+@Serializable
+data class PathStop(val seq: Int, val code: String, val name: String, val lat: Double, val lng: Double)
+
+@Serializable
+data class BusPathResponse(
+    val line: String,
+    val routeCode: String,
+    val bus: LiveBus,
+    val stop: PathStop,
+    val passed: Boolean,
+    val distanceMeters: Double,
+    val path: List<List<Double>>,
+    val remainingStops: List<PathStop>,
+)
+
+@Serializable
+data class AddFavoriteLineRequest(val line: String, val direction: String?)
 
 @Serializable
 data class LineLiveResponse(val line: String, val data: Freshness, val buses: List<LiveBus>)
