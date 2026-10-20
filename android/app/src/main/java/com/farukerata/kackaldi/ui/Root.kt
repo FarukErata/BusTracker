@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -20,7 +21,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.farukerata.kackaldi.KacKaldiApplication
+import com.farukerata.kackaldi.watch.AlertScheduler
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -60,6 +63,9 @@ fun KacKaldiRoot(dark: Boolean, onToggleTheme: () -> Unit) {
 @Composable
 private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme: () -> Unit) {
     val nav = rememberNavController()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val alerts by app.alerts.alerts.collectAsStateWithLifecycle(initialValue = emptyList())
     val openStop by app.pendingStop.collectAsStateWithLifecycle()
     LaunchedEffect(openStop) {
         val code = openStop ?: return@LaunchedEffect
@@ -76,6 +82,9 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
                 onStop = { nav.navigate(StopRoute(it)) },
                 onLine = { code, direction -> nav.navigate(LineRoute(code, direction)) },
                 onDevices = { nav.navigate(DevicesRoute) },
+                alerts = alerts,
+                onAlertEnabled = { alert, enabled -> scope.launch { AlertScheduler.save(context, app.alerts, alert.copy(enabled = enabled)) } },
+                onAlertRemove = { alert -> scope.launch { AlertScheduler.remove(context, app.alerts, alert.id) } },
             )
         }
         composable<DevicesRoute> {

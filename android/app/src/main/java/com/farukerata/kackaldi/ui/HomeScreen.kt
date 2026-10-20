@@ -19,10 +19,14 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,6 +42,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
+import com.farukerata.kackaldi.data.BusAlert
 import com.farukerata.kackaldi.data.FavoriteLineEntry
 import com.farukerata.kackaldi.data.FavoriteStopEntry
 import com.farukerata.kackaldi.data.FavoritesResponse
@@ -96,6 +101,9 @@ fun HomeScreen(
     onStop: (String) -> Unit,
     onLine: (String, String?) -> Unit,
     onDevices: () -> Unit,
+    alerts: List<BusAlert> = emptyList(),
+    onAlertEnabled: (BusAlert, Boolean) -> Unit = { _, _ -> },
+    onAlertRemove: (BusAlert) -> Unit = {},
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
@@ -128,6 +136,10 @@ fun HomeScreen(
             contentPadding = WindowInsets.navigationBars.asPaddingValues(),
         ) {
             val current = results
+            if (query.isBlank() && alerts.isNotEmpty()) {
+                item { SectionTitle("Your alerts") }
+                items(alerts, key = { "alert-${it.id}" }) { alert -> AlertRow(alert, onStop, onAlertEnabled, onAlertRemove) }
+            }
             if (query.isBlank() || current == null) favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine)
             else resultsSection(current, onStop, onLine)
             item { VersionFooter(updater.currentVersion) }
@@ -217,6 +229,34 @@ private fun StopRow(name: String, district: String?, towards: String?, lines: Li
         if (lines.isNotEmpty()) {
             Box(Modifier.padding(top = 4.dp)) { LineBadges(lines) }
         }
+    }
+}
+
+@Composable
+private fun AlertRow(alert: BusAlert, onStop: (String) -> Unit, onEnabled: (BusAlert, Boolean) -> Unit, onRemove: (BusAlert) -> Unit) {
+    val colors = Kit.colors
+    val lines = alert.lines.map { it.line }.distinct().joinToString(" / ")
+    val repeat = if (alert.repeats) "every ${dayList(alert.days)}" else "once"
+    ItemRow(
+        onClick = { onStop(alert.stopCode) },
+        leading = { Icon(Icons.Outlined.NotificationsNone, null, Modifier.size(18.dp), tint = colors.mutedForeground) },
+        trailing = {
+            Switch(
+                checked = alert.enabled,
+                onCheckedChange = { onEnabled(alert, it) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = colors.primaryForeground,
+                    checkedTrackColor = colors.primary,
+                    uncheckedThumbColor = colors.mutedForeground,
+                    uncheckedTrackColor = colors.secondary,
+                    uncheckedBorderColor = colors.border,
+                ),
+            )
+            GhostIcon(Icons.Outlined.DeleteOutline, "Delete alert", { onRemove(alert) })
+        },
+    ) {
+        ItemTitle("$lines · ${titleCase(alert.stopName)}")
+        ItemDescription("Ready at ${alert.readyAt}, $repeat · ${triggerSummary(alert.trigger)}")
     }
 }
 
