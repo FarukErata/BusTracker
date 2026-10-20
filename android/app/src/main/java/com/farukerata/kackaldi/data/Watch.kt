@@ -11,7 +11,15 @@ data class WatchTrigger(val kind: TriggerKind, val value: Int, val atStopName: S
         TriggerKind.Minutes -> !bus.notDeparted && bus.etaSeconds != null && bus.etaSeconds <= value * 60
         TriggerKind.Stops -> bus.stopsAway <= value
     }
+
+    fun near(bus: ArrivalView): Boolean = when (kind) {
+        TriggerKind.Minutes -> bus.etaSeconds != null && bus.etaSeconds <= value * 60 + NEAR_EXTRA_SECONDS
+        TriggerKind.Stops -> bus.stopsAway <= value + NEAR_EXTRA_STOPS
+    }
 }
+
+private const val NEAR_EXTRA_SECONDS = 180
+private const val NEAR_EXTRA_STOPS = 2
 
 @Serializable
 data class Watch(

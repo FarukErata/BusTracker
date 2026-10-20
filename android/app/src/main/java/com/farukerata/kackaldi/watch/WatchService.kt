@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.farukerata.kackaldi.KacKaldiApplication
@@ -37,6 +38,7 @@ import kotlinx.serialization.json.Json
 class WatchService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var job: Job? = null
+    private var wakeLock: PowerManager.WakeLock? = null
     private val app get() = application as KacKaldiApplication
     private val notifications get() = getSystemService(NotificationManager::class.java)
 
@@ -53,19 +55,21 @@ class WatchService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
+        releaseCpu()
         if (app.watch.value != null) app.watch.value = null
         super.onDestroy()
     }
 
     private fun start(watch: Watch) {
         createChannels()
-        val first = ongoing(watch, null, "Looking for ${watch.line}…")
+        val first = notification(watch, null, "Looking for ${watch.line}…")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(ONGOING_ID, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(ONGOING_ID, first)
         }
         app.watch.value = watch
+        holdCpu()
         job?.cancel()
         job = scope.launch { follow(watch) }
     }
@@ -80,41 +84,57 @@ class WatchService : Service() {
             }
             val response = runCatching { app.api.lineArrivals(watch.line, watch.stopCode, watch.direction) }.getOrNull()
             if (response == null) {
-                notifications.notify(ONGOING_ID, ongoing(watch, shown, "Can’t reach the server, trying again"))
+                notifications.notify(ONGOING_ID, notification(watch, shown, "Can’t reach the server, trying again", alerted = state?.alerted != null))
             } else {
                 val step = nextStep(watch.trigger, response.approaching, state)
                 state = step.state
                 shown = step.shown
-                step.fire?.let { notifications.notify(ALERT_ID, alert(watch, it)) }
                 if (step.done) {
                     finish()
                     return
                 }
-                notifications.notify(ONGOING_ID, ongoing(watch, shown, null, alerted = state.alerted != null))
+                notifications.notify(ONGOING_ID, notification(watch, shown, null, alerted = state.alerted != null, loud = step.fire != null))
             }
-            delay(REFRESH_MILLIS)
+            val close = state?.alerted != null || shown?.let(watch.trigger::near) == true
+            delay(if (close) NEAR_REFRESH_MILLIS else FAR_REFRESH_MILLIS)
         }
+    }
+
+    private fun holdCpu() {
+        if (wakeLock?.isHeld == true) return
+        wakeLock = getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "KacKaldi:watch")
+            .apply { acquire(MAX_WATCH_MILLIS + WAKE_LOCK_SLACK_MILLIS) }
+    }
+
+    private fun releaseCpu() {
+        wakeLock?.takeIf { it.isHeld }?.release()
+        wakeLock = null
     }
 
     private fun finish() {
         job?.cancel()
+        releaseCpu()
         app.watch.value = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private fun ongoing(watch: Watch, bus: ArrivalView?, problem: String?, alerted: Boolean = false): Notification {
+    private fun notification(watch: Watch, bus: ArrivalView?, problem: String?, alerted: Boolean = false, loud: Boolean = false): Notification {
         val text = problem ?: bus?.let(::describe) ?: "No ${watch.line} on the way yet"
-        val builder = NotificationCompat.Builder(this, ONGOING_CHANNEL)
+        val title = if (alerted && bus != null) alertTitle(watch, bus) else "${watch.line} · ${titleCase(watch.stopName)}"
+        val builder = NotificationCompat.Builder(this, if (alerted) ALERT_CHANNEL else ONGOING_CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("${watch.line} · ${titleCase(watch.stopName)}")
+            .setContentTitle(title)
             .setContentText(text)
-            .setSubText(if (alerted) "Alert sent" else "Alert ${triggerText(watch.trigger)}")
+            .setSubText(if (alerted) "Time to go to ${titleCase(watch.stopName)}" else "Alert ${triggerText(watch.trigger)}")
             .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setSilent(true)
-            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setOnlyAlertOnce(!loud)
+            .setSilent(!loud)
+            .setPriority(if (alerted) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_LOW)
+            .setCategory(if (alerted) NotificationCompat.CATEGORY_REMINDER else NotificationCompat.CATEGORY_PROGRESS)
             .setContentIntent(openStop(watch))
+            .setDeleteIntent(stopIntent())
             .addAction(0, "Stop watching", stopIntent())
         val eta = bus?.etaSeconds?.takeIf { !bus.notDeparted && problem == null }
         if (eta != null) {
@@ -125,22 +145,13 @@ class WatchService : Service() {
         return builder.build()
     }
 
-    private fun alert(watch: Watch, bus: ArrivalView): Notification {
+    private fun alertTitle(watch: Watch, bus: ArrivalView): String {
         val eta = bus.etaSeconds?.takeIf { !bus.notDeparted }
-        val title = when {
-            watch.trigger.atStopName != null -> "${watch.line} reached ${titleCase(watch.trigger.atStopName)}"
+        return when {
+            watch.trigger.atStopName != null && bus.stopsAway > 0 -> "${watch.line} passed ${titleCase(watch.trigger.atStopName)}"
             eta != null -> "${watch.line} is ${minutes(eta)} min away"
             else -> "${watch.line}: ${busWhere(bus.notDeparted, bus.stopsAway).lowercase()}"
         }
-        return NotificationCompat.Builder(this, ALERT_CHANNEL)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(describe(bus) + " · ${titleCase(watch.stopName)}")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setAutoCancel(true)
-            .setContentIntent(openStop(watch))
-            .build()
     }
 
     private fun describe(bus: ArrivalView): String = buildList {
@@ -192,8 +203,9 @@ class WatchService : Service() {
         private const val ONGOING_CHANNEL = "watch"
         private const val ALERT_CHANNEL = "alerts"
         private const val ONGOING_ID = 41
-        private const val ALERT_ID = 42
-        private const val REFRESH_MILLIS = 30_000L
+        private const val NEAR_REFRESH_MILLIS = 30_000L
+        private const val FAR_REFRESH_MILLIS = 60_000L
+        private const val WAKE_LOCK_SLACK_MILLIS = 60_000L
         private const val MAX_WATCH_MILLIS = 2 * 60 * 60 * 1000L
 
         fun start(context: Context, watch: Watch) {
