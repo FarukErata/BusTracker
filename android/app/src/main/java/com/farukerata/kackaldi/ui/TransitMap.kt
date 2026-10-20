@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.os.Build
 import android.view.Gravity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -134,8 +135,10 @@ fun TransitMap(
     AndroidView(factory = { mapView }, modifier = modifier, update = { controller.show(scene) })
 }
 
-private fun labelTypeface(context: Context): Typeface =
-    runCatching { Typeface.create(ResourcesCompat.getFont(context, R.font.geist), 600, false) }.getOrDefault(Typeface.DEFAULT_BOLD)
+private fun labelTypeface(context: Context): Typeface {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return Typeface.DEFAULT_BOLD
+    return runCatching { Typeface.create(ResourcesCompat.getFont(context, R.font.geist), 600, false) }.getOrDefault(Typeface.DEFAULT_BOLD)
+}
 
 private class MapLifecycle(private val view: MapView) {
     private var started = false
