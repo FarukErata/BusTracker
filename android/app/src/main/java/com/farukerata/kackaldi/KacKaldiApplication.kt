@@ -5,6 +5,7 @@ import com.farukerata.kackaldi.data.DeviceStore
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.Settings
 import com.farukerata.kackaldi.data.StopFilters
+import com.farukerata.kackaldi.data.Watch
 import com.farukerata.kackaldi.update.AppUpdater
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.maplibre.android.MapLibre
@@ -16,6 +17,8 @@ class KacKaldiApplication : Application() {
     val stopFilters by lazy { StopFilters(this) }
     val settings by lazy { Settings(this) }
     val pendingLinkCode = MutableStateFlow<String?>(null)
+    val pendingStop = MutableStateFlow<String?>(null)
+    val watch = MutableStateFlow<Watch?>(null)
 
     override fun onCreate() {
         super.onCreate()

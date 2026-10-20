@@ -1,5 +1,12 @@
 package com.farukerata.kackaldi.ui
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +33,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,10 +46,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -48,7 +60,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewModelScope
+import com.farukerata.kackaldi.KacKaldiApplication
 import com.farukerata.kackaldi.data.BusPathResponse
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineStatusView
@@ -56,6 +70,10 @@ import com.farukerata.kackaldi.data.PathStop
 import com.farukerata.kackaldi.data.StopArrivalView
 import com.farukerata.kackaldi.data.StopArrivalsView
 import com.farukerata.kackaldi.data.StopFilters
+import com.farukerata.kackaldi.data.TriggerKind
+import com.farukerata.kackaldi.data.Watch
+import com.farukerata.kackaldi.data.WatchTrigger
+import com.farukerata.kackaldi.watch.WatchService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -159,6 +177,27 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, St
     val stop = viewModel.arrivals.valueOrNull?.stop
     val shown by viewModel.shownLines.collectAsStateWithLifecycle()
     val colors = Kit.colors
+    val context = LocalContext.current
+    val app = context.applicationContext as KacKaldiApplication
+    val scope = rememberCoroutineScope()
+    val activeWatch by app.watch.collectAsStateWithLifecycle()
+    val lastTrigger by app.settings.lastTrigger.collectAsStateWithLifecycle(initialValue = WatchTrigger(TriggerKind.Minutes, 5))
+    var watchFor by remember { mutableStateOf<StopArrivalView?>(null) }
+    var pending by remember { mutableStateOf<Watch?>(null) }
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val watch = pending
+        pending = null
+        if (granted && watch != null) WatchService.start(context, watch)
+        else Toast.makeText(context, "Allow notifications to get bus alerts", Toast.LENGTH_LONG).show()
+    }
+    val begin = { watch: Watch ->
+        if (needsNotificationPermission(context)) {
+            pending = watch
+            permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            WatchService.start(context, watch)
+        }
+    }
 
     Column(
         Modifier
@@ -192,11 +231,34 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, St
             when (val state = viewModel.arrivals) {
                 Load.Loading -> RowsSkeleton()
                 is Load.Failed -> ErrorState(state.message, viewModel::pullToRefresh)
-                is Load.Ready -> ArrivalsList(state.value, shown, viewModel, onLine)
+                is Load.Ready -> ArrivalsList(state.value, shown, viewModel, onLine, activeWatch, { watchFor = it }, { WatchService.stop(context) })
             }
         }
     }
+    val target = watchFor
+    val data = viewModel.arrivals.valueOrNull
+    if (target != null && data != null) {
+        WatchSheet(
+            api = app.api,
+            line = target.line,
+            direction = target.direction,
+            directionName = target.directionName,
+            stopCode = viewModel.code,
+            approaching = data.arrivals.filter { it.line == target.line && it.direction == target.direction }.map { it.bus },
+            initial = lastTrigger,
+            onStart = { trigger ->
+                watchFor = null
+                scope.launch { app.settings.rememberTrigger(trigger) }
+                begin(Watch(target.line, target.direction, target.directionName, viewModel.code, data.stop.name, trigger, System.currentTimeMillis()))
+            },
+            onDismiss = { watchFor = null },
+        )
+    }
 }
+
+private fun needsNotificationPermission(context: Context): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
 
 @Composable
 private fun StopMapCard(viewModel: StopViewModel, lat: Double?, lng: Double?) {
@@ -232,7 +294,15 @@ private fun StopMapCard(viewModel: StopViewModel, lat: Double?, lng: Double?) {
 }
 
 @Composable
-private fun ArrivalsList(data: StopArrivalsView, shown: Set<String>, viewModel: StopViewModel, onLine: (String, String?, String?) -> Unit) {
+private fun ArrivalsList(
+    data: StopArrivalsView,
+    shown: Set<String>,
+    viewModel: StopViewModel,
+    onLine: (String, String?, String?) -> Unit,
+    watch: Watch?,
+    onNotify: (StopArrivalView) -> Unit,
+    onStopWatching: () -> Unit,
+) {
     val allLines = data.lines.map { it.line }.distinct()
     val visible = shown.intersect(allLines.toSet()).ifEmpty { allLines.toSet() }
     val lines = data.lines.filter { it.line in visible }
@@ -240,6 +310,7 @@ private fun ArrivalsList(data: StopArrivalsView, shown: Set<String>, viewModel: 
     val bothWays = lines.groupBy { it.line }.filterValues { it.size > 1 }.keys
     val waiting = lines.filter { it.error != null }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
+        if (watch != null && watch.stopCode == viewModel.code) item { WatchBar(watch, onStopWatching) }
         if (allLines.size > 1) item {
             LineFilter(allLines, visible.takeIf { it.size < allLines.size }.orEmpty(), { viewModel.toggleLine(it, allLines) }, viewModel::showAllLines)
         }
@@ -252,7 +323,7 @@ private fun ArrivalsList(data: StopArrivalsView, shown: Set<String>, viewModel: 
             val isSelected = viewModel.selection?.let { it.line == arrival.line && it.direction == arrival.direction && it.doorNo == arrival.bus.doorNo } == true
             Column(Modifier.animateContentSize().background(if (isSelected) Kit.colors.secondary.copy(alpha = 0.6f) else androidx.compose.ui.graphics.Color.Transparent)) {
                 ArrivalRow(arrival, data.stop.name, arrival.line in bothWays, age, viewModel.receivedAt, false) { viewModel.toggle(arrival) }
-                if (isSelected) TrackingDetails(arrival, viewModel.tracking?.remainingStops) { onLine(arrival.line, arrival.direction, viewModel.code) }
+                if (isSelected) TrackingDetails(arrival, viewModel.tracking?.remainingStops, { onNotify(arrival) }) { onLine(arrival.line, arrival.direction, viewModel.code) }
             }
         }
         if (waiting.isNotEmpty()) item {
@@ -304,7 +375,7 @@ private fun ArrivalRow(
 }
 
 @Composable
-private fun TrackingDetails(arrival: StopArrivalView, remaining: List<PathStop>?, onSeeLine: () -> Unit) {
+private fun TrackingDetails(arrival: StopArrivalView, remaining: List<PathStop>?, onNotify: () -> Unit, onSeeLine: () -> Unit) {
     val colors = Kit.colors
     Column(
         Modifier.fillMaxWidth().padding(start = 56.dp, end = 12.dp, bottom = 12.dp),
@@ -326,12 +397,39 @@ private fun TrackingDetails(arrival: StopArrivalView, remaining: List<PathStop>?
                 }
             }
         }
-        Text(
-            "See all of line ${arrival.line} →",
-            Modifier.pressable(onSeeLine),
-            style = Kit.xs.copy(fontWeight = FontWeight.Medium),
-            color = colors.pinFill,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            KitButton("Notify me", onNotify, kind = ButtonKind.Outline, icon = Icons.Outlined.NotificationsNone)
+            Text(
+                "See all of line ${arrival.line} →",
+                Modifier.pressable(onSeeLine),
+                style = Kit.xs.copy(fontWeight = FontWeight.Medium),
+                color = colors.pinFill,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WatchBar(watch: Watch, onStop: () -> Unit) {
+    val colors = Kit.colors
+    val trigger = watch.trigger
+    val alert = when {
+        trigger.atStopName != null -> "when a bus reaches ${titleCase(trigger.atStopName)}"
+        trigger.kind == TriggerKind.Minutes -> "${trigger.value} min before"
+        trigger.value == 1 -> "1 stop before"
+        else -> "${trigger.value} stops before"
+    }
+    Row(
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp).fillMaxWidth().border(1.dp, colors.border, CardShape).padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(Icons.Outlined.NotificationsActive, null, Modifier.size(18.dp), tint = colors.foreground)
+        Column(Modifier.weight(1f)) {
+            Text("Watching ${watch.line}", style = Kit.sm.copy(fontWeight = FontWeight.Medium), color = colors.foreground)
+            Text("Alert $alert", style = Kit.xs, color = colors.mutedForeground)
+        }
+        KitButton("Stop", onStop, kind = ButtonKind.Ghost)
     }
 }
 

@@ -60,6 +60,12 @@ fun KacKaldiRoot(dark: Boolean, onToggleTheme: () -> Unit) {
 @Composable
 private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme: () -> Unit) {
     val nav = rememberNavController()
+    val openStop by app.pendingStop.collectAsStateWithLifecycle()
+    LaunchedEffect(openStop) {
+        val code = openStop ?: return@LaunchedEffect
+        app.pendingStop.value = null
+        nav.navigate(StopRoute(code)) { launchSingleTop = true }
+    }
     NavHost(nav, startDestination = HomeRoute) {
         composable<HomeRoute> {
             HomeScreen(

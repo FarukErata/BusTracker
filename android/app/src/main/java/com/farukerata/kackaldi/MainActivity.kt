@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.farukerata.kackaldi.ui.KacKaldiRoot
 import com.farukerata.kackaldi.ui.KacKaldiTheme
+import com.farukerata.kackaldi.watch.WatchService
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun receive(intent: Intent?) {
+        intent?.getStringExtra(WatchService.EXTRA_STOP)?.let { (application as KacKaldiApplication).pendingStop.value = it }
         val data = intent?.takeIf { it.action == Intent.ACTION_VIEW }?.data ?: return
         val code = when (data.scheme) {
             "kackaldi" -> data.pathSegments.firstOrNull()
