@@ -22,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.farukerata.kackaldi.KacKaldiApplication
 import com.farukerata.kackaldi.data.BusAlert
+import com.farukerata.kackaldi.data.Recent
 import com.farukerata.kackaldi.watch.AlertScheduler
 import com.farukerata.kackaldi.watch.WatchService
 import kotlinx.coroutines.flow.map
@@ -72,6 +73,7 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
     val scope = rememberCoroutineScope()
     val alerts by app.alerts.alerts.collectAsStateWithLifecycle(initialValue = emptyList())
     val running by app.watch.collectAsStateWithLifecycle()
+    val recents by app.recents.items.collectAsStateWithLifecycle(initialValue = emptyList())
     val setEnabled = { alert: BusAlert, enabled: Boolean -> scope.launch { AlertScheduler.save(context, app.alerts, alert.copy(enabled = enabled)) }; Unit }
     val remove = { alert: BusAlert -> scope.launch { AlertScheduler.remove(context, app.alerts, alert.id) }; Unit }
     val openStop by app.pendingStop.collectAsStateWithLifecycle()
@@ -95,6 +97,8 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
                 alerts = alerts,
                 onAlertEnabled = setEnabled,
                 onAlertRemove = remove,
+                recents = recents,
+                onClearRecents = { scope.launch { app.recents.clear() } },
             )
         }
         composable<AlertsRoute> {
@@ -124,6 +128,10 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
             LineScreen(
                 viewModel = viewModel { LineViewModel(app.api, route.code, route.direction, route.stop) },
                 onBack = { nav.popBackStack() },
+                onDirectionShown = { direction ->
+                    val title = directionLabel(direction.stops.firstOrNull()?.name.orEmpty(), direction.name)
+                    scope.launch { app.recents.remember(Recent(Recent.LINE, route.code, title, direction = direction.direction)) }
+                },
             )
         }
     }

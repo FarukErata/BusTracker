@@ -4,6 +4,7 @@ import android.app.Application
 import com.farukerata.kackaldi.data.AlertStore
 import com.farukerata.kackaldi.data.DeviceStore
 import com.farukerata.kackaldi.data.KacKaldiApi
+import com.farukerata.kackaldi.data.Recents
 import com.farukerata.kackaldi.data.Settings
 import com.farukerata.kackaldi.data.StopFilters
 import com.farukerata.kackaldi.data.Watch
@@ -18,6 +19,7 @@ class KacKaldiApplication : Application() {
     val stopFilters by lazy { StopFilters(this) }
     val settings by lazy { Settings(this) }
     val alerts by lazy { AlertStore(this) }
+    val recents by lazy { Recents(this) }
     val pendingLinkCode = MutableStateFlow<String?>(null)
     val pendingStop = MutableStateFlow<String?>(null)
     val watch = MutableStateFlow<Watch?>(null)

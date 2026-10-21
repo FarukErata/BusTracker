@@ -88,6 +88,7 @@ data class WatchStep(
     val next: SeenBus?,
     val gone: SeenBus? = null,
     val lost: SeenBus? = null,
+    val perLine: List<SeenBus> = emptyList(),
 )
 
 fun alreadyInside(trigger: WatchTrigger, approaching: List<ArrivalView>): Set<String> =
@@ -117,8 +118,11 @@ fun nextStep(trigger: WatchTrigger, approaching: List<SeenBus>, passed: Set<Stri
     val fire = if (armed) waiting.firstOrNull { trigger.reached(it.bus) } else null
     val shown = fire ?: waiting.firstOrNull()
     val next = waiting.firstOrNull { it != shown }
-    return WatchStep(WatchState(skipped, fire), shown, fire, next, lost = lost)
+    return WatchStep(WatchState(skipped, fire), shown, fire, next, lost = lost, perLine = nearestPerLine(waiting))
 }
+
+private fun nearestPerLine(waiting: List<SeenBus>): List<SeenBus> =
+    waiting.groupBy { it.line }.values.map { it.first() }
 
 fun missed(state: WatchState): WatchState =
     WatchState(state.skipped + listOfNotNull(state.following?.bus?.doorNo), null)

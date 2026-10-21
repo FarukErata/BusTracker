@@ -75,6 +75,7 @@ import com.farukerata.kackaldi.data.StopArrivalsView
 import com.farukerata.kackaldi.data.StopFilters
 import com.farukerata.kackaldi.data.AlertLine
 import com.farukerata.kackaldi.data.BusAlert
+import com.farukerata.kackaldi.data.Recent
 import com.farukerata.kackaldi.data.SeenBus
 import com.farukerata.kackaldi.data.TriggerKind
 import com.farukerata.kackaldi.data.Watch
@@ -190,6 +191,9 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, St
     val app = context.applicationContext as KacKaldiApplication
     val scope = rememberCoroutineScope()
     val activeWatch by app.watch.collectAsStateWithLifecycle()
+    LaunchedEffect(stop?.code) {
+        stop?.let { app.recents.remember(Recent(Recent.STOP, it.code, it.name, it.district)) }
+    }
     val lastTrigger by app.settings.lastTrigger.collectAsStateWithLifecycle(initialValue = WatchTrigger(TriggerKind.Minutes, 5))
     var watchFor by remember { mutableStateOf<StopArrivalView?>(null) }
     var pending by remember { mutableStateOf<AlertDraft?>(null) }
@@ -373,12 +377,14 @@ private fun ArrivalsList(
 
 @Composable
 private fun LineFilter(lines: List<String>, picked: Set<String>, onToggle: (String) -> Unit, onAll: () -> Unit) {
+    val pinned = remember { picked }
+    val ordered = lines.sortedByDescending { it in pinned }
     LazyRow(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         item { Chip("All", picked.isEmpty(), onAll) }
-        items(lines, key = { it }) { line -> Chip(line, line in picked) { onToggle(line) } }
+        items(ordered, key = { it }) { line -> Chip(line, line in picked) { onToggle(line) } }
     }
 }
 

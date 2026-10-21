@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
@@ -109,7 +110,7 @@ fun GhostIcon(icon: ImageVector, description: String, onClick: () -> Unit, tint:
 }
 
 @Composable
-fun SearchField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
+fun SearchField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, onFocusChange: (Boolean) -> Unit = {}) {
     val colors = Kit.colors
     BasicTextField(
         value = value,
@@ -118,7 +119,7 @@ fun SearchField(value: String, onChange: (String) -> Unit, placeholder: String, 
         textStyle = Kit.base.copy(color = colors.foreground),
         cursorBrush = SolidColor(colors.foreground),
         keyboardOptions = KeyboardOptions.Default,
-        modifier = modifier,
+        modifier = modifier.onFocusChanged { onFocusChange(it.isFocused) },
         decorationBox = { field ->
             Row(
                 Modifier.fillMaxWidth().height(40.dp).border(1.dp, colors.input, FieldShape).padding(start = 10.dp, end = 2.dp),

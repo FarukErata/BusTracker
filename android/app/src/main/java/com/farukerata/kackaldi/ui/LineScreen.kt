@@ -166,8 +166,10 @@ class LineViewModel(private val api: KacKaldiApi, val code: String, initialDirec
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LineScreen(viewModel: LineViewModel, onBack: () -> Unit) {
+fun LineScreen(viewModel: LineViewModel, onBack: () -> Unit, onDirectionShown: (LineDirection) -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val shown = viewModel.direction()
+    LaunchedEffect(shown?.direction) { shown?.let(onDirectionShown) }
     LaunchedEffect(viewModel.code) {
         if (viewModel.stops !is Load.Ready) viewModel.reload()
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {

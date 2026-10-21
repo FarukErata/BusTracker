@@ -26,6 +26,7 @@ import com.farukerata.kackaldi.data.missed
 import com.farukerata.kackaldi.data.nextStep
 import com.farukerata.kackaldi.ui.busWhere
 import com.farukerata.kackaldi.ui.minutes
+import com.farukerata.kackaldi.ui.stopsAway
 import com.farukerata.kackaldi.ui.titleCase
 import java.time.Instant
 import java.time.ZoneId
@@ -222,9 +223,22 @@ class WatchService : Service() {
         val current = step
         return buildList {
             current?.lost?.let { add("Lost track of that ${it.line}") }
-            add(current?.shown?.let { describe(watch, it) } ?: nothingYet(watch))
+            add(perLineText(watch, current) ?: current?.shown?.let { describe(watch, it) } ?: nothingYet(watch))
             if (alerted) current?.next?.let { add("then ${it.line} ${eta(it)}") }
         }.joinToString(" · ")
+    }
+
+    private fun perLineText(watch: Watch, current: WatchStep?): String? {
+        val buses = current?.perLine.orEmpty()
+        if (state?.following != null || watch.lines.distinctBy { it.line }.size < 2 || buses.size < 2) return null
+        return buses.joinToString(" · ", transform = ::brief)
+    }
+
+    private fun brief(seen: SeenBus): String {
+        val bus = seen.bus
+        if (bus.notDeparted) return "${seen.line} at the first stop"
+        val eta = bus.etaSeconds?.let { "${minutes(it)} min " }.orEmpty()
+        return "${seen.line} $eta(${stopsAway(bus.stopsAway).lowercase()})"
     }
 
     private fun nothingYet(watch: Watch): String =

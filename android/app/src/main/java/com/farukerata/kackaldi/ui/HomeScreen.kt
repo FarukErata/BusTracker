@@ -1,9 +1,12 @@
 package com.farukerata.kackaldi.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,16 +15,16 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsNone
-import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Icon
@@ -30,8 +33,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -46,6 +52,7 @@ import com.farukerata.kackaldi.data.FavoriteStopEntry
 import com.farukerata.kackaldi.data.FavoritesResponse
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineSummary
+import com.farukerata.kackaldi.data.Recent
 import com.farukerata.kackaldi.data.StopSearchResult
 import com.farukerata.kackaldi.update.AppUpdater
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -104,9 +111,15 @@ fun HomeScreen(
     alerts: List<BusAlert>,
     onAlertEnabled: (BusAlert, Boolean) -> Unit,
     onAlertRemove: (BusAlert) -> Unit,
+    recents: List<Recent>,
+    onClearRecents: () -> Unit,
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
+    var searchFocused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    BackHandler(enabled = searchFocused) { focusManager.clearFocus() }
+    val leaveSearch = { focusManager.clearFocus() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(Unit) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) { viewModel.refreshFavorites() }
@@ -131,19 +144,49 @@ fun HomeScreen(
             onChange = { viewModel.query.value = it },
             placeholder = "Stop or line, like Fabrikalar or 500T",
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+            onFocusChange = { searchFocused = it },
         )
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = WindowInsets.navigationBars.asPaddingValues(),
         ) {
             val current = results
-            if (query.isBlank() && alerts.isNotEmpty()) {
-                item { SectionTitle("Your alerts") }
-                items(alerts, key = { "alert-${it.id}" }) { alert -> AlertRow(alert, onStop, onAlertEnabled, onAlertRemove) }
+            val showRecents = searchFocused && query.isBlank() && recents.isNotEmpty()
+            when {
+                showRecents -> recentsSection(recents, onClearRecents, { leaveSearch(); onStop(it) }, { code, dir -> leaveSearch(); onLine(code, dir) })
+                query.isNotBlank() && current != null -> resultsSection(current, onStop, onLine)
+                else -> {
+                    if (query.isBlank() && alerts.isNotEmpty()) {
+                        item { SectionTitle("Your alerts") }
+                        items(alerts, key = { "alert-${it.id}" }) { alert -> AlertRow(alert, onStop, onAlertEnabled, onAlertRemove) }
+                    }
+                    favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine)
+                }
             }
-            if (query.isBlank() || current == null) favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine)
-            else resultsSection(current, onStop, onLine)
             item { VersionFooter(updater.currentVersion) }
+        }
+    }
+}
+
+private fun LazyListScope.recentsSection(
+    recents: List<Recent>, onClear: () -> Unit, onStop: (String) -> Unit, onLine: (String, String?) -> Unit,
+) {
+    item {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Box(Modifier.weight(1f)) { SectionTitle("Recent") }
+            KitButton("Clear", onClear, Modifier.padding(end = 8.dp), kind = ButtonKind.Ghost)
+        }
+    }
+    items(recents, key = { "recent-${it.kind}-${it.code}-${it.direction}" }) { recent ->
+        ItemRow(
+            onClick = { if (recent.isStop) onStop(recent.code) else onLine(recent.code, recent.direction) },
+            leading = {
+                if (recent.isStop) Icon(Icons.Outlined.History, null, Modifier.size(18.dp), tint = Kit.colors.mutedForeground)
+                else LineBadge(recent.code)
+            },
+            trailing = { Chevron() },
+        ) {
+            if (recent.isStop) StopName(recent.title, recent.district) else ItemTitle(recent.title)
         }
     }
 }
