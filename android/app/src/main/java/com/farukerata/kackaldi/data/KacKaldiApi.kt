@@ -21,6 +21,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 
 class ApiException(val status: Int, message: String) : Exception(message)
@@ -32,6 +33,12 @@ class KacKaldiApi(private val store: DeviceStore) {
     }
 
     private val http = HttpClient(OkHttp) {
+        engine {
+            config {
+                connectTimeout(15, TimeUnit.SECONDS)
+                readTimeout(30, TimeUnit.SECONDS)
+            }
+        }
         expectSuccess = false
         install(ContentNegotiation) { json(json) }
         defaultRequest {
@@ -121,12 +128,13 @@ class KacKaldiApi(private val store: DeviceStore) {
 
     private suspend fun HttpResponse.toException(): ApiException {
         val detail = runCatching { body<Problem>().detail }.getOrNull()
-        return ApiException(status.value, detail ?: S.requestFailed(status.value))
+        return ApiException(status.value, detail ?: if (status.value in GATEWAY_ERRORS) S.serverSlow else S.requestFailed(status.value))
     }
 
     private fun deviceName() = listOf(Build.MANUFACTURER, Build.MODEL).distinct().joinToString(" ").trim().ifEmpty { S.androidPhone }
 
     private companion object {
         const val PLATFORM = "android"
+        val GATEWAY_ERRORS = 502..504
     }
 }

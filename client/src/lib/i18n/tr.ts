@@ -17,6 +17,8 @@ export const tr: Strings = {
     toDark: 'Koyu temaya geç',
     language: 'Dil',
     requestFailed: (status: number) => `İstek başarısız (${status})`,
+    noServer: 'Sunucuya ulaşılamıyor. Bağlantını kontrol et.',
+    serverSlow: 'Sunucu şu an yanıt vermiyor. Birazdan tekrar dene.',
     inviteNeeded: 'Bu uygulamayı kullanmak için davet kodu gerekiyor.',
     phoneBrowser: 'Telefon tarayıcısı',
     browser: 'Tarayıcı',

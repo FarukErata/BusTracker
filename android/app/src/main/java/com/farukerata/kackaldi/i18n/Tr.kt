@@ -20,6 +20,7 @@ object Tr : Strings() {
     override fun requestFailed(status: Int) = "İstek başarısız ($status)"
     override val androidPhone = "Android telefon"
     override val noServer = "Sunucuya ulaşılamıyor. Bağlantını kontrol et."
+    override val serverSlow = "Sunucu şu an yanıt vermiyor. Birazdan tekrar dene."
 
     override fun ago(seconds: Long) = when {
         seconds < 10 -> "az önce"

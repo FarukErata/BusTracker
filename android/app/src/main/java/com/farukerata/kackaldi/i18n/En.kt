@@ -20,6 +20,7 @@ object En : Strings() {
     override fun requestFailed(status: Int) = "Request failed ($status)"
     override val androidPhone = "Android phone"
     override val noServer = "Can’t reach the server. Check your connection."
+    override val serverSlow = "The server isn’t answering right now. Try again in a moment."
 
     override fun ago(seconds: Long) = when {
         seconds < 10 -> "just now"

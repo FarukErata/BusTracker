@@ -17,6 +17,8 @@ export const en = {
     toDark: 'Switch to dark theme',
     language: 'Language',
     requestFailed: (status: number) => `Request failed (${status})`,
+    noServer: 'Can’t reach the server. Check your connection.',
+    serverSlow: 'The server isn’t answering right now. Try again in a moment.',
     inviteNeeded: 'You need an invite code to use this app.',
     phoneBrowser: 'Phone browser',
     browser: 'Browser',

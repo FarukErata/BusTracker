@@ -20,6 +20,7 @@ abstract class Strings {
     abstract fun requestFailed(status: Int): String
     abstract val androidPhone: String
     abstract val noServer: String
+    abstract val serverSlow: String
 
     abstract fun ago(seconds: Long): String
     abstract fun lower(text: String): String

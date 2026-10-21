@@ -80,7 +80,7 @@ fun WelcomeScreen(api: KacKaldiApi, linkFromWeb: String?, onLinkUsed: () -> Unit
             } catch (e: ApiException) {
                 error = if (e.status == mode.wrongStatus) mode.wrong else e.message
             } catch (e: Exception) {
-                error = S.noServer
+                error = friendlyError(e)
             } finally {
                 pending = false
             }

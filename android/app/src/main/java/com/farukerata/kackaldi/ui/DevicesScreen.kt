@@ -96,7 +96,7 @@ class DevicesViewModel(private val api: KacKaldiApi) : ViewModel() {
             } catch (e: ApiException) {
                 message = e.message
             } catch (e: Exception) {
-                message = S.noServer
+                message = friendlyError(e)
             } finally {
                 removing = false
                 confirming = null
