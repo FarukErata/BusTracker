@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { Skeleton } from '@/components/ui/skeleton'
 import { busWhere, reportAge, secondsSince, seenAgo, titleCase } from '@/lib/format'
+import { strings, useT } from '@/lib/i18n'
 import { useIsWide } from '@/lib/media'
 import { rememberRecent } from '@/lib/recents'
 import { useStopLineFilter } from '@/lib/stopFilters'
@@ -110,12 +111,13 @@ function FavoriteStopButton({ code }: { code: string }) {
   const remove = useRemoveFavoriteStop()
   const saved = favorites.data?.stops.find(s => s.favorite.stopCode === code)
   const busy = add.isPending || remove.isPending
+  const t = useT()
 
   return (
     <Button
       variant="ghost"
       size="icon"
-      aria-label={saved ? 'Remove from your stops' : 'Save to your stops'}
+      aria-label={saved ? t.stop.unsave : t.stop.save}
       aria-pressed={!!saved}
       onClick={() => (saved ? remove.mutate(saved.favorite.id) : add.mutate(code))}
       disabled={busy || favorites.isPending}
@@ -130,11 +132,11 @@ function sameName(a: string, b: string) {
 }
 
 function waitingText(lines: StopArrivalsView['lines']) {
+  const t = strings().stop
   const names = [...new Set(lines.map(l => l.line))].join(', ')
   const retries = lines.map(l => l.retryInSeconds).filter((s): s is number => s !== null)
-  if (retries.length === 0) return `Waiting for İBB: ${names}`
-  const soonest = Math.min(...retries)
-  return `Waiting for İBB: ${names} · next try ${soonest < 60 ? `in about ${soonest} s` : `in about ${Math.ceil(soonest / 60)} min`}`
+  if (retries.length === 0) return t.waiting(names)
+  return `${t.waiting(names)} · ${t.nextTry(Math.min(...retries))}`
 }
 
 function oldestFetch(lines: StopArrivalsView['lines']) {
@@ -165,7 +167,7 @@ function ArrivalsList({ data, selection, tracking, onSelect, picked, onPick, rec
     <>
       {all.length > 1 && <LineFilter lines={all} picked={filtered ? [...visible] : []} onChange={onPick} />}
       {arrivals.length === 0 ? (
-        <EmptyState title="No bus on the way" description={`Lines here: ${[...visible].join(', ')}.`} />
+        <EmptyState title={strings().stop.noBus} description={strings().stop.linesHere([...visible].join(', '))} />
       ) : (
         <ItemGroup>
           {arrivals.map(a => (
@@ -199,9 +201,10 @@ function LineFilter({ lines, picked, onChange }: { lines: string[]; picked: stri
     const next = picked.includes(line) ? picked.filter(l => l !== line) : [...picked, line]
     onChange(next.length === lines.length ? [] : next)
   }
+  const t = useT()
   return (
-    <div role="group" aria-label="Lines to show" className="flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
-      <FilterChip active={picked.length === 0} onClick={() => onChange([])}>All</FilterChip>
+    <div role="group" aria-label={t.stop.linesToShow} className="flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
+      <FilterChip active={picked.length === 0} onClick={() => onChange([])}>{t.stop.all}</FilterChip>
       {pinnedFirst(lines, pinned).map(line => (
         <FilterChip key={line} active={picked.includes(line)} onClick={() => toggle(line)}>{line}</FilterChip>
       ))}
@@ -225,10 +228,11 @@ function linesInBothDirections(lines: StopArrivalsView['lines']) {
 
 function arrivalDetail(arrival: StopArrivalView, stopName: string, bothWays: boolean, ageSeconds: number) {
   const { bus } = arrival
+  const t = strings().bus
   const parts = [
-    sameName(arrival.directionName, stopName) && 'Ends here',
-    bothWays && !sameName(arrival.directionName, stopName) && `To ${titleCase(arrival.directionName)}`,
-    !bus.notDeparted && bus.lastStopName && `now at ${titleCase(bus.lastStopName)}`,
+    sameName(arrival.directionName, stopName) && t.endsHere,
+    bothWays && !sameName(arrival.directionName, stopName) && t.towards(titleCase(arrival.directionName)),
+    !bus.notDeparted && bus.lastStopName && t.nowAt(titleCase(bus.lastStopName)),
     reportAge(ageSeconds) !== 'fresh' && seenAgo(ageSeconds),
   ].filter(Boolean)
   return parts.join(' · ')
@@ -255,7 +259,7 @@ function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, receivedAt, selec
           {detail && <ItemDescription className="first-letter:uppercase">{detail}</ItemDescription>}
         </ItemContent>
         <ItemActions>
-          {bus.etaSeconds != null ? <Minutes etaSeconds={bus.etaSeconds} receivedAt={receivedAt} /> : <span className="text-xs text-muted-foreground">Not left</span>}
+          {bus.etaSeconds != null ? <Minutes etaSeconds={bus.etaSeconds} receivedAt={receivedAt} /> : <span className="text-xs text-muted-foreground">{strings().bus.notLeft}</span>}
         </ItemActions>
       </Item>
       {selected && <TrackingDetails arrival={arrival} tracking={tracking} />}
@@ -266,7 +270,7 @@ function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, receivedAt, selec
 function stopsSummary(remaining: TrackingView['remaining']) {
   const names = remaining.map(s => titleCase(s.name))
   if (names.length <= 4) return names
-  return [...names.slice(0, 2), `${names.length - 3} more`, names.at(-1)!]
+  return [...names.slice(0, 2), strings().stop.moreStops(names.length - 3), names.at(-1)!]
 }
 
 function TrackingDetails({ arrival, tracking }: { arrival: StopArrivalView; tracking: TrackingView | null }) {
@@ -285,7 +289,7 @@ function TrackingDetails({ arrival, tracking }: { arrival: StopArrivalView; trac
         <Skeleton className="h-3.5 w-3/4" />
       )}
       <Link to={`/lines/${encodeURIComponent(arrival.line)}?dir=${arrival.direction}`} className="w-fit font-medium text-primary underline-offset-4 hover:underline">
-        See all of line {arrival.line} →
+        {strings().stop.seeLine(arrival.line)}
       </Link>
     </div>
   )

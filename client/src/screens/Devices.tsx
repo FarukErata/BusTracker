@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { ago, countdown, isCompleteLinkCode, linkCodeInput } from '@/lib/format'
+import { strings } from '@/lib/i18n'
 import { useSecondsUntil } from '@/lib/useSecondsUntil'
 
 export function Devices() {
@@ -16,11 +17,11 @@ export function Devices() {
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col pb-8">
       <header className="flex items-center gap-2 px-3 pt-3">
         <BackButton />
-        <h1 className="flex-1 text-lg font-semibold tracking-tight">Devices</h1>
+        <h1 className="flex-1 text-lg font-semibold tracking-tight">{strings().devices.title}</h1>
       </header>
-      <SectionTitle>Add a device</SectionTitle>
+      <SectionTitle>{strings().devices.add}</SectionTitle>
       <LinkCodeCard />
-      <SectionTitle>Your devices</SectionTitle>
+      <SectionTitle>{strings().devices.yours}</SectionTitle>
       <DeviceList />
       <JoinAnotherDevice />
     </div>
@@ -37,13 +38,12 @@ function LinkCodeCard() {
 }
 
 function LinkCodeRequest({ expired, pending, error, onRequest }: { expired: boolean; pending: boolean; error: Error | null; onRequest: () => void }) {
-  const label = pending ? 'Getting a code…' : expired ? 'Get a new code' : 'Get a link code'
+  const t = strings().devices
+  const label = pending ? t.getting : expired ? t.getNew : t.get
   return (
     <div className="flex flex-col items-start gap-3 px-3">
       <p className="text-sm text-muted-foreground">
-        {expired
-          ? 'That code has expired. Get a new one when the other device is ready.'
-          : 'Get a short code and enter it on your other device. It will share your stops and lines.'}
+        {expired ? t.expiredText : t.getText}
       </p>
       <Button onClick={onRequest} disabled={pending} className="pressable">
         {label}
@@ -60,12 +60,12 @@ function LinkCodeRequest({ expired, pending, error, onRequest }: { expired: bool
 function LinkCodeShown({ code, remaining }: { code: string; remaining: number }) {
   return (
     <div className="mx-3 flex flex-col items-center gap-3 rounded-xl border p-5 text-center">
-      <p className="font-mono text-4xl font-semibold tracking-[0.15em] tabular-nums" aria-label={`Link code ${code.split('').join(' ')}`}>
+      <p className="font-mono text-4xl font-semibold tracking-[0.15em] tabular-nums" aria-label={strings().devices.codeLabel(code.split('').join(' '))}>
         {code}
       </p>
-      <p className="text-sm text-muted-foreground tabular-nums">Expires in {countdown(remaining)} · works once</p>
+      <p className="text-sm text-muted-foreground tabular-nums">{strings().devices.expiresIn(countdown(remaining))}</p>
       <p className="text-sm text-muted-foreground">
-        On the other device, open Kaç Kaldı and choose <span className="text-foreground">Enter a link code</span>.
+        {strings().devices.otherDeviceBefore}<span className="text-foreground">{strings().devices.otherDeviceAction}</span>{strings().devices.otherDeviceAfter}
       </p>
       <CopyButton text={code} />
     </div>
@@ -88,7 +88,7 @@ function CopyButton({ text }: { text: string }) {
       onClick={() => navigator.clipboard?.writeText(text).then(() => setCopied(true), () => setCopied(false))}
     >
       {copied ? <Check /> : <Copy />}
-      {copied ? 'Copied' : 'Copy'}
+      {copied ? strings().common.copied : strings().common.copy}
     </Button>
   )
 }
@@ -140,7 +140,7 @@ function DeviceRow({ device, now, ...actions }: DeviceRowProps) {
           {device.name}
           {device.current && (
             <Badge variant="primary-light" size="sm">
-              This device
+              {strings().devices.thisDevice}
             </Badge>
           )}
         </ItemTitle>
@@ -155,23 +155,23 @@ function RemoveControls({ confirming, removing, onAsk, onCancel, onRemove }: Omi
   if (!confirming)
     return (
       <Button variant="ghost" size="sm" onClick={onAsk}>
-        Remove
+        {strings().common.remove}
       </Button>
     )
   return (
     <>
       <Button variant="ghost" size="sm" onClick={onCancel}>
-        Cancel
+        {strings().common.cancel}
       </Button>
       <Button variant="destructive" size="sm" className="pressable" disabled={removing} onClick={onRemove}>
-        Remove
+        {strings().common.remove}
       </Button>
     </>
   )
 }
 
 const lastUsed = (device: DeviceView, now: number) =>
-  device.current ? 'In use now' : `Last used ${ago((now - Date.parse(device.lastSeenAt)) / 1000)}`
+  device.current ? strings().devices.inUse : strings().devices.lastUsed(ago((now - Date.parse(device.lastSeenAt)) / 1000))
 
 const isPhone = (device: DeviceView) => device.platform === 'android' || device.platform === 'ios' || /phone/i.test(device.name)
 
@@ -204,7 +204,7 @@ function JoinAnotherDevice() {
       await registerWithLinkCode(value)
       location.assign('/')
     } catch (failure) {
-      setError(isInvalidLinkCode(failure) ? 'That code doesn’t work or has expired. Get a new one on the other device.' : (failure as Error).message)
+      setError(isInvalidLinkCode(failure) ? strings().devices.codeWrong : (failure as Error).message)
       setPending(false)
     }
   }
@@ -212,20 +212,20 @@ function JoinAnotherDevice() {
   if (!open)
     return (
       <button type="button" onClick={() => setOpen(true)} className="mt-6 px-3 text-left text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">
-        Use a link code from another device instead
+        {strings().devices.useCode}
       </button>
     )
 
   return (
     <form onSubmit={join} className="mx-3 mt-6 flex flex-col gap-3 rounded-xl border p-4">
       <p className="text-sm text-muted-foreground">
-        This browser will switch to the other device’s stops and lines. Anything saved only here won’t come along.
+        {strings().devices.switchWarning}
       </p>
       <Input
         value={code}
         onChange={event => change(event.target.value)}
         placeholder="ABC-123"
-        aria-label="Link code"
+        aria-label={strings().devices.linkCode}
         aria-invalid={error !== null}
         autoFocus
         autoComplete="off"
@@ -240,10 +240,10 @@ function JoinAnotherDevice() {
       )}
       <div className="flex gap-2">
         <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-          Cancel
+          {strings().common.cancel}
         </Button>
         <Button type="submit" disabled={pending || !isCompleteLinkCode(code)} className="pressable flex-1">
-          {pending ? 'Linking…' : 'Link this browser'}
+          {pending ? strings().devices.linking : strings().devices.linkBrowser}
         </Button>
       </div>
     </form>

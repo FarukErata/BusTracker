@@ -1,3 +1,5 @@
+import { strings } from '@/lib/i18n'
+
 const TR = 'tr-TR'
 
 export function titleCase(text: string | null | undefined): string {
@@ -17,12 +19,7 @@ export function distance(meters: number): string {
 }
 
 export function ago(seconds: number): string {
-  if (seconds < 10) return 'just now'
-  if (seconds < 60) return `${Math.round(seconds)} s ago`
-  if (seconds < 3600) return `${Math.round(seconds / 60)} min ago`
-  if (seconds < 86400) return `${Math.round(seconds / 3600)} h ago`
-  const days = Math.round(seconds / 86400)
-  return days === 1 ? 'yesterday' : `${days} days ago`
+  return strings().time.ago(seconds)
 }
 
 export function linkCodeInput(text: string): string {
@@ -38,12 +35,11 @@ export function countdown(seconds: number): string {
 }
 
 export function stopsAway(count: number): string {
-  if (count === 0) return 'At your stop'
-  return `${count} ${count === 1 ? 'stop' : 'stops'} away`
+  return strings().bus.stopsAway(count)
 }
 
 export function busWhere(notDeparted: boolean, stops: number): string {
-  return notDeparted ? 'At the first stop' : stopsAway(stops)
+  return notDeparted ? strings().bus.atFirstStop : stopsAway(stops)
 }
 
 export function directionLabel(from: string, to: string): string {
@@ -62,4 +58,4 @@ export function reportAge(seconds: number): ReportAge {
 
 export const secondsSince = (iso: string, now = Date.now()) => Math.max(0, (now - Date.parse(iso)) / 1000)
 
-export const seenAgo = (seconds: number) => `seen ${ago(seconds)}`
+export const seenAgo = (seconds: number) => strings().time.seen(ago(seconds))

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.farukerata.kackaldi.data.BusAlert
 import com.farukerata.kackaldi.data.Watch
+import com.farukerata.kackaldi.i18n.S
 
 @Composable
 fun AlertsScreen(
@@ -44,16 +45,16 @@ fun AlertsScreen(
             .background(Kit.colors.background)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
     ) {
-        Header(onBack = onBack) { Box(Modifier.padding(horizontal = 4.dp)) { HeaderTitle("Alerts") } }
+        Header(onBack = onBack) { Box(Modifier.padding(horizontal = 4.dp)) { HeaderTitle(S.alertsTitle) } }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
             if (running == null && alerts.isEmpty()) {
-                item { EmptyState("No alerts yet", "Open a stop, tap a bus and choose Set alert. Pick a time and days to make it repeat.") }
+                item { EmptyState(S.noAlerts, S.noAlertsText) }
             }
             if (running != null) {
-                item { SectionTitle("Running now") }
+                item { SectionTitle(S.runningNow) }
                 item { RunningRow(running, onStop, onStopRunning) }
             }
-            if (alerts.isNotEmpty()) item { SectionTitle("Saved") }
+            if (alerts.isNotEmpty()) item { SectionTitle(S.saved) }
             items(alerts, key = { it.id }) { alert -> AlertRow(alert, onStop, onEnabled, onRemove) }
         }
     }
@@ -64,10 +65,10 @@ private fun RunningRow(watch: Watch, onStop: (String) -> Unit, onStopRunning: ()
     ItemRow(
         onClick = { onStop(watch.stopCode) },
         leading = { Icon(Icons.Outlined.NotificationsActive, null, Modifier.size(18.dp), tint = Kit.colors.foreground) },
-        trailing = { KitButton("Stop", onStopRunning, kind = ButtonKind.Ghost) },
+        trailing = { KitButton(S.stop, onStopRunning, kind = ButtonKind.Ghost) },
     ) {
         ItemTitle("${watch.lineNames} · ${titleCase(watch.stopName)}")
-        ItemDescription("Alert ${triggerSummary(watch.trigger)}")
+        ItemDescription(S.alertWhen(triggerSummary(watch.trigger)))
     }
 }
 
@@ -75,7 +76,6 @@ private fun RunningRow(watch: Watch, onStop: (String) -> Unit, onStopRunning: ()
 fun AlertRow(alert: BusAlert, onStop: (String) -> Unit, onEnabled: (BusAlert, Boolean) -> Unit, onRemove: (BusAlert) -> Unit) {
     val colors = Kit.colors
     val lines = alert.lines.map { it.line }.distinct().joinToString(" / ")
-    val repeat = if (alert.repeats) "every ${dayList(alert.days)}" else "once"
     ItemRow(
         onClick = { onStop(alert.stopCode) },
         leading = { Icon(Icons.Outlined.NotificationsNone, null, Modifier.size(18.dp), tint = colors.mutedForeground) },
@@ -91,10 +91,10 @@ fun AlertRow(alert: BusAlert, onStop: (String) -> Unit, onEnabled: (BusAlert, Bo
                     uncheckedBorderColor = colors.border,
                 ),
             )
-            GhostIcon(Icons.Outlined.DeleteOutline, "Delete alert", { onRemove(alert) })
+            GhostIcon(Icons.Outlined.DeleteOutline, S.deleteAlert, { onRemove(alert) })
         },
     ) {
         ItemTitle("$lines · ${titleCase(alert.stopName)}")
-        ItemDescription("Ready at ${alert.readyAt}, $repeat · ${triggerSummary(alert.trigger)}")
+        ItemDescription(S.readyAtRepeat(alert.readyAt, S.repeat(alert.days), triggerSummary(alert.trigger)))
     }
 }

@@ -23,6 +23,7 @@ import androidx.navigation.toRoute
 import com.farukerata.kackaldi.KacKaldiApplication
 import com.farukerata.kackaldi.data.BusAlert
 import com.farukerata.kackaldi.data.Recent
+import com.farukerata.kackaldi.i18n.S
 import com.farukerata.kackaldi.watch.AlertScheduler
 import com.farukerata.kackaldi.watch.WatchService
 import kotlinx.coroutines.flow.map
@@ -57,7 +58,7 @@ fun KacKaldiRoot(dark: Boolean, onToggleTheme: () -> Unit) {
     LaunchedEffect(signedIn, linkFromWeb) {
         if (signedIn != true || linkFromWeb == null) return@LaunchedEffect
         app.pendingLinkCode.value = null
-        Toast.makeText(context, "This phone is already signed in to Kaç Kaldı", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, S.alreadySignedIn, Toast.LENGTH_LONG).show()
     }
     when (signedIn) {
         null -> Box(Modifier.fillMaxSize().background(Kit.colors.background))

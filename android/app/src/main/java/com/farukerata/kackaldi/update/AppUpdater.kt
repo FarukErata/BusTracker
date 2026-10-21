@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import com.farukerata.kackaldi.BuildConfig
+import com.farukerata.kackaldi.i18n.S
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -115,7 +116,7 @@ class AppUpdater(private val context: Context) {
                 _state.value = UpdateState.Installing(update)
                 withContext(Dispatchers.IO) { install(apk) }
             } catch (e: Exception) {
-                _state.value = UpdateState.Failed(update, "Couldn’t download the update. Check your connection.")
+                _state.value = UpdateState.Failed(update, S.downloadFailed)
             }
         }
     }
@@ -123,7 +124,7 @@ class AppUpdater(private val context: Context) {
     internal fun onInstallFinished(status: Int, message: String?) {
         val update = _state.value.update ?: return
         if (status != PackageInstaller.STATUS_SUCCESS) {
-            _state.value = UpdateState.Failed(update, message?.takeIf { it.isNotBlank() } ?: "The update wasn’t installed.")
+            _state.value = UpdateState.Failed(update, message?.takeIf { it.isNotBlank() } ?: S.notInstalled)
         }
     }
 

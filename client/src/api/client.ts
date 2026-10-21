@@ -1,3 +1,4 @@
+import { strings } from '@/lib/i18n'
 const KEY_STORAGE = 'bt-device-key'
 export const ACCESS_LOST_EVENT = 'bt-access-lost'
 const INVITE_STORAGE = 'bt-invite'
@@ -50,11 +51,11 @@ export async function registerWithInvite(invite: string) {
   write(INVITE_STORAGE, invite.trim())
 }
 
-const deviceName = () => (navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser')
+const deviceName = () => (navigator.userAgent.includes('Mobile') ? strings().common.phoneBrowser : strings().common.browser)
 
 function registrationFailed(status: number, detail: string | undefined): ApiError {
   if (status === 403) window.dispatchEvent(new Event(ACCESS_LOST_EVENT))
-  return new ApiError(status, detail ?? 'You need an invite code to use this app.')
+  return new ApiError(status, detail ?? strings().common.inviteNeeded)
 }
 
 async function register(invite = read(INVITE_STORAGE), linkCode: string | null = null) {
@@ -83,7 +84,7 @@ function ensureDevice(): Promise<void> {
 async function parse<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T
   const body = await response.json().catch(() => null)
-  if (!response.ok) throw new ApiError(response.status, body?.detail ?? `Request failed (${response.status})`)
+  if (!response.ok) throw new ApiError(response.status, body?.detail ?? strings().common.requestFailed(response.status))
   return body as T
 }
 

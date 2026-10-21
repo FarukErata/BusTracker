@@ -54,6 +54,7 @@ import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineSummary
 import com.farukerata.kackaldi.data.Recent
 import com.farukerata.kackaldi.data.StopSearchResult
+import com.farukerata.kackaldi.i18n.S
 import com.farukerata.kackaldi.update.AppUpdater
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -133,16 +134,17 @@ fun HomeScreen(
     ) {
         Header(
             actions = {
-                GhostIcon(if (alertRunning) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsNone, "Alerts", onAlerts)
-                GhostIcon(Icons.Outlined.PersonOutline, "Your devices", onDevices)
-                GhostIcon(if (dark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, if (dark) "Light theme" else "Dark theme", onToggleTheme)
+                LanguageMenu()
+                GhostIcon(if (alertRunning) Icons.Outlined.NotificationsActive else Icons.Outlined.NotificationsNone, S.alerts, onAlerts)
+                GhostIcon(Icons.Outlined.PersonOutline, S.devices, onDevices)
+                GhostIcon(if (dark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, if (dark) S.lightTheme else S.darkTheme, onToggleTheme)
             },
         ) { HeaderTitle("Kaç Kaldı") }
         UpdateBanner(updater)
         SearchField(
             value = query,
             onChange = { viewModel.query.value = it },
-            placeholder = "Stop or line, like Fabrikalar or 500T",
+            placeholder = S.searchPlaceholder,
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
             onFocusChange = { searchFocused = it },
         )
@@ -157,7 +159,7 @@ fun HomeScreen(
                 query.isNotBlank() && current != null -> resultsSection(current, onStop, onLine)
                 else -> {
                     if (query.isBlank() && alerts.isNotEmpty()) {
-                        item { SectionTitle("Your alerts") }
+                        item { SectionTitle(S.yourAlerts) }
                         items(alerts, key = { "alert-${it.id}" }) { alert -> AlertRow(alert, onStop, onAlertEnabled, onAlertRemove) }
                     }
                     favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine)
@@ -173,8 +175,8 @@ private fun LazyListScope.recentsSection(
 ) {
     item {
         Row(verticalAlignment = Alignment.Bottom) {
-            Box(Modifier.weight(1f)) { SectionTitle("Recent") }
-            KitButton("Clear", onClear, Modifier.padding(end = 8.dp), kind = ButtonKind.Ghost)
+            Box(Modifier.weight(1f)) { SectionTitle(S.recent) }
+            KitButton(S.clear, onClear, Modifier.padding(end = 8.dp), kind = ButtonKind.Ghost)
         }
     }
     items(recents, key = { "recent-${it.kind}-${it.code}-${it.direction}" }) { recent ->
@@ -200,12 +202,12 @@ private fun LazyListScope.favoritesSection(
         is Load.Ready -> {
             val (lines, stops) = favorites.value
             if (lines.isEmpty() && stops.isEmpty()) {
-                item { EmptyState("Save the stops and lines you use", "Search above, open a stop or a line, and tap the star.") }
+                item { EmptyState(S.emptyTitle, S.emptyText) }
                 return
             }
-            if (stops.isNotEmpty()) item { SectionTitle("Your stops") }
+            if (stops.isNotEmpty()) item { SectionTitle(S.yourStops) }
             items(stops, key = { "stop-${it.favorite.id}" }) { entry -> FavoriteStopRow(entry, onStop) }
-            if (lines.isNotEmpty()) item { SectionTitle("Your lines") }
+            if (lines.isNotEmpty()) item { SectionTitle(S.yourLines) }
             items(lines, key = { "line-${it.favorite.id}" }) { entry -> FavoriteLineRow(entry, onLine) }
         }
     }
@@ -214,14 +216,14 @@ private fun LazyListScope.favoritesSection(
 private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (String) -> Unit, onLine: (String, String?) -> Unit) {
     when (results) {
         Load.Loading -> item { RowsSkeleton(rows = 3) }
-        is Load.Failed -> item { EmptyState("Search isn’t available right now", results.message) }
+        is Load.Failed -> item { EmptyState(S.searchDown, results.message) }
         is Load.Ready -> {
             val (lines, stops) = results.value
             if (lines.isEmpty() && stops.isEmpty()) {
-                item { EmptyState("Nothing found", "Try part of a stop name or a line code.") }
+                item { EmptyState(S.nothingFound, S.nothingFoundText) }
                 return
             }
-            if (lines.isNotEmpty()) item { SectionTitle("Lines") }
+            if (lines.isNotEmpty()) item { SectionTitle(S.lines) }
             items(lines, key = { "line-${it.lineCode}" }) { line ->
                 val first = line.directions.firstOrNull()
                 ItemRow(
@@ -230,7 +232,7 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
                     trailing = { Chevron() },
                 ) { ItemTitle(first?.let { directionLabel(it.from, it.to) } ?: line.lineCode) }
             }
-            if (stops.isNotEmpty()) item { SectionTitle("Stops") }
+            if (stops.isNotEmpty()) item { SectionTitle(S.stops) }
             items(stops, key = { "stop-${it.stop.code}" }) { result ->
                 StopRow(result.stop.name, result.stop.district, result.stop.towards, result.lines) { onStop(result.stop.code) }
             }
@@ -252,7 +254,7 @@ private fun FavoriteLineRow(entry: FavoriteLineEntry, onLine: (String, String?) 
         onClick = { onLine(entry.favorite.lineCode, entry.favorite.direction) },
         leading = { LineBadge(entry.favorite.lineCode) },
         trailing = { Chevron() },
-    ) { ItemTitle(entry.favorite.label ?: direction?.let(::titleCase) ?: "Both directions") }
+    ) { ItemTitle(entry.favorite.label ?: direction?.let(::titleCase) ?: S.bothDirections) }
 }
 
 @Composable

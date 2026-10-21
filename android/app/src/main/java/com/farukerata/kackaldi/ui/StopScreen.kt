@@ -3,10 +3,9 @@ package com.farukerata.kackaldi.ui
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import androidx.core.net.toUri
-import android.provider.Settings
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,28 +57,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewModelScope
 import com.farukerata.kackaldi.KacKaldiApplication
+import com.farukerata.kackaldi.data.AlertLine
+import com.farukerata.kackaldi.data.BusAlert
 import com.farukerata.kackaldi.data.BusPathResponse
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineStatusView
 import com.farukerata.kackaldi.data.PathStop
+import com.farukerata.kackaldi.data.Recent
+import com.farukerata.kackaldi.data.SeenBus
 import com.farukerata.kackaldi.data.StopArrivalView
 import com.farukerata.kackaldi.data.StopArrivalsView
 import com.farukerata.kackaldi.data.StopFilters
-import com.farukerata.kackaldi.data.AlertLine
-import com.farukerata.kackaldi.data.BusAlert
-import com.farukerata.kackaldi.data.Recent
-import com.farukerata.kackaldi.data.SeenBus
 import com.farukerata.kackaldi.data.TriggerKind
 import com.farukerata.kackaldi.data.Watch
 import com.farukerata.kackaldi.data.WatchTrigger
+import com.farukerata.kackaldi.i18n.S
 import com.farukerata.kackaldi.watch.AlertScheduler
 import com.farukerata.kackaldi.watch.WatchService
 import java.util.UUID
@@ -208,7 +209,7 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, St
         pending = null
         val name = viewModel.arrivals.valueOrNull?.stop?.name.orEmpty()
         if (granted && draft != null) apply(draft, name)
-        else Toast.makeText(context, "Allow notifications to get bus alerts", Toast.LENGTH_LONG).show()
+        else Toast.makeText(context, S.allowNotifications, Toast.LENGTH_LONG).show()
     }
 
     Column(
@@ -223,7 +224,7 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, St
                 val saved = viewModel.favoriteId != null
                 GhostIcon(
                     if (saved) Icons.Rounded.Star else Icons.Outlined.StarOutline,
-                    if (saved) "Remove from your stops" else "Save to your stops",
+                    if (saved) S.unsaveStop else S.saveStop,
                     viewModel::toggleFavorite,
                     tint = if (saved) colors.star else colors.foreground,
                 )
@@ -280,14 +281,13 @@ private suspend fun applyDraft(context: Context, app: KacKaldiApplication, stopC
     }
     val alert = BusAlert(UUID.randomUUID().toString(), stopCode, stopName, draft.lines, draft.trigger, clockText(readyAt), draft.days)
     AlertScheduler.save(context, app.alerts, alert)
-    val repeat = if (alert.repeats) "every ${dayList(alert.days)}" else "once"
-    Toast.makeText(context, "Alert saved · ready at ${alert.readyAt}, $repeat", Toast.LENGTH_LONG).show()
+    Toast.makeText(context, S.alertSaved(alert.readyAt, S.repeat(alert.days)), Toast.LENGTH_LONG).show()
     if (!AlertScheduler.canSchedule(context)) askForAlarms(context)
 }
 
 private fun askForAlarms(context: Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-    Toast.makeText(context, "Allow alarms so your alert starts on time", Toast.LENGTH_LONG).show()
+    Toast.makeText(context, S.allowAlarms, Toast.LENGTH_LONG).show()
     context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, "package:${context.packageName}".toUri()))
 }
 
@@ -360,7 +360,7 @@ private fun ArrivalsList(
             else NewAlertButton { onAlert(alertLinesFor(lines, arrivals, filtered = visible.size < allLines.size)) }
         }
         if (arrivals.isEmpty()) item {
-            EmptyState("No bus on the way", "Lines here: ${visible.joinToString(", ")}.")
+            EmptyState(S.noBus, S.linesHere(visible.joinToString(", ")))
         }
         items(arrivals, key = { "${it.line}-${it.bus.doorNo}" }) { arrival ->
             val fetchedAt = lines.firstOrNull { it.line == arrival.line && it.direction == arrival.direction }?.data?.fetchedAt
@@ -386,7 +386,7 @@ private fun LineFilter(lines: List<String>, picked: Set<String>, onToggle: (Stri
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        item { Chip("All", picked.isEmpty(), onAll) }
+        item { Chip(S.all, picked.isEmpty(), onAll) }
         items(ordered, key = { it }) { line -> Chip(line, line in picked) { onToggle(line) } }
     }
 }
@@ -399,9 +399,9 @@ private fun ArrivalRow(
     val bus = arrival.bus
     val endsHere = arrival.directionName.equals(stopName, ignoreCase = true)
     val detail = buildList {
-        if (endsHere) add("Ends here")
-        if (bothWays && !endsHere) add("To ${titleCase(arrival.directionName)}")
-        if (!bus.notDeparted) bus.lastStopName?.let { add("now at ${titleCase(it)}") }
+        if (endsHere) add(S.endsHere)
+        if (bothWays && !endsHere) add(S.towards(titleCase(arrival.directionName)))
+        if (!bus.notDeparted) bus.lastStopName?.let { add(S.nowAt(titleCase(it))) }
         if (age != ReportAge.Fresh) add(seenAgo(ageSeconds))
     }.joinToString(" · ").replaceFirstChar { it.uppercase() }
     ItemRow(
@@ -445,9 +445,9 @@ private fun TrackingDetails(arrival: StopArrivalView, remaining: List<PathStop>?
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            KitButton("Set alert", onNotify, kind = ButtonKind.Outline, icon = Icons.Outlined.NotificationsNone)
+            KitButton(S.setAlert, onNotify, kind = ButtonKind.Outline, icon = Icons.Outlined.NotificationsNone)
             Text(
-                "See all of line ${arrival.line} →",
+                S.seeLine(arrival.line),
                 Modifier.pressable(onSeeLine),
                 style = Kit.xs.copy(fontWeight = FontWeight.Medium),
                 color = colors.pinFill,
@@ -465,7 +465,7 @@ private fun alertLinesFor(lines: List<LineStatusView>, arrivals: List<StopArriva
 @Composable
 private fun NewAlertButton(onClick: () -> Unit) {
     KitButton(
-        "Set an alert",
+        S.setAnAlert,
         onClick,
         Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp).fillMaxWidth(),
         kind = ButtonKind.Outline,
@@ -483,24 +483,23 @@ private fun WatchBar(watch: Watch, onStop: () -> Unit) {
     ) {
         Icon(Icons.Outlined.NotificationsActive, null, Modifier.size(18.dp), tint = colors.foreground)
         Column(Modifier.weight(1f)) {
-            Text("Watching ${watch.lineNames}", style = Kit.sm.copy(fontWeight = FontWeight.Medium), color = colors.foreground)
-            Text("Alert ${triggerSummary(watch.trigger)}", style = Kit.xs, color = colors.mutedForeground)
+            Text(S.watching(watch.lineNames), style = Kit.sm.copy(fontWeight = FontWeight.Medium), color = colors.foreground)
+            Text(S.alertWhen(triggerSummary(watch.trigger)), style = Kit.xs, color = colors.mutedForeground)
         }
-        KitButton("Stop", onStop, kind = ButtonKind.Ghost)
+        KitButton(S.stop, onStop, kind = ButtonKind.Ghost)
     }
 }
 
 private fun stopsSummary(remaining: List<PathStop>): List<String> {
     val names = remaining.map { titleCase(it.name) }
     if (names.size <= 4) return names
-    return listOf(names[0], names[1], "${names.size - 3} more", names.last())
+    return listOf(names[0], names[1], S.moreStops(names.size - 3), names.last())
 }
 
 private fun waitingText(lines: List<LineStatusView>): String {
     val names = lines.map { it.line }.distinct().joinToString(", ")
-    val soonest = lines.mapNotNull { it.retryInSeconds }.minOrNull() ?: return "Waiting for İBB: $names"
-    val next = if (soonest < 60) "in about $soonest s" else "in about ${(soonest + 59) / 60} min"
-    return "Waiting for İBB: $names · next try $next"
+    val soonest = lines.mapNotNull { it.retryInSeconds }.minOrNull() ?: return S.waiting(names)
+    return "${S.waiting(names)} · ${S.nextTry(soonest)}"
 }
 
 private fun oldestFetch(lines: List<LineStatusView>): String? = lines.mapNotNull { it.data?.fetchedAt }.minOrNull()

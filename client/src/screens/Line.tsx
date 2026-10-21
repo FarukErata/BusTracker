@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { directionLabel, distance, reportAge, secondsSince, seenAgo, stopsAway, titleCase } from '@/lib/format'
+import { strings } from '@/lib/i18n'
 import { useIsWide } from '@/lib/media'
 import { rememberRecent } from '@/lib/recents'
 import { cn } from '@/lib/utils'
@@ -117,7 +118,7 @@ export function Line() {
       <div className="absolute inset-x-2 top-2 z-10 mx-auto max-w-md rounded-xl border bg-background/95 p-1 backdrop-blur-sm">{header}</div>
       <Drawer open modal={false} snapPoints={SNAP_POINTS} snapPoint={snap} onSnapPointChange={setSnap} showSwipeHandle onOpenChange={() => {}}>
         <DrawerContent className="mx-auto max-w-md">
-          <DrawerTitle className="sr-only">Buses on line {code}</DrawerTitle>
+          <DrawerTitle className="sr-only">{strings().line.busesOn(code)}</DrawerTitle>
           <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-6">{panel}</div>
         </DrawerContent>
       </Drawer>
@@ -164,9 +165,9 @@ function LineHeader({ code, direction, canToggle, onToggle }: { code: string; di
         onClick={onToggle}
         disabled={!canToggle}
         className="pressable flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted"
-        aria-label="Switch direction"
+        aria-label={strings().line.switchDirection}
       >
-        <span className="truncate">{first && last ? `${titleCase(first.name)} → ${titleCase(last.name)}` : 'Loading…'}</span>
+        <span className="truncate">{first && last ? `${titleCase(first.name)} → ${titleCase(last.name)}` : strings().common.loading}</span>
         {canToggle && <ArrowLeftRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
       </button>
       <FavoriteLineButton code={code} direction={direction?.direction ?? null} />
@@ -185,7 +186,7 @@ function FavoriteLineButton({ code, direction }: { code: string; direction: stri
     else add.mutate({ line: code, direction })
   }
   return (
-    <Button variant="ghost" size="icon" onClick={toggle} aria-pressed={!!saved} aria-label={saved ? 'Remove from your lines' : 'Save this direction to your lines'}>
+    <Button variant="ghost" size="icon" onClick={toggle} aria-pressed={!!saved} aria-label={saved ? strings().line.unsave : strings().line.save}>
       <Star className={cn(saved && 'fill-current text-amber-500 dark:text-amber-400')} />
     </Button>
   )
@@ -203,10 +204,10 @@ function BusPositions({ buses, direction, selectedBus, onSelect, onPick }: {
   return (
     <>
       <p className="mx-3 flex items-center gap-1.5 rounded-lg border border-dashed px-2.5 py-1.5 text-xs text-muted-foreground">
-        <MapPin className="size-3.5" aria-hidden /> Tap a stop to see arrival times
+        <MapPin className="size-3.5" aria-hidden /> {strings().line.tapStop}
       </p>
       {ordered.length === 0 ? (
-        <p className="px-3 py-4 text-center text-sm text-muted-foreground">No bus is running in this direction right now.</p>
+        <p className="px-3 py-4 text-center text-sm text-muted-foreground">{strings().line.noBus}</p>
       ) : (
         <ItemGroup>
           {ordered.map(bus => (
@@ -233,16 +234,20 @@ function describePosition(bus: TrackedBusView, direction: LineDirection | undefi
 }
 
 function busPlace(bus: TrackedBusView, direction: LineDirection | undefined) {
-  if (bus.status === 'at-terminal') return `Waiting at ${stopName(direction, direction?.stops[0]?.seq ?? null) ?? 'the first stop'}`
+  const t = strings().line
+  if (bus.status === 'at-terminal') {
+    const first = stopName(direction, direction?.stops[0]?.seq ?? null)
+    return first ? t.waitingAt(first) : t.waitingAtFirst
+  }
   const after = stopName(direction, bus.lastStopSeq)
   const next = stopName(direction, bus.nextStopSeq)
-  return [after && `after ${after}`, next && `next ${next}`].filter(Boolean).join(' · ')
+  return [after && t.after(after), next && t.next(next)].filter(Boolean).join(' · ')
 }
 
 function StopPicker({ stops, onPick }: { stops: LineStop[]; onPick: (stop: string) => void }) {
   return (
     <>
-      <h2 className="px-3 pt-3 pb-1 text-xs font-medium text-muted-foreground">Stops</h2>
+      <h2 className="px-3 pt-3 pb-1 text-xs font-medium text-muted-foreground">{strings().line.stops}</h2>
       <ItemGroup>
         {stops.map(stop => (
           <Item key={stop.code} size="xs" className="pressable cursor-pointer" onClick={() => onPick(stop.code)}>
@@ -264,27 +269,27 @@ function PinnedArrivals({ stop, approaching, passedCount, loading, receivedAt, o
     <>
       <div className="mx-3 flex items-center gap-1.5 rounded-lg bg-primary/10 py-1 pr-1 pl-2.5 text-sm text-primary">
         <MapPin className="size-3.5 shrink-0" aria-hidden />
-        <span className="min-w-0 flex-1 truncate">To {stop ? titleCase(stop.name) : 'this stop'}</span>
-        <Button variant="ghost" size="icon" onClick={onClear} aria-label="Clear stop"><X /></Button>
+        <span className="min-w-0 flex-1 truncate">{stop ? strings().line.to(titleCase(stop.name)) : strings().line.toThisStop}</span>
+        <Button variant="ghost" size="icon" onClick={onClear} aria-label={strings().line.clearStop}><X /></Button>
       </div>
       {loading && <RowsSkeleton rows={3} />}
-      {approaching && approaching.length === 0 && <p className="px-3 py-4 text-center text-sm text-muted-foreground">No bus on the way to this stop.</p>}
+      {approaching && approaching.length === 0 && <p className="px-3 py-4 text-center text-sm text-muted-foreground">{strings().line.noBusToStop}</p>}
       {approaching && approaching.length > 0 && (
         <ItemGroup>
           {approaching.map(a => (
             <Item key={a.doorNo} size="sm" className={cn('pressable cursor-pointer', a.doorNo === selectedBus && 'bg-muted')} onClick={() => onSelect(a.doorNo)}>
               <ItemContent>
                 <ItemTitle className="tabular-nums">{a.doorNo}{a.heavyTraffic && <TrafficBadge />}</ItemTitle>
-                <ItemDescription>{a.notDeparted ? 'At the first stop' : [stopsAway(a.stopsAway), distance(a.distanceMeters), a.lastStopName && `now at ${titleCase(a.lastStopName)}`].filter(Boolean).join(' · ')}</ItemDescription>
+                <ItemDescription>{a.notDeparted ? strings().bus.atFirstStop : [stopsAway(a.stopsAway), distance(a.distanceMeters), a.lastStopName && strings().bus.nowAt(titleCase(a.lastStopName))].filter(Boolean).join(' · ')}</ItemDescription>
               </ItemContent>
               <ItemActions>
-                {a.etaSeconds != null ? <Minutes etaSeconds={a.etaSeconds} receivedAt={receivedAt} /> : <span className="text-xs text-muted-foreground">Not left</span>}
+                {a.etaSeconds != null ? <Minutes etaSeconds={a.etaSeconds} receivedAt={receivedAt} /> : <span className="text-xs text-muted-foreground">{strings().bus.notLeft}</span>}
               </ItemActions>
             </Item>
           ))}
         </ItemGroup>
       )}
-      {passedCount > 0 && <p className="px-3 text-xs text-muted-foreground">{passedCount} recently passed this stop</p>}
+      {passedCount > 0 && <p className="px-3 text-xs text-muted-foreground">{strings().line.passed(passedCount)}</p>}
     </>
   )
 }

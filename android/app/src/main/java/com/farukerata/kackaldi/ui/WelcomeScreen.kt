@@ -39,38 +39,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import com.farukerata.kackaldi.data.ApiException
 import com.farukerata.kackaldi.data.KacKaldiApi
+import com.farukerata.kackaldi.i18n.S
 import kotlinx.coroutines.launch
 
-private enum class JoinMode(
-    val lead: String,
-    val label: String,
-    val action: String,
-    val busy: String,
-    val wrong: String,
-    val other: String,
-    val wrongStatus: Int,
-    val placeholder: String,
-) {
-    Invite(
-        lead = "This server is private. Enter the invite code you were given.",
-        label = "Invite code",
-        action = "Join",
-        busy = "Joining…",
-        wrong = "That code doesn’t work. Check it and try again.",
-        other = "Already using Kaç Kaldı on another device? Enter a link code",
-        wrongStatus = 403,
-        placeholder = "Invite code",
-    ),
-    Link(
-        lead = "On your other device, open Devices and tap Get a link code. Enter the code here.",
-        label = "Link code",
-        action = "Link",
-        busy = "Linking…",
-        wrong = "That code doesn’t work or has expired. Get a new one on the other device.",
-        other = "I have an invite code instead",
-        wrongStatus = 400,
-        placeholder = "ABC-123",
-    );
+private enum class JoinMode(val wrongStatus: Int) {
+    Invite(403),
+    Link(400);
+
+    val lead: String get() = if (this == Invite) S.inviteLead else S.linkLead
+    val label: String get() = if (this == Invite) S.inviteCode else S.linkCode
+    val action: String get() = if (this == Invite) S.join else S.link
+    val busy: String get() = if (this == Invite) S.joining else S.linking
+    val wrong: String get() = if (this == Invite) S.inviteWrong else S.linkWrong
+    val other: String get() = if (this == Invite) S.haveLink else S.haveInvite
+    val placeholder: String get() = if (this == Invite) S.inviteCode else "ABC-123"
 
     fun format(value: String) = if (this == Link) linkCodeChars(value) else value
 
@@ -98,7 +80,7 @@ fun WelcomeScreen(api: KacKaldiApi, linkFromWeb: String?, onLinkUsed: () -> Unit
             } catch (e: ApiException) {
                 error = if (e.status == mode.wrongStatus) mode.wrong else e.message
             } catch (e: Exception) {
-                error = "Can’t reach the server. Check your connection."
+                error = S.noServer
             } finally {
                 pending = false
             }
@@ -193,7 +175,7 @@ fun WelcomeScreen(api: KacKaldiApi, linkFromWeb: String?, onLinkUsed: () -> Unit
                 error = null
             })
             Text(
-                "Scanned a sign-in QR code? Go back to the browser and tap Open Kaç Kaldı.",
+                S.scannedQr,
                 Modifier.widthIn(max = 320.dp),
                 style = Kit.xs,
                 color = colors.mutedForeground,

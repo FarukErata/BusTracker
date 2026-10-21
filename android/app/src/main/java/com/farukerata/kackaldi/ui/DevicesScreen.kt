@@ -50,6 +50,7 @@ import com.farukerata.kackaldi.data.DeviceView
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LinkCodeResponse
 import com.farukerata.kackaldi.data.MeResponse
+import com.farukerata.kackaldi.i18n.S
 import java.time.Instant
 import java.time.OffsetDateTime
 import kotlinx.coroutines.delay
@@ -95,7 +96,7 @@ class DevicesViewModel(private val api: KacKaldiApi) : ViewModel() {
             } catch (e: ApiException) {
                 message = e.message
             } catch (e: Exception) {
-                message = "Can’t reach the server. Check your connection."
+                message = S.noServer
             } finally {
                 removing = false
                 confirming = null
@@ -113,12 +114,12 @@ fun DevicesScreen(viewModel: DevicesViewModel, onBack: () -> Unit) {
             .background(Kit.colors.background)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
     ) {
-        Header(onBack = onBack) { Box(Modifier.padding(horizontal = 4.dp)) { HeaderTitle("Devices") } }
+        Header(onBack = onBack) { Box(Modifier.padding(horizontal = 4.dp)) { HeaderTitle(S.devicesTitle) } }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
-            item { SectionTitle("Add a device") }
+            item { SectionTitle(S.addDevice) }
             item { LinkCodeCard(viewModel.linkCode, viewModel.creating, viewModel::createLinkCode) }
             viewModel.message?.let { item { Text(it, Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = Kit.sm, color = Kit.colors.destructive) } }
-            item { SectionTitle("Your devices") }
+            item { SectionTitle(S.devices) }
             when (val state = viewModel.me) {
                 Load.Loading -> item { RowsSkeleton(rows = 2) }
                 is Load.Failed -> item { ErrorState(state.message, viewModel::reload) }
@@ -139,9 +140,9 @@ private fun LinkCodeCard(code: LinkCodeResponse?, creating: Boolean, onCreate: (
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             MonoCode(linkCodeInput(code.code))
-            Text("Expires in ${countdown(remaining)} · works once", style = Kit.sm, color = colors.mutedForeground)
+            Text(S.expiresIn(countdown(remaining)), style = Kit.sm, color = colors.mutedForeground)
             Text(
-                "On the other device, open Kaç Kaldı and choose Enter a link code.",
+                S.otherDeviceHint,
                 style = Kit.sm,
                 color = colors.mutedForeground,
                 textAlign = TextAlign.Center,
@@ -152,12 +153,11 @@ private fun LinkCodeCard(code: LinkCodeResponse?, creating: Boolean, onCreate: (
     }
     Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            if (code != null) "That code has expired. Get a new one when the other device is ready."
-            else "Get a short code and enter it on your other device. It will share your stops and lines.",
+            if (code != null) S.codeExpiredText else S.getCodeText,
             style = Kit.sm,
             color = colors.mutedForeground,
         )
-        KitButton(if (creating) "Getting a code…" else if (code != null) "Get a new code" else "Get a link code", onCreate, enabled = !creating)
+        KitButton(if (creating) S.gettingCode else if (code != null) S.getNewCode else S.getCode, onCreate, enabled = !creating)
     }
 }
 
@@ -171,7 +171,7 @@ private fun CopyButton(text: String) {
         copied = false
     }
     KitButton(
-        if (copied) "Copied" else "Copy",
+        if (copied) S.copied else S.copy,
         {
             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Link code", text))
             copied = true
@@ -201,22 +201,22 @@ private fun DeviceRow(device: DeviceView, viewModel: DevicesViewModel) {
             ItemTitle(device.name, Modifier.weight(1f, fill = false))
             if (device.current) {
                 Box(Modifier.height(18.dp).border(1.dp, colors.border, RowShape).background(colors.secondary, RowShape).padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
-                    Text("This device", style = Kit.xs.copy(fontWeight = FontWeight.Medium), color = colors.foreground)
+                    Text(S.thisDevice, style = Kit.xs.copy(fontWeight = FontWeight.Medium), color = colors.foreground)
                 }
             }
         }
-        ItemDescription(if (device.current) "In use now" else "Last used ${ago(secondsSince(device.lastSeenAt))}")
+        ItemDescription(if (device.current) S.inUse else S.lastUsed(ago(secondsSince(device.lastSeenAt))))
     }
 }
 
 @Composable
 private fun RemoveControls(device: DeviceView, viewModel: DevicesViewModel) {
     if (viewModel.confirming != device.id) {
-        KitButton("Remove", { viewModel.confirming = device.id }, kind = ButtonKind.Ghost)
+        KitButton(S.remove, { viewModel.confirming = device.id }, kind = ButtonKind.Ghost)
         return
     }
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        KitButton("Cancel", { viewModel.confirming = null }, kind = ButtonKind.Ghost)
-        KitButton("Remove", { viewModel.remove(device) }, kind = ButtonKind.Destructive, enabled = !viewModel.removing)
+        KitButton(S.cancel, { viewModel.confirming = null }, kind = ButtonKind.Ghost)
+        KitButton(S.remove, { viewModel.remove(device) }, kind = ButtonKind.Destructive, enabled = !viewModel.removing)
     }
 }

@@ -8,6 +8,7 @@ import { BackButton } from '@/components/bits'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { APK_URL, isAndroid, joinUrl, openAppUrl } from '@/lib/androidApp'
 import { countdown } from '@/lib/format'
+import { strings, useLang } from '@/lib/i18n'
 import { useSecondsUntil } from '@/lib/useSecondsUntil'
 import { cn } from '@/lib/utils'
 
@@ -24,7 +25,7 @@ function useLatestRelease() {
     queryFn: async (): Promise<Release | null> => {
       const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
       if (response.status === 404) return null
-      if (!response.ok) throw new Error(`GitHub answered ${response.status}`)
+      if (!response.ok) throw new Error(strings().android.githubFailed(response.status))
       const body = await response.json()
       return { tagName: body.tag_name, publishedAt: body.published_at }
     },
@@ -42,7 +43,7 @@ export function AndroidApp() {
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
       <header className="flex items-center gap-2 px-3 pt-3">
         <BackButton />
-        <h1 className="flex-1 text-lg font-semibold tracking-tight">Android app</h1>
+        <h1 className="flex-1 text-lg font-semibold tracking-tight">{strings().android.title}</h1>
       </header>
       <main className="flex flex-col items-center gap-5 px-6 pt-6 pb-10 text-center">
         <ReleaseLine release={release.data} pending={release.isPending} failed={release.isError} />
@@ -53,13 +54,15 @@ export function AndroidApp() {
 }
 
 function ReleaseLine({ release, pending, failed }: { release: Release | null | undefined; pending: boolean; failed: boolean }) {
-  if (pending) return <p className="h-5 text-sm text-muted-foreground">Checking the latest version…</p>
-  if (failed) return <p className="h-5 text-sm text-muted-foreground">Latest version</p>
-  if (!release) return <p className="h-5 text-sm text-muted-foreground">No release published yet</p>
+  const lang = useLang()
+  const t = strings().android
+  if (pending) return <p className="h-5 text-sm text-muted-foreground">{t.checking}</p>
+  if (failed) return <p className="h-5 text-sm text-muted-foreground">{t.latest}</p>
+  if (!release) return <p className="h-5 text-sm text-muted-foreground">{t.noRelease}</p>
 
   const version = release.tagName.replace(/^android-v/, '')
-  const date = new Date(release.publishedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-  return <p className="h-5 text-sm text-muted-foreground">Version {version} · {date}</p>
+  const date = new Date(release.publishedAt).toLocaleDateString(lang, { day: 'numeric', month: 'short', year: 'numeric' })
+  return <p className="h-5 text-sm text-muted-foreground">{t.version(version, date)}</p>
 }
 
 function OnPhone({ signedIn }: { signedIn: boolean }) {
@@ -71,16 +74,16 @@ function OnPhone({ signedIn }: { signedIn: boolean }) {
     <>
       <DownloadButton />
       <p className="max-w-xs text-sm text-muted-foreground">
-        After the download, open the file. Android asks once to allow installs from your browser; allow it, then tap Install.
+        {strings().android.afterDownload}
       </p>
       {signedIn && (
         <div className="flex flex-col items-center gap-2 pt-2">
           <Button variant="outline" size="lg" className="pressable gap-2" disabled={create.isPending} onClick={openSignedIn}>
             <Smartphone />
-            Open the app signed in
+            {strings().android.openSignedIn}
           </Button>
           <p className="max-w-xs text-sm text-muted-foreground">
-            Once it is installed, this opens Kaç Kaldı already linked to your account, with your saved stops.
+            {strings().android.openSignedInText}
           </p>
           {create.isError && <p className="text-sm text-destructive">{create.error.message}</p>}
         </div>
@@ -92,9 +95,9 @@ function OnPhone({ signedIn }: { signedIn: boolean }) {
 function PlainQr() {
   return (
     <>
-      <QrCode value={APK_URL} label="QR code for the Android app download" />
+      <QrCode value={APK_URL} label={strings().android.qrDownload} />
       <p className="max-w-xs text-sm text-muted-foreground">
-        Scan with your Android phone’s camera to download the app. Updates install over the old version.
+        {strings().android.scanDownload}
       </p>
       <ApkLink />
     </>
@@ -118,21 +121,21 @@ function SignInQr() {
   if (remaining <= 0)
     return (
       <div className="flex flex-col items-center gap-3">
-        <p className="text-sm text-muted-foreground">This QR code has expired.</p>
+        <p className="text-sm text-muted-foreground">{strings().android.qrExpired}</p>
         <Button className="pressable gap-2" onClick={() => create.mutate()}>
           <RefreshCw />
-          New QR code
+          {strings().android.newQr}
         </Button>
       </div>
     )
 
   return (
     <>
-      <QrCode value={joinUrl(code.code, code.expiresAt)} label="QR code that installs the app and signs it in to your account" />
+      <QrCode value={joinUrl(code.code, code.expiresAt)} label={strings().android.qrSignIn} />
       <p className="max-w-xs text-sm text-muted-foreground">
-        Scan with your Android phone’s camera. It downloads the app and signs it in to your account, so your saved stops come along.
+        {strings().android.scanSignIn}
       </p>
-      <p className="text-sm text-muted-foreground tabular-nums">Works once, for {countdown(remaining)}</p>
+      <p className="text-sm text-muted-foreground tabular-nums">{strings().join.worksOnce(countdown(remaining))}</p>
       <ApkLink />
     </>
   )
@@ -141,7 +144,7 @@ function SignInQr() {
 function ApkLink() {
   return (
     <a href={APK_URL} className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground">
-      Or download the APK here
+      {strings().android.apkLink}
     </a>
   )
 }
@@ -150,7 +153,7 @@ function DownloadButton() {
   return (
     <a href={APK_URL} className={cn(buttonVariants({ size: 'lg' }), 'pressable gap-2')}>
       <Download />
-      Download Kaç Kaldı
+      {strings().join.download}
     </a>
   )
 }

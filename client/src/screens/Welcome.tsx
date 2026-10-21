@@ -5,6 +5,7 @@ import { ErrorState } from '@/components/bits'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { isCompleteLinkCode, linkCodeInput } from '@/lib/format'
+import { strings } from '@/lib/i18n'
 
 type Access = 'checking' | 'ready' | 'invite' | 'error'
 
@@ -59,15 +60,15 @@ interface JoinModeSettings {
   isWrong: (error: unknown) => boolean
 }
 
-const JOIN_MODES: Record<JoinMode, JoinModeSettings> = {
+const joinModes = (t = strings()): Record<JoinMode, JoinModeSettings> => ({
   invite: {
-    lead: 'This server is private. Enter the invite code you were given.',
-    placeholder: 'Invite code',
-    label: 'Invite code',
-    action: 'Join',
-    busy: 'Joining…',
-    wrong: 'That code doesn’t work. Check it and try again.',
-    other: 'Already using Kaç Kaldı on another device? Enter a link code',
+    lead: t.welcome.inviteLead,
+    placeholder: t.welcome.inviteCode,
+    label: t.welcome.inviteCode,
+    action: t.welcome.join,
+    busy: t.welcome.joining,
+    wrong: t.welcome.inviteWrong,
+    other: t.welcome.haveLink,
     next: 'link',
     inputClass: 'h-10 text-center',
     autoCapitalize: 'off',
@@ -78,13 +79,13 @@ const JOIN_MODES: Record<JoinMode, JoinModeSettings> = {
     isWrong: isInviteRequired,
   },
   link: {
-    lead: 'On your other device, open Devices and tap Get a link code. Enter the code here.',
+    lead: t.welcome.linkLead,
     placeholder: 'ABC-123',
-    label: 'Link code',
-    action: 'Link',
-    busy: 'Linking…',
-    wrong: 'That code doesn’t work or has expired. Get a new one on the other device.',
-    other: 'I have an invite code instead',
+    label: t.devices.linkCode,
+    action: t.welcome.link,
+    busy: t.devices.linking,
+    wrong: t.devices.codeWrong,
+    other: t.welcome.haveInvite,
     next: 'invite',
     inputClass: 'h-10 text-center font-mono tracking-[0.15em]',
     autoCapitalize: 'characters',
@@ -94,7 +95,7 @@ const JOIN_MODES: Record<JoinMode, JoinModeSettings> = {
     join: registerWithLinkCode,
     isWrong: isInvalidLinkCode,
   },
-}
+})
 
 function InviteScreen({ onJoined }: { onJoined: () => void }) {
   const [mode, setMode] = useState<JoinMode>('invite')
@@ -102,7 +103,7 @@ function InviteScreen({ onJoined }: { onJoined: () => void }) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const autoTried = useRef(false)
-  const settings = JOIN_MODES[mode]
+  const settings = joinModes()[mode]
 
   function switchMode() {
     setMode(settings.next)
@@ -171,7 +172,7 @@ function InviteScreen({ onJoined }: { onJoined: () => void }) {
           {settings.other}
         </button>
         <Link to="/android" className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
-          Get the Android app
+          {strings().welcome.androidApp}
         </Link>
       </div>
     </div>

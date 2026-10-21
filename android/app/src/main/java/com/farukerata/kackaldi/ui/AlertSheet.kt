@@ -47,13 +47,21 @@ import com.farukerata.kackaldi.data.LineStop
 import com.farukerata.kackaldi.data.SeenBus
 import com.farukerata.kackaldi.data.TriggerKind
 import com.farukerata.kackaldi.data.WatchTrigger
+import com.farukerata.kackaldi.i18n.S
 import java.time.LocalTime
 
-private enum class TriggerMode(val label: String) { Minutes("Minutes"), Stops("Stops"), AtStop("At a stop") }
+private enum class TriggerMode {
+    Minutes, Stops, AtStop;
+
+    val label: String get() = when (this) {
+        Minutes -> S.triggerMinutes
+        Stops -> S.triggerStops
+        AtStop -> S.triggerAtStop
+    }
+}
 
 private const val MAX_MINUTES = 120
 private const val MAX_STOPS = 60
-private val dayLetters = listOf("Mo", "Tu", "We", "Th", "Fr", "Sa", "Su")
 
 data class AlertDraft(val lines: List<AlertLine>, val trigger: WatchTrigger, val readyAt: LocalTime?, val days: Set<Int>)
 
@@ -92,23 +100,23 @@ fun AlertSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 16.dp).padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Set an alert", style = Kit.base.copy(fontWeight = FontWeight.SemiBold), color = colors.foreground)
+            Text(S.setAnAlert, style = Kit.base.copy(fontWeight = FontWeight.SemiBold), color = colors.foreground)
             LinesPicker(options, approaching, picked) { picked = it }
             ReadyPicker(readyAt, onNow = { readyAt = null; days = emptySet() }, onChoose = { choosingTime = true })
-            Section("Tell me when the bus is") {
+            Section(S.tellMeWhen) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     TriggerMode.entries.filter { it != TriggerMode.AtStop || single != null }.forEach { Chip(it.label, mode == it) { mode = it } }
                 }
                 when (mode) {
-                    TriggerMode.Minutes -> NumberField(minutesText, { minutesText = it }, "min before it reaches my stop")
-                    TriggerMode.Stops -> NumberField(stopsText, { stopsText = it }, "stops before my stop")
+                    TriggerMode.Minutes -> NumberField(minutesText, { minutesText = it }, S.minBefore)
+                    TriggerMode.Stops -> NumberField(stopsText, { stopsText = it }, S.stopsBefore)
                     TriggerMode.AtStop -> EarlierStopPicker(earlier, atStop) { atStop = it }
                 }
             }
             if (readyAt != null) RepeatPicker(days) { days = it }
             sheetHint(readyAt, chosen, approaching.filter { seen -> picked.any { it.line == seen.line } })?.let { Note(it) }
             KitButton(
-                if (readyAt == null) "Start" else "Save alert",
+                if (readyAt == null) S.start else S.saveAlert,
                 { chosen?.let { onSave(AlertDraft(picked, it, readyAt, days)) } },
                 Modifier.fillMaxWidth(),
                 enabled = chosen != null && chosen.value > 0,
@@ -132,7 +140,7 @@ private fun chosenTrigger(mode: TriggerMode, minutesText: String, stopsText: Str
 }
 
 private fun sheetHint(readyAt: LocalTime?, chosen: WatchTrigger?, approaching: List<SeenBus>): String? = when {
-    readyAt != null -> "It starts watching 15 min before you’re ready and tells you about the first bus you can catch."
+    readyAt != null -> S.startsEarly
     chosen != null -> insideText(chosen, approaching)
     else -> null
 }
@@ -144,13 +152,13 @@ private fun LinesPicker(options: List<AlertLine>, approaching: List<SeenBus>, pi
     val onTheWay = approaching.map { it.line }.toSet()
     val ordered = options.sortedByDescending { it.line in onTheWay }
     val visible = if (showAll) ordered else ordered.filter { it.line in onTheWay || it in picked }
-    Section("Lines") {
+    Section(S.lines) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             visible.forEach { option ->
                 val label = if ((sameLine[option.line]?.size ?: 0) > 1) "${option.line} → ${titleCase(option.directionName)}" else option.line
                 Chip(label, option in picked) { onPicked(toggled(picked, option)) }
             }
-            if (visible.size < ordered.size) Chip("+${ordered.size - visible.size} more", false) { showAll = true }
+            if (visible.size < ordered.size) Chip(S.moreLines(ordered.size - visible.size), false) { showAll = true }
         }
     }
 }
@@ -160,24 +168,24 @@ private fun toggled(picked: List<AlertLine>, option: AlertLine): List<AlertLine>
 
 @Composable
 private fun ReadyPicker(readyAt: LocalTime?, onNow: () -> Unit, onChoose: () -> Unit) {
-    Section("I’m ready") {
+    Section(S.imReady) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Chip("Now", readyAt == null, onNow)
-            Chip(readyAt?.let { "At ${clockText(it)}" } ?: "At a time", readyAt != null, onChoose)
+            Chip(S.now, readyAt == null, onNow)
+            Chip(readyAt?.let { S.atTime(clockText(it)) } ?: S.atATime, readyAt != null, onChoose)
         }
     }
 }
 
 @Composable
 private fun RepeatPicker(days: Set<Int>, onDays: (Set<Int>) -> Unit) {
-    Section("Repeat") {
+    Section(S.repeatTitle) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            dayLetters.forEachIndexed { index, letter ->
+            S.days.forEachIndexed { index, letter ->
                 val day = index + 1
                 Chip(letter, day in days) { onDays(if (day in days) days - day else days + day) }
             }
         }
-        Note(if (days.isEmpty()) "No days picked: it runs once, then goes away." else "Runs every ${dayList(days)}.")
+        Note(if (days.isEmpty()) S.noDays else S.runsEvery(days))
     }
 }
 
@@ -188,9 +196,9 @@ private fun TimeDialog(start: LocalTime, onPick: (LocalTime) -> Unit, onDismiss:
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Kit.colors.background,
-        confirmButton = { KitButton("Set", { onPick(LocalTime.of(state.hour, state.minute)) }) },
-        dismissButton = { KitButton("Cancel", onDismiss, kind = ButtonKind.Ghost) },
-        title = { Text("I’m ready at", style = Kit.base.copy(fontWeight = FontWeight.SemiBold), color = Kit.colors.foreground) },
+        confirmButton = { KitButton(S.set, { onPick(LocalTime.of(state.hour, state.minute)) }) },
+        dismissButton = { KitButton(S.cancel, onDismiss, kind = ButtonKind.Ghost) },
+        title = { Text(S.readyAtTitle, style = Kit.base.copy(fontWeight = FontWeight.SemiBold), color = Kit.colors.foreground) },
         text = {
             val colors = Kit.colors
             TimeInput(
@@ -225,25 +233,13 @@ private suspend fun earlierStops(api: KacKaldiApi, line: AlertLine, stopCode: St
 private fun insideText(trigger: WatchTrigger, approaching: List<SeenBus>): String? {
     val inside = approaching.filter { trigger.reached(it.bus) }
     if (inside.isEmpty()) return null
-    val which = if (inside.size == 1) "The next ${inside.first().line} is" else "${inside.size} buses are"
-    return "$which already closer than this, so you’ll be told about the one after."
+    return S.alreadyCloser(inside.singleOrNull()?.line, inside.size)
 }
 
-fun triggerSummary(trigger: WatchTrigger): String = when {
-    trigger.atStopName != null -> "when a bus reaches ${titleCase(trigger.atStopName)}"
-    trigger.kind == TriggerKind.Minutes -> "${trigger.value} min before"
-    trigger.value == 1 -> "1 stop before"
-    else -> "${trigger.value} stops before"
-}
+fun triggerSummary(trigger: WatchTrigger): String =
+    S.summary(trigger.atStopName?.let(::titleCase), trigger.value.takeIf { trigger.kind == TriggerKind.Minutes }, trigger.value)
 
 fun clockText(time: LocalTime): String = "%02d:%02d".format(time.hour, time.minute)
-
-fun dayList(days: Set<Int>): String = when (days) {
-    setOf(1, 2, 3, 4, 5) -> "weekday"
-    setOf(6, 7) -> "weekend day"
-    (1..7).toSet() -> "day"
-    else -> days.sorted().joinToString(", ") { dayLetters[it - 1] }
-}
 
 @Composable
 private fun Note(text: String) {
@@ -278,7 +274,7 @@ private fun EarlierStopPicker(earlier: Load<EarlierStops>, picked: LineStop?, on
         is Load.Failed -> Note(earlier.message)
         is Load.Ready -> {
             if (earlier.value.stops.isEmpty()) {
-                Note("This is the first stop of the line.")
+                Note(S.firstStopOfLine)
                 return
             }
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp).border(1.dp, Kit.colors.border, CardShape)) {
@@ -290,7 +286,7 @@ private fun EarlierStopPicker(earlier: Load<EarlierStops>, picked: LineStop?, on
                         trailing = if (picked == stop) ({ Icon(Icons.Outlined.Check, null, tint = Kit.colors.foreground) }) else null,
                     ) {
                         ItemTitle(titleCase(stop.name))
-                        ItemDescription(if (away == 1) "1 stop before yours" else "$away stops before yours")
+                        ItemDescription(S.stopsBeforeYours(away))
                     }
                 }
             }

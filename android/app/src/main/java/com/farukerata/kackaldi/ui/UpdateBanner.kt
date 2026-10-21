@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.farukerata.kackaldi.i18n.S
 import com.farukerata.kackaldi.update.AppUpdate
 import com.farukerata.kackaldi.update.AppUpdater
 import com.farukerata.kackaldi.update.UpdateState
@@ -59,29 +60,29 @@ fun UpdateBanner(updater: AppUpdater, modifier: Modifier = Modifier) {
 @Composable
 private fun Actions(state: UpdateState, updater: AppUpdater) {
     val action = when (state) {
-        is UpdateState.Available -> "Update"
-        is UpdateState.NeedsPermission -> "Open settings"
-        is UpdateState.Failed -> "Try again"
+        is UpdateState.Available -> S.update
+        is UpdateState.NeedsPermission -> S.openSettings
+        is UpdateState.Failed -> S.tryAgain
         else -> return
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-        KitButton("Later", updater::dismiss, kind = ButtonKind.Ghost)
+        KitButton(S.later, updater::dismiss, kind = ButtonKind.Ghost)
         KitButton(action, updater::start)
     }
 }
 
 private fun title(state: UpdateState, update: AppUpdate): String = when (state) {
-    is UpdateState.Downloading -> "Downloading ${update.versionName}… ${(state.progress * 100).toInt()}%"
-    is UpdateState.Installing -> "Installing ${update.versionName}…"
-    is UpdateState.Failed -> "Update didn’t finish"
-    else -> "Kaç Kaldı ${update.versionName} is ready"
+    is UpdateState.Downloading -> S.downloading(update.versionName, (state.progress * 100).toInt())
+    is UpdateState.Installing -> S.installing(update.versionName)
+    is UpdateState.Failed -> S.updateFailed
+    else -> S.updateReady(update.versionName)
 }
 
 private fun body(state: UpdateState): String = when (state) {
-    is UpdateState.Available -> "Download and install it now. Your saved stops stay as they are."
-    is UpdateState.Downloading -> "You can keep using the app while it downloads."
-    is UpdateState.NeedsPermission -> "Allow Kaç Kaldı to install updates, then come back here."
-    is UpdateState.Installing -> "The app closes while it updates. Open it again afterwards."
+    is UpdateState.Available -> S.updateAvailableText
+    is UpdateState.Downloading -> S.updateDownloadingText
+    is UpdateState.NeedsPermission -> S.updatePermissionText
+    is UpdateState.Installing -> S.updateInstallingText
     is UpdateState.Failed -> state.message
     UpdateState.None -> ""
 }

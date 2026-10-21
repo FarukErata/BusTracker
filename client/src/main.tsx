@@ -5,6 +5,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router'
 import 'leaflet/dist/leaflet.css'
 import './index.css'
 import { rememberInviteFromUrl } from '@/api/client'
+import { useLang } from '@/lib/i18n'
 import { applyTheme } from '@/lib/theme'
 import { AndroidApp } from '@/screens/AndroidApp'
 import { Devices } from '@/screens/Devices'
@@ -35,10 +36,15 @@ const router = createBrowserRouter([
   { path: '/join/:code', element: <Join /> },
 ])
 
+function App() {
+  const lang = useLang()
+  return <RouterProvider key={lang} router={router} />
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <App />
     </QueryClientProvider>
   </StrictMode>,
 )

@@ -2,6 +2,7 @@ package com.farukerata.kackaldi.data
 
 import android.os.Build
 import com.farukerata.kackaldi.BuildConfig
+import com.farukerata.kackaldi.i18n.S
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -104,7 +105,7 @@ class KacKaldiApi(private val store: DeviceStore) {
     private suspend inline fun <reified T> authorized(
         send: HttpClient.(HttpRequestBuilder.() -> Unit) -> HttpResponse,
     ): T {
-        val key = store.current() ?: throw ApiException(HttpStatusCode.Unauthorized.value, "Not signed in")
+        val key = store.current() ?: throw ApiException(HttpStatusCode.Unauthorized.value, S.notSignedIn)
         val response = http.send { bearerAuth(key) }
         if (response.status == HttpStatusCode.Unauthorized) store.clear()
         if (!response.status.isSuccess()) throw response.toException()
@@ -113,10 +114,10 @@ class KacKaldiApi(private val store: DeviceStore) {
 
     private suspend fun HttpResponse.toException(): ApiException {
         val detail = runCatching { body<Problem>().detail }.getOrNull()
-        return ApiException(status.value, detail ?: "Request failed (${status.value})")
+        return ApiException(status.value, detail ?: S.requestFailed(status.value))
     }
 
-    private fun deviceName() = listOf(Build.MANUFACTURER, Build.MODEL).distinct().joinToString(" ").trim().ifEmpty { "Android phone" }
+    private fun deviceName() = listOf(Build.MANUFACTURER, Build.MODEL).distinct().joinToString(" ").trim().ifEmpty { S.androidPhone }
 
     private companion object {
         const val PLATFORM = "android"

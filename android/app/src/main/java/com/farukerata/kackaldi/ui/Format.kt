@@ -4,6 +4,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import com.farukerata.kackaldi.i18n.S
 import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -18,22 +19,13 @@ fun titleCase(text: String?): String =
 
 fun minutes(etaSeconds: Int): String = if (etaSeconds < 60) "<1" else (etaSeconds / 60.0).roundToInt().toString()
 
-fun stopsAway(count: Int): String = when (count) {
-    0 -> "At your stop"
-    1 -> "1 stop away"
-    else -> "$count stops away"
-}
+fun stopsAway(count: Int): String = S.stopsAway(count)
 
-fun busWhere(notDeparted: Boolean, stops: Int): String = if (notDeparted) "At the first stop" else stopsAway(stops)
+fun busWhere(notDeparted: Boolean, stops: Int): String = if (notDeparted) S.atFirstStop else stopsAway(stops)
 
 fun directionLabel(from: String, to: String): String = "${titleCase(from)} → ${titleCase(to)}"
 
-fun ago(seconds: Long): String = when {
-    seconds < 10 -> "just now"
-    seconds < 60 -> "$seconds s ago"
-    seconds < 3600 -> "${seconds / 60} min ago"
-    else -> "${seconds / 3600} h ago"
-}
+fun ago(seconds: Long): String = S.ago(seconds)
 
 fun secondsSince(iso: String, now: Instant = Instant.now()): Long =
     runCatching { Duration.between(OffsetDateTime.parse(iso).toInstant(), now).seconds.coerceAtLeast(0) }.getOrDefault(0)
@@ -66,7 +58,7 @@ fun reportAge(seconds: Long): ReportAge = when {
     else -> ReportAge.Fresh
 }
 
-fun seenAgo(seconds: Long): String = "seen ${ago(seconds)}"
+fun seenAgo(seconds: Long): String = S.seen(ago(seconds))
 
 private const val OLD_REPORT_SECONDS = 90L
 private const val STALE_REPORT_SECONDS = 180L

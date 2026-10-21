@@ -35,13 +35,17 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Traffic
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,6 +59,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +69,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.farukerata.kackaldi.i18n.L10n
+import com.farukerata.kackaldi.i18n.Lang
+import com.farukerata.kackaldi.i18n.S
 import kotlinx.coroutines.delay
 
 val RowShape = RoundedCornerShape(8.dp)
@@ -88,7 +98,7 @@ fun Header(onBack: (() -> Unit)? = null, actions: @Composable RowScope.() -> Uni
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        if (onBack != null) GhostIcon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
+        if (onBack != null) GhostIcon(Icons.AutoMirrored.Outlined.ArrowBack, S.back, onBack)
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, content = content)
         actions()
     }
@@ -106,6 +116,31 @@ fun GhostIcon(icon: ImageVector, description: String, onClick: () -> Unit, tint:
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, description, Modifier.size(18.dp), tint = tint)
+    }
+}
+
+@Composable
+fun LanguageMenu() {
+    val lang by L10n.lang.collectAsState()
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            Modifier.height(36.dp).pressable({ open = true }).semantics { contentDescription = S.language }.padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(lang.code.uppercase(), style = Kit.xs.copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.5.sp), color = Kit.colors.foreground)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = Kit.colors.background) {
+            Lang.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.code.uppercase(), style = Kit.sm.copy(fontWeight = FontWeight.SemiBold), color = Kit.colors.foreground) },
+                    onClick = {
+                        open = false
+                        L10n.set(option)
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -131,7 +166,7 @@ fun SearchField(value: String, onChange: (String) -> Unit, placeholder: String, 
                     if (value.isEmpty()) Text(placeholder, style = Kit.base, color = colors.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     field()
                 }
-                if (value.isNotEmpty()) GhostIcon(Icons.Outlined.Close, "Clear search", { onChange("") })
+                if (value.isNotEmpty()) GhostIcon(Icons.Outlined.Close, S.clearSearch, { onChange("") })
             }
         },
     )
@@ -225,7 +260,7 @@ fun TrafficBadge() {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(Icons.Outlined.Traffic, null, Modifier.size(12.dp), tint = Color.White)
-        Text("Heavy traffic", style = Kit.xs.copy(fontWeight = FontWeight.Medium), color = Color.White, maxLines = 1)
+        Text(S.heavyTraffic, style = Kit.xs.copy(fontWeight = FontWeight.Medium), color = Color.White, maxLines = 1)
     }
 }
 
@@ -268,13 +303,13 @@ fun Minutes(etaSeconds: Int, receivedAt: Long) {
     val elapsed = if (receivedAt > 0) ((now - receivedAt) / 1000).toInt().coerceAtLeast(0) else 0
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(minutes((etaSeconds - elapsed).coerceAtLeast(0)), style = Kit.lg.copy(fontWeight = FontWeight.SemiBold, lineHeight = Kit.lg.fontSize), color = Kit.colors.foreground)
-        Text("min", style = Kit.xs, color = Kit.colors.mutedForeground)
+        Text(S.min, style = Kit.xs, color = Kit.colors.mutedForeground)
     }
 }
 
 @Composable
 fun NotLeft() {
-    Text("Not left", style = Kit.xs, color = Kit.colors.mutedForeground)
+    Text(S.notLeft, style = Kit.xs, color = Kit.colors.mutedForeground)
 }
 
 @Composable
@@ -353,8 +388,8 @@ fun EmptyState(title: String, description: String, modifier: Modifier = Modifier
 
 @Composable
 fun ErrorState(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    EmptyState("Couldn’t load this", message, modifier) {
-        KitButton("Retry", onRetry, kind = ButtonKind.Outline, icon = Icons.Outlined.Refresh)
+    EmptyState(S.couldNotLoad, message, modifier) {
+        KitButton(S.retry, onRetry, kind = ButtonKind.Outline, icon = Icons.Outlined.Refresh)
     }
 }
 
@@ -379,7 +414,7 @@ fun UpdatedAgo(fetchedAt: String?, modifier: Modifier = Modifier) {
     if (fetchedAt == null) return
     val now = rememberNow(5_000)
     Text(
-        "Updated ${ago(secondsSince(fetchedAt, java.time.Instant.ofEpochMilli(now)))}",
+        S.updated(ago(secondsSince(fetchedAt, java.time.Instant.ofEpochMilli(now)))),
         modifier.fillMaxWidth().padding(16.dp),
         style = Kit.xs,
         color = Kit.colors.mutedForeground,

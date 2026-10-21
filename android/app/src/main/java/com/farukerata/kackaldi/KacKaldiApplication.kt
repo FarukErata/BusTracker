@@ -7,6 +7,7 @@ import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.Recents
 import com.farukerata.kackaldi.data.Settings
 import com.farukerata.kackaldi.data.StopFilters
+import com.farukerata.kackaldi.i18n.L10n
 import com.farukerata.kackaldi.data.Watch
 import com.farukerata.kackaldi.update.AppUpdater
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,7 @@ class KacKaldiApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        L10n.init(this)
         MapLibre.getInstance(this)
     }
 }

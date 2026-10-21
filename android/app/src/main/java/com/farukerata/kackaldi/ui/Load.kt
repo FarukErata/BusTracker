@@ -1,5 +1,6 @@
 package com.farukerata.kackaldi.ui
 
+import com.farukerata.kackaldi.i18n.S
 import kotlinx.coroutines.CancellationException
 
 sealed interface Load<out T> {
@@ -14,7 +15,7 @@ suspend fun <T> load(block: suspend () -> T): Load<T> =
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        Load.Failed(e.message ?: "Something went wrong")
+        Load.Failed(e.message ?: S.somethingWrong)
     }
 
 val <T> Load<T>.valueOrNull: T? get() = (this as? Load.Ready)?.value

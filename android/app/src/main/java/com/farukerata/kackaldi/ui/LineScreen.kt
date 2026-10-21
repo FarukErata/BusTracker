@@ -62,6 +62,7 @@ import com.farukerata.kackaldi.data.LineLiveResponse
 import com.farukerata.kackaldi.data.LineStopsResponse
 import com.farukerata.kackaldi.data.LiveBus
 import com.farukerata.kackaldi.data.RouteShape
+import com.farukerata.kackaldi.i18n.S
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -261,7 +262,7 @@ private fun LineHeaderCard(viewModel: LineViewModel, onBack: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        GhostIcon(Icons.AutoMirrored.Outlined.ArrowBack, "Back", onBack)
+        GhostIcon(Icons.AutoMirrored.Outlined.ArrowBack, S.back, onBack)
         LineBadge(viewModel.code)
         Row(
             Modifier.weight(1f).pressable(viewModel::toggleDirection, enabled = canToggle).padding(horizontal = 8.dp, vertical = 6.dp),
@@ -269,18 +270,18 @@ private fun LineHeaderCard(viewModel: LineViewModel, onBack: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                if (first != null && last != null) "${titleCase(first.name)} → ${titleCase(last.name)}" else "Loading…",
+                if (first != null && last != null) "${titleCase(first.name)} → ${titleCase(last.name)}" else S.loading,
                 Modifier.weight(1f, fill = false),
                 style = Kit.sm,
                 color = colors.foreground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (canToggle) Icon(Icons.Outlined.SwapHoriz, "Switch direction", Modifier.size(16.dp), tint = colors.mutedForeground)
+            if (canToggle) Icon(Icons.Outlined.SwapHoriz, S.switchDirection, Modifier.size(16.dp), tint = colors.mutedForeground)
         }
         GhostIcon(
             if (saved) Icons.Rounded.Star else Icons.Outlined.StarOutline,
-            if (saved) "Remove from your lines" else "Save this direction to your lines",
+            if (saved) S.unsaveLine else S.saveLine,
             viewModel::toggleFavorite,
             tint = if (saved) colors.star else colors.foreground,
         )
@@ -313,8 +314,8 @@ private fun LazyListScope.pinnedArrivals(viewModel: LineViewModel, direction: Li
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(Icons.Outlined.Place, null, Modifier.size(14.dp), tint = colors.pinFill)
-            Text("To ${stop?.let { titleCase(it.name) } ?: "this stop"}", Modifier.weight(1f), style = Kit.sm, color = colors.pinFill, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            GhostIcon(Icons.Outlined.Close, "Clear stop", { viewModel.pin(null) }, tint = colors.pinFill)
+            Text(stop?.let { S.toStop(titleCase(it.name)) } ?: S.toThisStop, Modifier.weight(1f), style = Kit.sm, color = colors.pinFill, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            GhostIcon(Icons.Outlined.Close, S.clearStop, { viewModel.pin(null) }, tint = colors.pinFill)
         }
     }
     when (val state = viewModel.arrivals) {
@@ -323,14 +324,14 @@ private fun LazyListScope.pinnedArrivals(viewModel: LineViewModel, direction: Li
         is Load.Ready -> {
             val approaching = state.value.approaching
             if (approaching.isEmpty()) item {
-                Text("No bus on the way to this stop.", Modifier.fillMaxWidth().padding(16.dp), style = Kit.sm, color = Kit.colors.mutedForeground, textAlign = TextAlign.Center)
+                Text(S.noBusToStop, Modifier.fillMaxWidth().padding(16.dp), style = Kit.sm, color = Kit.colors.mutedForeground, textAlign = TextAlign.Center)
             }
             items(approaching, key = { "arrival-${it.doorNo}" }) { arrival ->
                 ApproachingRow(arrival, viewModel.arrivalsReceivedAt, arrival.doorNo == viewModel.selectedBus) { viewModel.select(arrival.doorNo) }
             }
             val passed = state.value.recentlyPassed.size
             if (passed > 0) item {
-                Text("$passed recently passed this stop", Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = Kit.xs, color = Kit.colors.mutedForeground)
+                Text(S.passed(passed), Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = Kit.xs, color = Kit.colors.mutedForeground)
             }
         }
     }
@@ -339,9 +340,9 @@ private fun LazyListScope.pinnedArrivals(viewModel: LineViewModel, direction: Li
 @Composable
 private fun ApproachingRow(arrival: ArrivalView, receivedAt: Long, selected: Boolean, onClick: () -> Unit) {
     val detail = if (arrival.notDeparted) {
-        "At the first stop"
+        S.atFirstStop
     } else {
-        listOfNotNull(stopsAway(arrival.stopsAway), distance(arrival.distanceMeters), arrival.lastStopName?.let { "now at ${titleCase(it)}" }).joinToString(" · ")
+        listOfNotNull(stopsAway(arrival.stopsAway), distance(arrival.distanceMeters), arrival.lastStopName?.let { S.nowAt(titleCase(it)) }).joinToString(" · ")
     }
     ItemRow(
         onClick = onClick,
@@ -357,14 +358,14 @@ private fun ApproachingRow(arrival: ArrivalView, receivedAt: Long, selected: Boo
 }
 
 private fun LazyListScope.busPositions(viewModel: LineViewModel, direction: LineDirection?, loading: Boolean) {
-    item { Hint("Tap a stop to see arrival times", Icons.Outlined.Place) }
+    item { Hint(S.tapStop, Icons.Outlined.Place) }
     if (loading) {
         item { RowsSkeleton(rows = 3) }
         return
     }
     val buses = busesIn(viewModel.live, direction).sortedByDescending { it.alongMeters ?: 0.0 }
     if (buses.isEmpty()) item {
-        Text("No bus is running in this direction right now.", Modifier.fillMaxWidth().padding(16.dp), style = Kit.sm, color = Kit.colors.mutedForeground, textAlign = TextAlign.Center)
+        Text(S.noBusDirection, Modifier.fillMaxWidth().padding(16.dp), style = Kit.sm, color = Kit.colors.mutedForeground, textAlign = TextAlign.Center)
     }
     items(buses, key = { "bus-${it.doorNo}" }) { bus ->
         val age = secondsSince(bus.reportedAt)
@@ -377,7 +378,7 @@ private fun LazyListScope.busPositions(viewModel: LineViewModel, direction: Line
         }
     }
     if (direction != null) {
-        item { SectionTitle("Stops") }
+        item { SectionTitle(S.stops) }
         items(direction.stops, key = { "stop-${direction.direction}-${it.seq}-${it.code}" }) { stop ->
             Row(
                 Modifier.fillMaxWidth().pressable({ viewModel.pin(stop.code) }).padding(horizontal = 10.dp, vertical = 8.dp),
@@ -394,9 +395,9 @@ private fun LazyListScope.busPositions(viewModel: LineViewModel, direction: Line
 private fun describePosition(bus: LiveBus, direction: LineDirection?, ageSeconds: Long): String {
     fun name(seq: Int?) = seq?.let { s -> direction?.stops?.firstOrNull { it.seq == s } }?.let { titleCase(it.name) }
     val place = if (bus.status == "at-terminal") {
-        "Waiting at ${name(direction?.stops?.firstOrNull()?.seq) ?: "the first stop"}"
+        name(direction?.stops?.firstOrNull()?.seq)?.let(S::waitingAt) ?: S.waitingAtFirst
     } else {
-        listOfNotNull(name(bus.lastStopSeq)?.let { "after $it" }, name(bus.nextStopSeq)?.let { "next $it" }).joinToString(" · ")
+        listOfNotNull(name(bus.lastStopSeq)?.let { S.after(it) }, name(bus.nextStopSeq)?.let { S.next(it) }).joinToString(" · ")
     }
     val seen = if (reportAge(ageSeconds) != ReportAge.Fresh) seenAgo(ageSeconds) else null
     return listOfNotNull(place.ifBlank { null }, seen).joinToString(" · ").replaceFirstChar { it.uppercase() }

@@ -10,8 +10,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.farukerata.kackaldi.i18n.L10n
 import com.farukerata.kackaldi.ui.KacKaldiRoot
 import com.farukerata.kackaldi.ui.KacKaldiTheme
 import com.farukerata.kackaldi.watch.WatchService
@@ -31,8 +33,11 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
                 onDispose {}
             }
+            val lang by L10n.lang.collectAsStateWithLifecycle()
             KacKaldiTheme(dark) {
-                KacKaldiRoot(dark) { scope.launch { app.settings.setDarkTheme(!dark) } }
+                key(lang) {
+                    KacKaldiRoot(dark) { scope.launch { app.settings.setDarkTheme(!dark) } }
+                }
             }
         }
     }

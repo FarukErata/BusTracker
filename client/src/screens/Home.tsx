@@ -3,11 +3,12 @@ import { Link } from 'react-router'
 import { ChevronRight, History, MapPin, Search, Smartphone, UserRound, X } from 'lucide-react'
 import { useFavorites, useLineSearch, useStopSearch } from '@/api/hooks'
 import type { FavoritesResponse, LineSummary, StopSearchResult } from '@/api/types'
-import { EmptyState, ErrorState, LineBadge, LineBadges, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards } from '@/components/bits'
+import { EmptyState, ErrorState, LanguageMenu, LineBadge, LineBadges, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards } from '@/components/bits'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { directionLabel, titleCase } from '@/lib/format'
+import { useT } from '@/lib/i18n'
 import { clearRecents, useRecents, type Recent } from '@/lib/recents'
 
 export function Home() {
@@ -32,13 +33,15 @@ export function Home() {
 }
 
 function HomeHeader() {
+  const t = useT()
   return (
     <header className="flex items-center gap-2 px-3 pt-3">
       <h1 className="flex-1 text-lg font-semibold tracking-tight">Kaç Kaldı</h1>
-      <Link to="/android" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Get the Android app">
+      <LanguageMenu />
+      <Link to="/android" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label={t.home.androidApp}>
         <Smartphone />
       </Link>
-      <Link to="/devices" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Your devices">
+      <Link to="/devices" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label={t.home.devices}>
         <UserRound />
       </Link>
       <ThemeToggle />
@@ -47,6 +50,7 @@ function HomeHeader() {
 }
 
 function SearchBox({ query, onChange, onFocus }: { query: string; onChange: (query: string) => void; onFocus: () => void }) {
+  const t = useT()
   return (
     <div className="px-3 pt-2">
       <div className="relative">
@@ -61,12 +65,12 @@ function SearchBox({ query, onChange, onFocus }: { query: string; onChange: (que
           spellCheck={false}
           enterKeyHint="search"
           onKeyDown={e => e.key === 'Escape' && e.currentTarget.blur()}
-          placeholder="Stop or line, like Fabrikalar or 500T"
+          placeholder={t.home.placeholder}
           className="pr-9 pl-8"
-          aria-label="Search stops and lines"
+          aria-label={t.home.search}
         />
         {query.trim().length > 0 && (
-          <Button variant="ghost" size="icon" className="absolute top-1/2 right-0.5 -translate-y-1/2" onClick={() => onChange('')} aria-label="Clear search">
+          <Button variant="ghost" size="icon" className="absolute top-1/2 right-0.5 -translate-y-1/2" onClick={() => onChange('')} aria-label={t.home.clearSearch}>
             <X />
           </Button>
         )}
@@ -76,11 +80,12 @@ function SearchBox({ query, onChange, onFocus }: { query: string; onChange: (que
 }
 
 function Recents({ items }: { items: Recent[] }) {
+  const t = useT()
   return (
     <div onMouseDown={e => e.preventDefault()}>
       <div className="flex items-end justify-between pr-1.5">
-        <SectionTitle>Recent</SectionTitle>
-        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearRecents}>Clear</Button>
+        <SectionTitle>{t.home.recent}</SectionTitle>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearRecents}>{t.home.clear}</Button>
       </div>
       <ItemGroup>{items.map(r => <RecentRow key={`${r.kind}-${r.code}-${r.kind === 'line' ? r.direction : ''}`} item={r} />)}</ItemGroup>
     </div>
@@ -104,18 +109,19 @@ function RecentRow({ item }: { item: Recent }) {
 
 function Favorites() {
   const favorites = useFavorites()
+  const t = useT()
   if (favorites.isPending) return <RowsSkeleton />
   if (favorites.isError) return <ErrorState message={favorites.error.message} onRetry={() => favorites.refetch()} />
 
   const { stops, lines } = favorites.data
   if (stops.length === 0 && lines.length === 0)
-    return <EmptyState title="Save the stops and lines you use" description="Search above, open a stop or a line, and tap the star." />
+    return <EmptyState title={t.home.emptyTitle} description={t.home.emptyText} />
 
   return (
     <>
-      {stops.length > 0 && <SectionTitle>Your stops</SectionTitle>}
+      {stops.length > 0 && <SectionTitle>{t.home.yourStops}</SectionTitle>}
       <ItemGroup>{stops.map(s => <FavoriteStopRow key={s.favorite.id} item={s} />)}</ItemGroup>
-      {lines.length > 0 && <SectionTitle>Your lines</SectionTitle>}
+      {lines.length > 0 && <SectionTitle>{t.home.yourLines}</SectionTitle>}
       <ItemGroup>{lines.map(l => <FavoriteLineRow key={l.favorite.id} item={l} />)}</ItemGroup>
     </>
   )
@@ -141,11 +147,12 @@ function FavoriteLineRow({ item }: { item: FavoritesResponse['lines'][number] })
   const { lineCode, direction, label } = item.favorite
   const dir = direction ? item.directions[direction] : null
   const target = direction ? `/lines/${lineCode}?dir=${direction}` : `/lines/${lineCode}`
+  const t = useT()
   return (
     <Item className="pressable" render={<Link to={target} />}>
       <ItemMedia><LineBadge code={lineCode} /></ItemMedia>
       <ItemContent>
-        <ItemTitle>{label ?? (dir ? titleCase(dir) : 'Both directions')}</ItemTitle>
+        <ItemTitle>{label ?? (dir ? titleCase(dir) : t.home.bothDirections)}</ItemTitle>
       </ItemContent>
       <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
     </Item>
@@ -158,18 +165,19 @@ function SearchResults({ query }: { query: string }) {
   const lineResults = lines.data ?? []
   const stopResults = query.trim().length >= 2 ? stops.data ?? [] : []
   const loading = (lines.isPending && lines.fetchStatus !== 'idle') || (stops.isPending && stops.fetchStatus !== 'idle')
+  const t = useT()
 
   if (loading && lineResults.length === 0 && stopResults.length === 0) return <RowsSkeleton rows={3} />
   if (lines.isError || stops.isError)
-    return <ErrorState message="Search isn't available right now." onRetry={() => { lines.refetch(); stops.refetch() }} />
+    return <ErrorState message={t.home.searchDown} onRetry={() => { lines.refetch(); stops.refetch() }} />
   if (lineResults.length === 0 && stopResults.length === 0)
-    return <EmptyState title="Nothing found" description="Try part of a stop name or a line code." />
+    return <EmptyState title={t.home.nothingFound} description={t.home.nothingFoundText} />
 
   return (
     <>
-      {lineResults.length > 0 && <SectionTitle>Lines</SectionTitle>}
+      {lineResults.length > 0 && <SectionTitle>{t.home.lines}</SectionTitle>}
       <ItemGroup>{lineResults.map(l => <LineResultRow key={l.lineCode} line={l} />)}</ItemGroup>
-      {stopResults.length > 0 && <SectionTitle>Stops</SectionTitle>}
+      {stopResults.length > 0 && <SectionTitle>{t.home.stops}</SectionTitle>}
       <ItemGroup>{stopResults.map(s => <StopResultRow key={s.stop.code} result={s} />)}</ItemGroup>
     </>
   )

@@ -24,6 +24,7 @@ import com.farukerata.kackaldi.data.WatchStep
 import com.farukerata.kackaldi.data.WatchTrigger
 import com.farukerata.kackaldi.data.missed
 import com.farukerata.kackaldi.data.nextStep
+import com.farukerata.kackaldi.i18n.S
 import com.farukerata.kackaldi.ui.busWhere
 import com.farukerata.kackaldi.ui.minutes
 import com.farukerata.kackaldi.ui.stopsAway
@@ -35,10 +36,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -87,7 +88,7 @@ class WatchService : Service() {
         step = null
         phase = Phase.Watching
         hidden = false
-        showFresh(watching(next, "Looking for ${next.lineNames}…"))
+        showFresh(watching(next, S.lookingFor(next.lineNames)))
         notifications.cancel(ENDED_ID)
         app.watch.value = next
         follow()
@@ -114,13 +115,13 @@ class WatchService : Service() {
         while (scope.isActive) {
             val now = System.currentTimeMillis()
             if (state?.following == null && now > watch.readyAtMillis + GIVE_UP_MILLIS) {
-                notifications.notify(ENDED_ID, ended(watch, "No ${watch.lineNames} came by ${clock(now)}"))
+                notifications.notify(ENDED_ID, ended(watch, S.noneCameBy(watch.lineNames, clock(now))))
                 finish()
                 return
             }
             val seen = arrivals(watch)
             if (seen == null) {
-                post(watching(watch, "Can’t reach the server, trying again"))
+                post(watching(watch, S.retrying))
             } else {
                 val next = nextStep(watch.trigger, seen.buses, seen.passed, state, armed = now >= watch.readyAtMillis)
                 state = next.state
@@ -213,8 +214,8 @@ class WatchService : Service() {
             .setSilent(!loud)
             .setPriority(if (alerted) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_LOW)
             .setCategory(if (alerted) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_PROGRESS)
-        if (alerted) builder.addAction(0, "Missed it", serviceIntent(ACTION_MISSED, 2))
-        builder.addAction(0, "Stop", serviceIntent(ACTION_STOP, 1))
+        if (alerted) builder.addAction(0, S.missedIt, serviceIntent(ACTION_MISSED, 2))
+        builder.addAction(0, S.stop, serviceIntent(ACTION_STOP, 1))
         countdown(builder, seen?.takeIf { problem == null })
         return builder.build().apply { if (loud) flags = flags or Notification.FLAG_INSISTENT }
     }
@@ -222,9 +223,9 @@ class WatchService : Service() {
     private fun watchingText(watch: Watch, alerted: Boolean): String {
         val current = step
         return buildList {
-            current?.lost?.let { add("Lost track of that ${it.line}") }
+            current?.lost?.let { add(S.lostTrack(it.line)) }
             add(perLineText(watch, current) ?: current?.shown?.let { describe(watch, it) } ?: nothingYet(watch))
-            if (alerted) current?.next?.let { add("then ${it.line} ${eta(it)}") }
+            if (alerted) current?.next?.let { add(S.then(it.line, eta(it))) }
         }.joinToString(" · ")
     }
 
@@ -236,18 +237,17 @@ class WatchService : Service() {
 
     private fun brief(seen: SeenBus): String {
         val bus = seen.bus
-        if (bus.notDeparted) return "${seen.line} at the first stop"
-        val eta = bus.etaSeconds?.let { "${minutes(it)} min " }.orEmpty()
-        return "${seen.line} $eta(${stopsAway(bus.stopsAway).lowercase()})"
+        if (bus.notDeparted) return S.briefFirstStop(seen.line)
+        return S.brief(seen.line, bus.etaSeconds?.let(::minutes), S.lower(stopsAway(bus.stopsAway)))
     }
 
     private fun nothingYet(watch: Watch): String =
-        if (state?.skipped?.isNotEmpty() == true) "Waiting for the next ${watch.lineNames}" else "No ${watch.lineNames} on the way yet"
+        if (state?.skipped?.isNotEmpty() == true) S.waitingNext(watch.lineNames) else S.noneYet(watch.lineNames)
 
     private fun watchingSubText(watch: Watch, alerted: Boolean): String = when {
-        alerted -> "Time to go to ${titleCase(watch.stopName)}"
-        System.currentTimeMillis() >= watch.readyAtMillis -> "Alert ${triggerText(watch.trigger)}"
-        else -> "Ready at ${clock(watch.readyAtMillis)} · alert ${triggerText(watch.trigger)}"
+        alerted -> S.timeToGo(titleCase(watch.stopName))
+        System.currentTimeMillis() >= watch.readyAtMillis -> S.alertAt(triggerText(watch.trigger))
+        else -> S.readyAtAlert(clock(watch.readyAtMillis), triggerText(watch.trigger))
     }
 
     private fun countdown(builder: NotificationCompat.Builder, seen: SeenBus?) {
@@ -257,18 +257,18 @@ class WatchService : Service() {
             return
         }
         builder.setWhen(System.currentTimeMillis() + seconds * 1000L).setUsesChronometer(true).setChronometerCountDown(true).setShowWhen(true)
-        builder.setShortCriticalText("${minutes(seconds)} min")
+        builder.setShortCriticalText(S.minChip(minutes(seconds)))
     }
 
     private fun goneNotification(watch: Watch, gone: SeenBus, next: SeenBus?): Notification =
         base(watch, ONGOING_CHANNEL)
-            .setContentTitle("Your ${gone.line} left ${titleCase(watch.stopName)} at ${clock(System.currentTimeMillis())}")
-            .setContentText(next?.let { "Next: ${it.line} ${eta(it)}" } ?: "No other ${watch.lineNames} on the way yet")
+            .setContentTitle(S.gone(gone.line, titleCase(watch.stopName), clock(System.currentTimeMillis())))
+            .setContentText(next?.let { S.nextBus(it.line, eta(it)) } ?: S.noOther(watch.lineNames))
             .setSilent(true)
             .setShowWhen(false)
             .setRequestPromotedOngoing(false)
-            .addAction(0, "OK", serviceIntent(ACTION_STOP, 1))
-            .addAction(0, "Missed it", serviceIntent(ACTION_MISSED, 2))
+            .addAction(0, S.ok, serviceIntent(ACTION_STOP, 1))
+            .addAction(0, S.missedIt, serviceIntent(ACTION_MISSED, 2))
             .build()
 
     private fun base(watch: Watch, channel: String): NotificationCompat.Builder =
@@ -289,32 +289,28 @@ class WatchService : Service() {
             .build()
 
     private fun eta(seen: SeenBus): String =
-        seen.bus.etaSeconds?.takeIf { !seen.bus.notDeparted }?.let { "in ${minutes(it)} min" } ?: busWhere(seen.bus.notDeparted, seen.bus.stopsAway).lowercase()
+        seen.bus.etaSeconds?.takeIf { !seen.bus.notDeparted }?.let { S.inMinutes(minutes(it)) } ?: S.lower(busWhere(seen.bus.notDeparted, seen.bus.stopsAway))
 
     private fun alertTitle(watch: Watch, seen: SeenBus): String {
         val bus = seen.bus
         val eta = bus.etaSeconds?.takeIf { !bus.notDeparted }
         return when {
-            watch.trigger.atStopName != null && bus.stopsAway > 0 -> "Leave now · ${seen.line} passed ${titleCase(watch.trigger.atStopName)}"
-            eta != null -> "Leave now · ${seen.line} is ${minutes(eta)} min away"
-            else -> "Leave now · ${seen.line} ${busWhere(bus.notDeparted, bus.stopsAway).lowercase()}"
+            watch.trigger.atStopName != null && bus.stopsAway > 0 -> S.leavePassed(seen.line, titleCase(watch.trigger.atStopName))
+            eta != null -> S.leaveMinutes(seen.line, minutes(eta))
+            else -> S.leaveWhere(seen.line, S.lower(busWhere(bus.notDeparted, bus.stopsAway)))
         }
     }
 
     private fun describe(watch: Watch, seen: SeenBus): String = buildList {
         val bus = seen.bus
         if (watch.lines.size > 1) add(seen.line)
-        bus.etaSeconds?.takeIf { !bus.notDeparted }?.let { add("${minutes(it)} min") }
+        bus.etaSeconds?.takeIf { !bus.notDeparted }?.let { add(S.minChip(minutes(it))) }
         add(busWhere(bus.notDeparted, bus.stopsAway))
-        if (!bus.notDeparted) bus.lastStopName?.let { add("now at ${titleCase(it)}") }
+        if (!bus.notDeparted) bus.lastStopName?.let { add(S.nowAt(titleCase(it))) }
     }.joinToString(" · ")
 
-    private fun triggerText(trigger: WatchTrigger): String = when {
-        trigger.atStopName != null -> "at ${titleCase(trigger.atStopName)}"
-        trigger.kind == TriggerKind.Minutes -> "at ${trigger.value} min"
-        trigger.value == 1 -> "at 1 stop"
-        else -> "at ${trigger.value} stops"
-    }
+    private fun triggerText(trigger: WatchTrigger): String =
+        S.triggerAt(trigger.atStopName?.let(::titleCase), trigger.value.takeIf { trigger.kind == TriggerKind.Minutes }, trigger.value)
 
     private fun clock(millis: Long): String =
         Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
@@ -335,14 +331,14 @@ class WatchService : Service() {
 
     private fun createChannels() {
         notifications.createNotificationChannel(
-            NotificationChannel(ONGOING_CHANNEL, "Watched bus", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Live countdown while you wait for a bus"
+            NotificationChannel(ONGOING_CHANNEL, S.watchedChannel, NotificationManager.IMPORTANCE_LOW).apply {
+                description = S.watchedChannelText
             },
         )
         notifications.deleteNotificationChannel(OLD_ALERT_CHANNEL)
         notifications.createNotificationChannel(
-            NotificationChannel(ALERT_CHANNEL, "Time to go", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Rings until you look, when it is time to leave for your bus"
+            NotificationChannel(ALERT_CHANNEL, S.leaveChannel, NotificationManager.IMPORTANCE_HIGH).apply {
+                description = S.leaveChannelText
                 enableVibration(true)
                 vibrationPattern = LEAVE_VIBRATION
             },

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ago, minutes, titleCase, type ReportAge } from '@/lib/format'
+import { LANGS, setLang, useLang, useT, type Lang } from '@/lib/i18n'
 import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
@@ -31,10 +32,26 @@ export function LineBadges({ lines, max = 4 }: { lines: string[]; max?: number }
 
 export function ThemeToggle() {
   const { theme, toggle } = useTheme()
+  const t = useT()
   return (
-    <Button variant="ghost" size="icon" onClick={toggle} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+    <Button variant="ghost" size="icon" onClick={toggle} aria-label={theme === 'dark' ? t.common.toLight : t.common.toDark}>
       {theme === 'dark' ? <Sun /> : <Moon />}
     </Button>
+  )
+}
+
+export function LanguageMenu() {
+  const lang = useLang()
+  const t = useT()
+  return (
+    <select
+      value={lang}
+      onChange={e => setLang(e.target.value as Lang)}
+      aria-label={t.common.language}
+      className="pressable h-8 cursor-pointer appearance-none rounded-md bg-transparent px-2 text-xs font-semibold tracking-wide hover:bg-muted"
+    >
+      {LANGS.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
+    </select>
   )
 }
 
@@ -42,8 +59,9 @@ export function BackButton() {
   const navigate = useNavigate()
   const location = useLocation()
   const hasHistory = location.key !== 'default'
+  const t = useT()
   return (
-    <Button variant="ghost" size="icon" onClick={() => (hasHistory ? navigate(-1) : navigate('/'))} aria-label="Back">
+    <Button variant="ghost" size="icon" onClick={() => (hasHistory ? navigate(-1) : navigate('/'))} aria-label={t.common.back}>
       <ArrowLeft />
     </Button>
   )
@@ -62,19 +80,21 @@ export function Minutes({ etaSeconds, receivedAt }: { etaSeconds: number; receiv
   const now = useNow(5_000)
   const elapsed = receivedAt ? Math.max(0, (now - receivedAt) / 1000) : 0
   const value = minutes(Math.max(0, etaSeconds - elapsed))
+  const t = useT()
   return (
     <span className="flex items-baseline gap-0.5 tabular-nums">
       <span key={value} className="eta-swap text-lg font-semibold leading-none">{value}</span>
-      <span className="text-xs text-muted-foreground">min</span>
+      <span className="text-xs text-muted-foreground">{t.common.min}</span>
     </span>
   )
 }
 
 export function TrafficBadge() {
+  const t = useT()
   return (
     <Badge variant="warning" className="gap-1">
       <TrafficCone className="size-3" aria-hidden />
-      Heavy traffic
+      {t.common.heavyTraffic}
     </Badge>
   )
 }
@@ -85,8 +105,9 @@ export function UpdatedAgo({ fetchedAt }: { fetchedAt: string | null | undefined
     const timer = setInterval(() => setNow(Date.now()), 5_000)
     return () => clearInterval(timer)
   }, [])
+  const t = useT()
   if (!fetchedAt) return null
-  return <p className="text-center text-xs text-muted-foreground">Updated {ago((now - Date.parse(fetchedAt)) / 1000)}</p>
+  return <p className="text-center text-xs text-muted-foreground">{t.common.updated(ago((now - Date.parse(fetchedAt)) / 1000))}</p>
 }
 
 export function RowsSkeleton({ rows = 4 }: { rows?: number }) {
@@ -106,16 +127,17 @@ export function RowsSkeleton({ rows = 4 }: { rows?: number }) {
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const t = useT()
   return (
     <Empty>
       <EmptyHeader>
-        <EmptyTitle>Couldn't load this</EmptyTitle>
+        <EmptyTitle>{t.common.couldNotLoad}</EmptyTitle>
         <EmptyDescription>{message}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button variant="outline" onClick={onRetry}>
           <RotateCw data-icon="inline-start" />
-          Retry
+          {t.common.retry}
         </Button>
       </EmptyContent>
     </Empty>
