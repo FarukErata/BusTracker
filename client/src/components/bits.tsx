@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
+import { Menu } from '@base-ui/react/menu'
 import { ArrowLeft, ArrowRight, Moon, RotateCw, Sun, TrafficCone } from 'lucide-react'
 import { Badge } from '@/components/reui/badge'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ago, minutes, titleCase, type ReportAge } from '@/lib/format'
-import { LANGS, setLang, useLang, useT, type Lang } from '@/lib/i18n'
+import { LANGS, setLang, useLang, useT } from '@/lib/i18n'
 import { useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 
@@ -44,14 +45,32 @@ export function LanguageMenu() {
   const lang = useLang()
   const t = useT()
   return (
-    <select
-      value={lang}
-      onChange={e => setLang(e.target.value as Lang)}
-      aria-label={t.common.language}
-      className="pressable h-8 cursor-pointer appearance-none rounded-md bg-transparent px-2 text-xs font-semibold tracking-wide hover:bg-muted"
-    >
-      {LANGS.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
-    </select>
+    <Menu.Root>
+      <Menu.Trigger
+        aria-label={t.common.language}
+        className="pressable h-8 cursor-pointer rounded-md bg-transparent px-2 text-xs font-semibold tracking-wide hover:bg-muted"
+      >
+        {lang.toUpperCase()}
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner sideOffset={4} align="center" className="z-50">
+          <Menu.Popup className="flex origin-[var(--transform-origin)] flex-col gap-0.5 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md outline-none transition-[opacity,scale] duration-150 ease-out data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0">
+            {LANGS.map(option => (
+              <Menu.Item
+                key={option}
+                onClick={() => setLang(option)}
+                className={cn(
+                  'cursor-default rounded-md px-3 py-1.5 text-center text-xs font-semibold tracking-wide outline-none select-none data-[highlighted]:bg-muted',
+                  option === lang ? 'bg-muted' : 'text-muted-foreground',
+                )}
+              >
+                {option.toUpperCase()}
+              </Menu.Item>
+            ))}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   )
 }
 
