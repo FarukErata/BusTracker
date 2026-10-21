@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { ArrowLeftRight, MapPin, Star, X } from 'lucide-react'
 import { useAddFavoriteLine, useBusPath, useFavorites, useLineArrivals, useLineLive, useLineShapes, useLineStops, useRemoveFavoriteLine } from '@/api/hooks'
-import type { ArrivalView, LineDirection, LineStop, TrackedBusView } from '@/api/types'
-import { ageRing, BackButton, ErrorState, LineBadge, Minutes, RowsSkeleton, TrafficBadge, UpdatedAgo } from '@/components/bits'
+import type { AnnouncementView, ArrivalView, LineDirection, LineStop, PlannedView, TrackedBusView } from '@/api/types'
+import { ageRing, BackButton, ErrorState, LineBadge, RowsSkeleton, TrafficBadge, UpdatedAgo } from '@/components/bits'
 import { LineMap } from '@/components/maps'
+import { Announcements, ArrivalTime, NextTrips, TimetableSection } from '@/components/planned'
 import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
-import { directionLabel, distance, reportAge, secondsSince, seenAgo, stopsAway, titleCase } from '@/lib/format'
+import { clock, directionLabel, distance, reportAge, secondsSince, seenAgo, stopsAway, titleCase } from '@/lib/format'
 import { strings } from '@/lib/i18n'
 import { useIsWide } from '@/lib/media'
 import { rememberRecent } from '@/lib/recents'
@@ -87,8 +88,13 @@ export function Line() {
     />
   )
   const header = <LineHeader code={code} direction={direction} canToggle={directions.length > 1} onToggle={toggleDirection} />
+  const announcements = (live.data?.announcements ?? []).filter(a => a.direction === null || a.direction === direction?.direction)
+  const planned = live.data?.planned.find(p => p.direction === direction?.direction) ?? null
   const panel = (
     <LinePanel
+      code={code}
+      announcements={announcements}
+      planned={planned}
       loading={stops.isPending || live.isPending}
       direction={direction}
       buses={buses}
@@ -126,14 +132,15 @@ export function Line() {
   )
 }
 
-function LinePanel({ loading, direction, buses, pinnedStop, arrivals, selectedBus, onSelect, onPin, fetchedAt }: {
-  loading: boolean; direction: LineDirection | undefined; buses: TrackedBusView[]; pinnedStop: string | null
+function LinePanel({ code, announcements, planned, loading, direction, buses, pinnedStop, arrivals, selectedBus, onSelect, onPin, fetchedAt }: {
+  code: string; announcements: AnnouncementView[]; planned: PlannedView | null; loading: boolean; direction: LineDirection | undefined; buses: TrackedBusView[]; pinnedStop: string | null
   arrivals: ReturnType<typeof useLineArrivals>; selectedBus: string | null
   onSelect: (door: string) => void; onPin: (stop: string | null) => void; fetchedAt: string | undefined
 }) {
   if (loading) return <RowsSkeleton rows={3} />
   return (
     <>
+      <Announcements items={announcements} showLines={false} />
       {pinnedStop && direction ? (
         <PinnedArrivals
           stop={direction.stops.find(s => s.code === pinnedStop)}
@@ -144,9 +151,11 @@ function LinePanel({ loading, direction, buses, pinnedStop, arrivals, selectedBu
           onClear={() => onPin(null)}
           onSelect={onSelect}
           selectedBus={selectedBus}
+          code={code}
+          planned={arrivals.data?.planned ?? null}
         />
       ) : (
-        <BusPositions buses={buses} direction={direction} selectedBus={selectedBus} onSelect={onSelect} onPick={onPin} />
+        <BusPositions code={code} planned={planned} buses={buses} direction={direction} selectedBus={selectedBus} onSelect={onSelect} onPick={onPin} />
       )}
       <UpdatedAgo fetchedAt={fetchedAt} />
     </>
@@ -197,8 +206,8 @@ function stopName(direction: LineDirection | undefined, seq: number | null) {
   return stop ? titleCase(stop.name) : null
 }
 
-function BusPositions({ buses, direction, selectedBus, onSelect, onPick }: {
-  buses: TrackedBusView[]; direction: LineDirection | undefined; selectedBus: string | null; onSelect: (door: string) => void; onPick: (stop: string) => void
+function BusPositions({ code, planned, buses, direction, selectedBus, onSelect, onPick }: {
+  code: string; planned: PlannedView | null; buses: TrackedBusView[]; direction: LineDirection | undefined; selectedBus: string | null; onSelect: (door: string) => void; onPick: (stop: string) => void
 }) {
   const ordered = [...buses].sort((a, b) => (b.alongMeters ?? 0) - (a.alongMeters ?? 0))
   return (
@@ -223,6 +232,8 @@ function BusPositions({ buses, direction, selectedBus, onSelect, onPick }: {
           ))}
         </ItemGroup>
       )}
+      {planned && <NextTrips rows={[{ key: planned.direction, line: code, trips: planned.next }]} atStop={false} />}
+      {direction && <TimetableSection line={code} direction={direction.direction} />}
       <StopPicker stops={direction?.stops ?? []} onPick={onPick} />
     </>
   )
@@ -237,7 +248,8 @@ function busPlace(bus: TrackedBusView, direction: LineDirection | undefined) {
   const t = strings().line
   if (bus.status === 'at-terminal') {
     const first = stopName(direction, direction?.stops[0]?.seq ?? null)
-    return first ? t.waitingAt(first) : t.waitingAtFirst
+    const waiting = first ? t.waitingAt(first) : t.waitingAtFirst
+    return bus.planned ? `${waiting} · ${strings().plan.leaves(clock(bus.planned.departs))}` : waiting
   }
   const after = stopName(direction, bus.lastStopSeq)
   const next = stopName(direction, bus.nextStopSeq)
@@ -260,7 +272,8 @@ function StopPicker({ stops, onPick }: { stops: LineStop[]; onPick: (stop: strin
   )
 }
 
-function PinnedArrivals({ stop, approaching, passedCount, loading, receivedAt, onClear, onSelect, selectedBus }: {
+function PinnedArrivals({ stop, approaching, passedCount, loading, receivedAt, onClear, onSelect, selectedBus, code, planned }: {
+  code: string; planned: PlannedView | null
   stop: LineStop | undefined; approaching: ArrivalView[] | undefined; passedCount: number; loading: boolean
   onClear: () => void; onSelect: (door: string) => void; selectedBus: string | null
   receivedAt: number
@@ -280,16 +293,17 @@ function PinnedArrivals({ stop, approaching, passedCount, loading, receivedAt, o
             <Item key={a.doorNo} size="sm" className={cn('pressable cursor-pointer', a.doorNo === selectedBus && 'bg-muted')} onClick={() => onSelect(a.doorNo)}>
               <ItemContent>
                 <ItemTitle className="tabular-nums">{a.doorNo}{a.heavyTraffic && <TrafficBadge />}</ItemTitle>
-                <ItemDescription>{a.notDeparted ? strings().bus.atFirstStop : [stopsAway(a.stopsAway), distance(a.distanceMeters), a.lastStopName && strings().bus.nowAt(titleCase(a.lastStopName))].filter(Boolean).join(' · ')}</ItemDescription>
+                <ItemDescription>{a.notDeparted ? [strings().bus.atFirstStop, a.planned && strings().plan.leaves(clock(a.planned.departs))].filter(Boolean).join(' · ') : [stopsAway(a.stopsAway), distance(a.distanceMeters), a.lastStopName && strings().bus.nowAt(titleCase(a.lastStopName))].filter(Boolean).join(' · ')}</ItemDescription>
               </ItemContent>
               <ItemActions>
-                {a.etaSeconds != null ? <Minutes etaSeconds={a.etaSeconds} receivedAt={receivedAt} /> : <span className="text-xs text-muted-foreground">{strings().bus.notLeft}</span>}
+                <ArrivalTime bus={a} receivedAt={receivedAt} />
               </ItemActions>
             </Item>
           ))}
         </ItemGroup>
       )}
       {passedCount > 0 && <p className="px-3 text-xs text-muted-foreground">{strings().line.passed(passedCount)}</p>}
+      {planned && <NextTrips rows={[{ key: planned.direction, line: code, trips: planned.next }]} atStop />}
     </>
   )
 }

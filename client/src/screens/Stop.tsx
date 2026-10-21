@@ -3,12 +3,13 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { ArrowRight, Star } from 'lucide-react'
 import { useAddFavoriteStop, useFavorites, useRemoveFavoriteStop, useStop, useStopArrivals } from '@/api/hooks'
 import type { StopArrivalView, StopArrivalsView, StopInfo } from '@/api/types'
-import { ageRing, BackButton, EmptyState, ErrorState, LineBadge, Minutes, RowsSkeleton, StopName, Towards, TrafficBadge, UpdatedAgo } from '@/components/bits'
+import { ageRing, BackButton, EmptyState, ErrorState, LineBadge, RowsSkeleton, StopName, Towards, TrafficBadge, UpdatedAgo } from '@/components/bits'
 import { MapSurface, StopMap } from '@/components/maps'
+import { Announcements, ArrivalTime, NextTrips } from '@/components/planned'
 import { Button } from '@/components/ui/button'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { Skeleton } from '@/components/ui/skeleton'
-import { busWhere, reportAge, secondsSince, seenAgo, titleCase } from '@/lib/format'
+import { busWhere, clock, reportAge, secondsSince, seenAgo, titleCase } from '@/lib/format'
 import { strings, useT } from '@/lib/i18n'
 import { useIsWide } from '@/lib/media'
 import { rememberRecent } from '@/lib/recents'
@@ -160,12 +161,21 @@ function ArrivalsList({ data, selection, tracking, onSelect, picked, onPick, rec
   const arrivals = data.arrivals.filter(a => visible.has(a.line))
   const waiting = lines.filter(l => l.error)
   const bothWays = linesInBothDirections(lines)
+  const announcements = data.announcements.filter(a =>
+    visible.has(a.line) && (a.direction === null || lines.some(l => l.line === a.line && l.direction === a.direction)))
+  const nextTrips = lines.flatMap(l => l.planned ? [{
+    key: `${l.line}-${l.direction}`,
+    line: l.line,
+    label: bothWays.has(l.line) ? strings().bus.towards(titleCase(l.directionName)) : undefined,
+    trips: l.planned.next,
+  }] : [])
   const isSelected = (a: StopArrivalView) =>
     selection?.line === a.line && selection.direction === a.direction && selection.doorNo === a.bus.doorNo
 
   return (
     <>
       {all.length > 1 && <LineFilter lines={all} picked={filtered ? [...visible] : []} onChange={onPick} />}
+      <Announcements items={announcements} />
       {arrivals.length === 0 ? (
         <EmptyState title={strings().stop.noBus} description={strings().stop.linesHere([...visible].join(', '))} />
       ) : (
@@ -185,6 +195,7 @@ function ArrivalsList({ data, selection, tracking, onSelect, picked, onPick, rec
           ))}
         </ItemGroup>
       )}
+      <NextTrips rows={nextTrips} atStop />
       {waiting.length > 0 && <p className="px-3 text-xs text-muted-foreground">{waitingText(waiting)}</p>}
       <div className="mt-auto pb-4"><UpdatedAgo fetchedAt={oldestFetch(lines)} /></div>
     </>
@@ -233,6 +244,7 @@ function arrivalDetail(arrival: StopArrivalView, stopName: string, bothWays: boo
     sameName(arrival.directionName, stopName) && t.endsHere,
     bothWays && !sameName(arrival.directionName, stopName) && t.towards(titleCase(arrival.directionName)),
     !bus.notDeparted && bus.lastStopName && t.nowAt(titleCase(bus.lastStopName)),
+    bus.notDeparted && bus.planned && strings().plan.leaves(clock(bus.planned.departs)),
     reportAge(ageSeconds) !== 'fresh' && seenAgo(ageSeconds),
   ].filter(Boolean)
   return parts.join(' · ')
@@ -259,7 +271,7 @@ function ArrivalRow({ arrival, stopName, bothWays, ageSeconds, receivedAt, selec
           {detail && <ItemDescription className="first-letter:uppercase">{detail}</ItemDescription>}
         </ItemContent>
         <ItemActions>
-          {bus.etaSeconds != null ? <Minutes etaSeconds={bus.etaSeconds} receivedAt={receivedAt} /> : <span className="text-xs text-muted-foreground">{strings().bus.notLeft}</span>}
+          <ArrivalTime bus={bus} receivedAt={receivedAt} />
         </ItemActions>
       </Item>
       {selected && <TrackingDetails arrival={arrival} tracking={tracking} />}

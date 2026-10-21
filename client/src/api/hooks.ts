@@ -1,7 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type {
+  AnnouncementsResponse,
   BusPathResponse,
+  DayType,
   FavoritesResponse,
   LineArrivalsResponse,
   LineLiveResponse,
@@ -13,6 +15,7 @@ import type {
   StopArrivalsView,
   StopDetails,
   StopSearchResult,
+  TimetableResponse,
 } from './types'
 
 const LIVE_REFRESH_MS = 30_000
@@ -115,6 +118,27 @@ export function useBusPath(line: string | null, bus: string | null, stop: string
     enabled: !!line && !!bus && !!stop,
     refetchInterval: LIVE_REFRESH_MS,
     placeholderData: keepPreviousData,
+  })
+}
+
+export function useLineTimetable(line: string, day: DayType | null) {
+  return useQuery({
+    queryKey: ['line', line, 'timetable', day],
+    queryFn: () => api<TimetableResponse>(`/api/lines/${enc(line)}/timetable${day ? `?day=${day}` : ''}`),
+    enabled: !!line,
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useAnnouncements(lines: string[], stops: string[]) {
+  const lineList = [...new Set(lines)].sort().join(',')
+  const stopList = [...new Set(stops)].sort().join(',')
+  return useQuery({
+    queryKey: ['announcements', lineList, stopList],
+    queryFn: () => api<AnnouncementsResponse>(`/api/announcements?lines=${enc(lineList)}&stops=${enc(stopList)}`),
+    enabled: lineList.length > 0 || stopList.length > 0,
+    refetchInterval: 5 * 60_000,
   })
 }
 

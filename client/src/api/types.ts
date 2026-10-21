@@ -45,6 +45,64 @@ export interface StopDetails {
   lines: StopLine[]
 }
 
+export type DayType = 'I' | 'C' | 'P'
+
+export interface PlannedTripView {
+  departs: string
+  atStop: string | null
+  routeCode: string
+  variant: string
+  cancelled: boolean
+}
+
+export interface PlannedView {
+  direction: Direction
+  firstStop: string
+  dayType: DayType
+  holiday: boolean
+  next: PlannedTripView[]
+}
+
+export interface AnnouncementView {
+  line: string
+  kind: 'cancelled' | 'notice'
+  message: string
+  postedAt: string
+  direction: Direction | null
+  fromStop: string | null
+  departure: string | null
+  reason: string | null
+}
+
+export interface TimetableTripView {
+  time: string
+  at: string
+  routeCode: string
+  variant: string
+  cancelled: boolean
+}
+
+export interface TimetableDirectionView {
+  direction: Direction
+  name: string
+  firstStop: string
+  trips: TimetableTripView[]
+}
+
+export interface TimetableResponse {
+  line: string
+  dayType: DayType
+  holiday: boolean
+  todayDayType: DayType
+  available: boolean
+  directions: TimetableDirectionView[]
+  announcements: AnnouncementView[]
+}
+
+export interface AnnouncementsResponse {
+  announcements: AnnouncementView[]
+}
+
 export interface ArrivalView {
   doorNo: string
   routeCode: string
@@ -57,6 +115,7 @@ export interface ArrivalView {
   lastStopSeq: number | null
   lastStopName: string | null
   heavyTraffic: boolean
+  planned: PlannedTripView | null
 }
 
 export interface PassedView {
@@ -81,12 +140,14 @@ export interface LineStatusView {
   data: Freshness | null
   error: string | null
   retryInSeconds: number | null
+  planned: PlannedView | null
 }
 
 export interface StopArrivalsView {
   stop: StopInfo
   arrivals: StopArrivalView[]
   lines: LineStatusView[]
+  announcements: AnnouncementView[]
 }
 
 export interface LineStop {
@@ -147,12 +208,15 @@ export interface TrackedBusView {
   speedKmh: number | null
   passedStopSeqs: number[]
   heavyTraffic: boolean
+  planned: PlannedTripView | null
 }
 
 export interface LineLiveResponse {
   line: string
   data: Freshness
   buses: TrackedBusView[]
+  planned: PlannedView[]
+  announcements: AnnouncementView[]
 }
 
 export interface LineArrivalsResponse {
@@ -162,6 +226,8 @@ export interface LineArrivalsResponse {
   data: Freshness
   approaching: ArrivalView[]
   recentlyPassed: PassedView[]
+  planned: PlannedView | null
+  announcements: AnnouncementView[]
 }
 
 export interface FavoriteLine {

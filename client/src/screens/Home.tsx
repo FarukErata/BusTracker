@@ -1,9 +1,10 @@
 import { useDeferredValue, useState, type FocusEvent } from 'react'
 import { Link } from 'react-router'
 import { ChevronRight, History, MapPin, Search, Smartphone, UserRound, X } from 'lucide-react'
-import { useFavorites, useLineSearch, useStopSearch } from '@/api/hooks'
+import { useAnnouncements, useFavorites, useLineSearch, useStopSearch } from '@/api/hooks'
 import type { FavoritesResponse, LineSummary, StopSearchResult } from '@/api/types'
 import { EmptyState, ErrorState, LanguageMenu, LineBadge, LineBadges, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards } from '@/components/bits'
+import { Announcements } from '@/components/planned'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
@@ -109,6 +110,10 @@ function RecentRow({ item }: { item: Recent }) {
 
 function Favorites() {
   const favorites = useFavorites()
+  const announcements = useAnnouncements(
+    favorites.data?.lines.map(l => l.favorite.lineCode) ?? [],
+    favorites.data?.stops.map(s => s.favorite.stopCode) ?? [],
+  )
   const t = useT()
   if (favorites.isPending) return <RowsSkeleton />
   if (favorites.isError) return <ErrorState message={favorites.error.message} onRetry={() => favorites.refetch()} />
@@ -117,8 +122,15 @@ function Favorites() {
   if (stops.length === 0 && lines.length === 0)
     return <EmptyState title={t.home.emptyTitle} description={t.home.emptyText} />
 
+  const notices = announcements.data?.announcements ?? []
   return (
     <>
+      {notices.length > 0 && (
+        <>
+          <SectionTitle>{t.home.announcements}</SectionTitle>
+          <Announcements items={notices} />
+        </>
+      )}
       {stops.length > 0 && <SectionTitle>{t.home.yourStops}</SectionTitle>}
       <ItemGroup>{stops.map(s => <FavoriteStopRow key={s.favorite.id} item={s} />)}</ItemGroup>
       {lines.length > 0 && <SectionTitle>{t.home.yourLines}</SectionTitle>}

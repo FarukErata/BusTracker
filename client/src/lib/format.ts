@@ -59,3 +59,14 @@ export function reportAge(seconds: number): ReportAge {
 export const secondsSince = (iso: string, now = Date.now()) => Math.max(0, (now - Date.parse(iso)) / 1000)
 
 export const seenAgo = (seconds: number) => strings().time.seen(ago(seconds))
+
+const ISTANBUL_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+
+export const clock = (iso: string) => ISTANBUL_CLOCK.format(new Date(iso))
+
+export function sentenceCase(text: string): string {
+  return text
+    .trim()
+    .toLocaleLowerCase(TR)
+    .replace(/(^|[.!?]\s+)(\p{L})/gu, (_, before: string, letter: string) => before + letter.toLocaleUpperCase(TR))
+}
