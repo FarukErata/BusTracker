@@ -1,6 +1,6 @@
-import { useDeferredValue, useState } from 'react'
+import { useDeferredValue, useState, type FocusEvent } from 'react'
 import { Link } from 'react-router'
-import { ChevronRight, MapPin, Search, Smartphone, UserRound, X } from 'lucide-react'
+import { ChevronRight, History, MapPin, Search, Smartphone, UserRound, X } from 'lucide-react'
 import { useFavorites, useLineSearch, useStopSearch } from '@/api/hooks'
 import type { FavoritesResponse, LineSummary, StopSearchResult } from '@/api/types'
 import { EmptyState, ErrorState, LineBadge, LineBadges, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards } from '@/components/bits'
@@ -8,11 +8,18 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { directionLabel, titleCase } from '@/lib/format'
+import { clearRecents, useRecents, type Recent } from '@/lib/recents'
 
 export function Home() {
   const [query, setQuery] = useState('')
   const deferred = useDeferredValue(query)
   const searching = query.trim().length > 0
+  const [focused, setFocused] = useState(false)
+  const recents = useRecents()
+  const leave = (e: FocusEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false)
+  }
+  const showRecents = focused && !searching && recents.length > 0
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
@@ -26,12 +33,15 @@ export function Home() {
         </Link>
         <ThemeToggle />
       </header>
+      <div onBlur={leave} className="flex flex-1 flex-col">
       <div className="px-3 pt-2">
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             value={query}
             onChange={e => setQuery(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onKeyDown={e => e.key === 'Escape' && e.currentTarget.blur()}
             placeholder="Stop or line, like Fabrikalar or 500T"
             className="pr-9 pl-8"
             aria-label="Search stops and lines"
@@ -43,8 +53,36 @@ export function Home() {
           )}
         </div>
       </div>
-      {searching ? <SearchResults query={deferred} /> : <Favorites />}
+      {searching ? <SearchResults query={deferred} /> : showRecents ? <Recents items={recents} /> : <Favorites />}
+      </div>
     </div>
+  )
+}
+
+function Recents({ items }: { items: Recent[] }) {
+  return (
+    <div onMouseDown={e => e.preventDefault()}>
+      <div className="flex items-end justify-between pr-1.5">
+        <SectionTitle>Recent</SectionTitle>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearRecents}>Clear</Button>
+      </div>
+      <ItemGroup>{items.map(r => <RecentRow key={`${r.kind}-${r.code}-${r.kind === 'line' ? r.direction : ''}`} item={r} />)}</ItemGroup>
+    </div>
+  )
+}
+
+function RecentRow({ item }: { item: Recent }) {
+  const target = item.kind === 'stop' ? `/stops/${item.code}` : `/lines/${item.code}?dir=${item.direction}`
+  return (
+    <Item className="pressable" render={<Link to={target} />}>
+      {item.kind === 'stop'
+        ? <ItemMedia variant="icon"><History className="text-muted-foreground" /></ItemMedia>
+        : <ItemMedia><LineBadge code={item.code} /></ItemMedia>}
+      <ItemContent>
+        <ItemTitle>{item.kind === 'stop' ? <StopName name={item.name} district={item.district} /> : item.title}</ItemTitle>
+      </ItemContent>
+      <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
+    </Item>
   )
 }
 

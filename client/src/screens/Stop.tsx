@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ArrowRight, Star } from 'lucide-react'
 import { useAddFavoriteStop, useFavorites, useRemoveFavoriteStop, useStop, useStopArrivals } from '@/api/hooks'
@@ -9,6 +10,7 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, 
 import { Skeleton } from '@/components/ui/skeleton'
 import { busWhere, reportAge, secondsSince, seenAgo, titleCase } from '@/lib/format'
 import { useIsWide } from '@/lib/media'
+import { rememberRecent } from '@/lib/recents'
 import { useStopLineFilter } from '@/lib/stopFilters'
 import { useTracking, type TrackedSelection, type TrackingView } from '@/lib/tracking'
 import { cn } from '@/lib/utils'
@@ -19,6 +21,9 @@ export function Stop() {
   const [picked, setPicked] = useStopLineFilter(code)
   const arrivals = useStopArrivals(code, picked)
   const info = stop.data?.stop
+  useEffect(() => {
+    if (info) rememberRecent({ kind: 'stop', code: info.code, name: info.name, district: info.district })
+  }, [info])
   const wide = useIsWide()
   const [params, setParams] = useSearchParams()
   const selection = readSelection(params)
@@ -184,7 +189,12 @@ function ArrivalsList({ data, selection, tracking, onSelect, picked, onPick, rec
   )
 }
 
+function pinnedFirst(lines: string[], pinned: string[]) {
+  return [...lines.filter(l => pinned.includes(l)), ...lines.filter(l => !pinned.includes(l))]
+}
+
 function LineFilter({ lines, picked, onChange }: { lines: string[]; picked: string[]; onChange: (lines: string[]) => void }) {
+  const [pinned] = useState(picked)
   const toggle = (line: string) => {
     const next = picked.includes(line) ? picked.filter(l => l !== line) : [...picked, line]
     onChange(next.length === lines.length ? [] : next)
@@ -192,7 +202,7 @@ function LineFilter({ lines, picked, onChange }: { lines: string[]; picked: stri
   return (
     <div role="group" aria-label="Lines to show" className="flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
       <FilterChip active={picked.length === 0} onClick={() => onChange([])}>All</FilterChip>
-      {lines.map(line => (
+      {pinnedFirst(lines, pinned).map(line => (
         <FilterChip key={line} active={picked.includes(line)} onClick={() => toggle(line)}>{line}</FilterChip>
       ))}
     </div>

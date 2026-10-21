@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { ArrowLeftRight, MapPin, Star, X } from 'lucide-react'
 import { useAddFavoriteLine, useBusPath, useFavorites, useLineArrivals, useLineLive, useLineShapes, useLineStops, useRemoveFavoriteLine } from '@/api/hooks'
@@ -8,8 +8,9 @@ import { LineMap } from '@/components/maps'
 import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
-import { distance, reportAge, secondsSince, seenAgo, stopsAway, titleCase } from '@/lib/format'
+import { directionLabel, distance, reportAge, secondsSince, seenAgo, stopsAway, titleCase } from '@/lib/format'
 import { useIsWide } from '@/lib/media'
+import { rememberRecent } from '@/lib/recents'
 import { cn } from '@/lib/utils'
 
 const PEEK = '180px'
@@ -33,6 +34,10 @@ export function Line() {
 
   const directions = stops.data?.directions ?? []
   const direction = directions.find(d => d.direction === params.get('dir')) ?? directions[0]
+  const directionTitle = direction ? directionLabel(direction.stops[0]?.name ?? '', direction.name) : null
+  useEffect(() => {
+    if (direction && directionTitle) rememberRecent({ kind: 'line', code, direction: direction.direction, title: directionTitle })
+  }, [code, direction, directionTitle])
   const pinnedStop = params.get('stop')
   const arrivals = useLineArrivals(code, pinnedStop, direction?.direction ?? null)
 
