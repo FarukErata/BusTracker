@@ -106,8 +106,9 @@ if (app.Environment.IsDevelopment())
     app.UseStaticFiles(new StaticFileOptions { FileProvider = devPage, RequestPath = "/dev" });
 }
 
+var webApp = new StaticFileOptions { OnPrepareResponse = WebAppCaching.Apply };
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(webApp);
 app.UseRouting();
 app.UseMiddleware<RequestTracingMiddleware>();
 
@@ -123,7 +124,7 @@ app.MapStopEndpoints();
 app.MapLineEndpoints();
 app.MapLiveEndpoints();
 app.MapStatsEndpoints();
-app.MapFallbackToFile("{*path:regex(^(?!api/|dev/|health).*$)}", "index.html").AllowAnonymous();
+app.MapFallbackToFile("{*path:regex(^(?!api/|dev/|health).*$)}", "index.html", webApp).AllowAnonymous();
 
 var access = app.Services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Access;
 if (!app.Environment.IsDevelopment())
