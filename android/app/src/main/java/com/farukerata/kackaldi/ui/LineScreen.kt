@@ -70,7 +70,7 @@ private const val LIVE_REFRESH_MILLIS = 30_000L
 private val ShownStatuses = setOf("ok", "at-terminal", "stale")
 private val PeekHeight = 180.dp
 
-class LineViewModel(private val api: KacKaldiApi, val code: String, initialDirection: String?, initialStop: String?) : ViewModel() {
+class LineViewModel(val api: KacKaldiApi, val code: String, initialDirection: String?, initialStop: String?) : ViewModel() {
     var stops by mutableStateOf<Load<LineStopsResponse>>(Load.Loading)
         private set
     var shapes by mutableStateOf<List<RouteShape>>(emptyList())
@@ -292,7 +292,9 @@ private fun LineHeaderCard(viewModel: LineViewModel, onBack: () -> Unit) {
 private fun LinePanel(viewModel: LineViewModel, modifier: Modifier) {
     val direction = viewModel.direction()
     val loading = viewModel.stops is Load.Loading || viewModel.live == null
+    val announcements = viewModel.live?.announcements.orEmpty().filter { it.direction == null || it.direction == direction?.direction }
     LazyColumn(modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)) {
+        if (announcements.isNotEmpty()) item { AnnouncementsCard(announcements, showLines = false) }
         val pinned = viewModel.pinnedStop
         if (pinned != null && direction != null) pinnedArrivals(viewModel, direction, pinned)
         else busPositions(viewModel, direction, loading)
@@ -333,6 +335,9 @@ private fun LazyListScope.pinnedArrivals(viewModel: LineViewModel, direction: Li
             if (passed > 0) item {
                 Text(S.passed(passed), Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = Kit.xs, color = Kit.colors.mutedForeground)
             }
+            state.value.planned?.let { planned ->
+                item { NextTrips(listOf(NextTripsRow(planned.direction, viewModel.code, null, planned.next)), atStop = true) }
+            }
         }
     }
 }
@@ -340,14 +345,14 @@ private fun LazyListScope.pinnedArrivals(viewModel: LineViewModel, direction: Li
 @Composable
 private fun ApproachingRow(arrival: ArrivalView, receivedAt: Long, selected: Boolean, onClick: () -> Unit) {
     val detail = if (arrival.notDeparted) {
-        S.atFirstStop
+        listOfNotNull(S.atFirstStop, plannedDetail(arrival.planned)).joinToString(" · ")
     } else {
         listOfNotNull(stopsAway(arrival.stopsAway), distance(arrival.distanceMeters), arrival.lastStopName?.let { S.nowAt(titleCase(it)) }).joinToString(" · ")
     }
     ItemRow(
         onClick = onClick,
         selected = selected,
-        trailing = { arrival.etaSeconds?.let { Minutes(it, receivedAt) } ?: NotLeft() },
+        trailing = { ArrivalTime(arrival.etaSeconds, arrival.planned, receivedAt) },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ItemTitle(arrival.doorNo)
@@ -377,7 +382,11 @@ private fun LazyListScope.busPositions(viewModel: LineViewModel, direction: Line
             ItemDescription(describePosition(bus, direction, age))
         }
     }
+    viewModel.live?.planned?.firstOrNull { it.direction == direction?.direction }?.let { planned ->
+        item { NextTrips(listOf(NextTripsRow(planned.direction, viewModel.code, null, planned.next)), atStop = false) }
+    }
     if (direction != null) {
+        item(key = "timetable-${direction.direction}") { TimetableSection(viewModel.api, viewModel.code, direction.direction) }
         item { SectionTitle(S.stops) }
         items(direction.stops, key = { "stop-${direction.direction}-${it.seq}-${it.code}" }) { stop ->
             Row(
@@ -395,7 +404,8 @@ private fun LazyListScope.busPositions(viewModel: LineViewModel, direction: Line
 private fun describePosition(bus: LiveBus, direction: LineDirection?, ageSeconds: Long): String {
     fun name(seq: Int?) = seq?.let { s -> direction?.stops?.firstOrNull { it.seq == s } }?.let { titleCase(it.name) }
     val place = if (bus.status == "at-terminal") {
-        name(direction?.stops?.firstOrNull()?.seq)?.let(S::waitingAt) ?: S.waitingAtFirst
+        val waiting = name(direction?.stops?.firstOrNull()?.seq)?.let(S::waitingAt) ?: S.waitingAtFirst
+        listOfNotNull(waiting, plannedDetail(bus.planned)).joinToString(" · ")
     } else {
         listOfNotNull(name(bus.lastStopSeq)?.let { S.after(it) }, name(bus.nextStopSeq)?.let { S.next(it) }).joinToString(" · ")
     }

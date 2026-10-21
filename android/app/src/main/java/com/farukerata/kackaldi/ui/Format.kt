@@ -8,6 +8,8 @@ import com.farukerata.kackaldi.i18n.S
 import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -70,3 +72,15 @@ fun countdown(seconds: Long): String {
 
 fun distance(meters: Double): String =
     if (meters < 1000) "${(Math.round(meters / 10) * 10)} m" else String.format(java.util.Locale.ROOT, "%.1f km", meters / 1000)
+
+private val istanbul: ZoneId = ZoneId.of("Europe/Istanbul")
+private val clockFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val sentenceStart = Regex("""(^|[.!?]\s+)(\p{L})""")
+
+fun clock(iso: String): String =
+    runCatching { OffsetDateTime.parse(iso).atZoneSameInstant(istanbul).format(clockFormat) }.getOrDefault("")
+
+fun epochMillis(iso: String): Long = runCatching { OffsetDateTime.parse(iso).toInstant().toEpochMilli() }.getOrDefault(0L)
+
+fun sentenceCase(text: String): String =
+    text.trim().lowercase(turkish).replace(sentenceStart) { it.groupValues[1] + it.groupValues[2].uppercase(turkish) }

@@ -71,6 +71,21 @@ class KacKaldiApi(private val store: DeviceStore) {
         }
     }
 
+    suspend fun timetable(code: String, day: String?): TimetableResponse = authorized { auth ->
+        get("api/lines/$code/timetable") {
+            auth()
+            if (day != null) parameter("day", day)
+        }
+    }
+
+    suspend fun announcements(lines: Collection<String>, stops: Collection<String>): AnnouncementsResponse = authorized { auth ->
+        get("api/announcements") {
+            auth()
+            parameter("lines", lines.distinct().sorted().joinToString(","))
+            parameter("stops", stops.distinct().sorted().joinToString(","))
+        }
+    }
+
     suspend fun busPath(code: String, bus: String, stop: String): BusPathResponse = authorized { auth ->
         get("api/lines/$code/path") {
             auth()

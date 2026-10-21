@@ -22,6 +22,55 @@ data class LineEnds(val direction: String, val from: String, val to: String)
 data class LineSummary(val lineCode: String, val directions: List<LineEnds>)
 
 @Serializable
+data class PlannedTripView(
+    val departs: String,
+    val atStop: String? = null,
+    val routeCode: String = "",
+    val variant: String = "",
+    val cancelled: Boolean = false,
+)
+
+@Serializable
+data class PlannedView(
+    val direction: String,
+    val firstStop: String = "",
+    val dayType: String = "",
+    val holiday: Boolean = false,
+    val next: List<PlannedTripView> = emptyList(),
+)
+
+@Serializable
+data class AnnouncementView(
+    val line: String,
+    val kind: String,
+    val message: String,
+    val postedAt: String = "",
+    val direction: String? = null,
+    val fromStop: String? = null,
+    val departure: String? = null,
+)
+
+@Serializable
+data class TimetableTripView(val time: String, val at: String, val routeCode: String = "", val cancelled: Boolean = false)
+
+@Serializable
+data class TimetableDirectionView(val direction: String, val name: String = "", val firstStop: String = "", val trips: List<TimetableTripView> = emptyList())
+
+@Serializable
+data class TimetableResponse(
+    val line: String,
+    val dayType: String,
+    val holiday: Boolean = false,
+    val todayDayType: String,
+    val available: Boolean = false,
+    val directions: List<TimetableDirectionView> = emptyList(),
+    val announcements: List<AnnouncementView> = emptyList(),
+)
+
+@Serializable
+data class AnnouncementsResponse(val announcements: List<AnnouncementView> = emptyList())
+
+@Serializable
 data class ArrivalView(
     val doorNo: String,
     val routeCode: String,
@@ -34,6 +83,7 @@ data class ArrivalView(
     val lastStopSeq: Int? = null,
     val lastStopName: String? = null,
     val heavyTraffic: Boolean = false,
+    val planned: PlannedTripView? = null,
 )
 
 @Serializable
@@ -50,10 +100,16 @@ data class LineStatusView(
     val data: Freshness? = null,
     val error: String? = null,
     val retryInSeconds: Int? = null,
+    val planned: PlannedView? = null,
 )
 
 @Serializable
-data class StopArrivalsView(val stop: StopInfo, val arrivals: List<StopArrivalView>, val lines: List<LineStatusView>)
+data class StopArrivalsView(
+    val stop: StopInfo,
+    val arrivals: List<StopArrivalView>,
+    val lines: List<LineStatusView>,
+    val announcements: List<AnnouncementView> = emptyList(),
+)
 
 @Serializable
 data class LineStop(val seq: Int, val code: String, val name: String, val district: String = "", val lat: Double = 0.0, val lng: Double = 0.0)
@@ -79,6 +135,7 @@ data class LiveBus(
     val nextStopSeq: Int? = null,
     val alongMeters: Double? = null,
     val heavyTraffic: Boolean = false,
+    val planned: PlannedTripView? = null,
 )
 
 @Serializable
@@ -95,6 +152,8 @@ data class LineArrivalsResponse(
     val data: Freshness,
     val approaching: List<ArrivalView>,
     val recentlyPassed: List<PassedView>,
+    val planned: PlannedView? = null,
+    val announcements: List<AnnouncementView> = emptyList(),
 )
 
 @Serializable
@@ -116,7 +175,13 @@ data class BusPathResponse(
 data class AddFavoriteLineRequest(val line: String, val direction: String?)
 
 @Serializable
-data class LineLiveResponse(val line: String, val data: Freshness, val buses: List<LiveBus>)
+data class LineLiveResponse(
+    val line: String,
+    val data: Freshness,
+    val buses: List<LiveBus>,
+    val planned: List<PlannedView> = emptyList(),
+    val announcements: List<AnnouncementView> = emptyList(),
+)
 
 @Serializable
 data class RouteShape(val routeCode: String, val direction: String, val variant: String, val points: List<List<Double>>)

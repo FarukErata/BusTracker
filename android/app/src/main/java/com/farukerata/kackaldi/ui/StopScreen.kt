@@ -351,10 +351,17 @@ private fun ArrivalsList(
     val arrivals = data.arrivals.filter { it.line in visible }
     val bothWays = lines.groupBy { it.line }.filterValues { it.size > 1 }.keys
     val waiting = lines.filter { it.error != null }
+    val announcements = data.announcements.filter { a ->
+        a.line in visible && (a.direction == null || lines.any { it.line == a.line && it.direction == a.direction })
+    }
+    val nextTrips = lines.mapNotNull { status ->
+        status.planned?.let { NextTripsRow("${status.line}-${status.direction}", status.line, if (status.line in bothWays) S.towards(titleCase(status.directionName)) else null, it.next) }
+    }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
         if (allLines.size > 1) item {
             LineFilter(allLines, visible.takeIf { it.size < allLines.size }.orEmpty(), { viewModel.toggleLine(it, allLines) }, viewModel::showAllLines)
         }
+        if (announcements.isNotEmpty()) item { AnnouncementsCard(announcements) }
         item {
             if (watch != null && watch.stopCode == viewModel.code) WatchBar(watch, onStopWatching)
             else NewAlertButton { onAlert(alertLinesFor(lines, arrivals, filtered = visible.size < allLines.size)) }
@@ -371,6 +378,7 @@ private fun ArrivalsList(
                 if (isSelected) TrackingDetails(arrival, viewModel.tracking?.remainingStops, { onAlert(listOf(alertLine(arrival))) }) { onLine(arrival.line, arrival.direction, viewModel.code) }
             }
         }
+        item { NextTrips(nextTrips, atStop = true) }
         if (waiting.isNotEmpty()) item {
             Text(waitingText(waiting), Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = Kit.xs, color = Kit.colors.mutedForeground)
         }
@@ -402,16 +410,14 @@ private fun ArrivalRow(
         if (endsHere) add(S.endsHere)
         if (bothWays && !endsHere) add(S.towards(titleCase(arrival.directionName)))
         if (!bus.notDeparted) bus.lastStopName?.let { add(S.nowAt(titleCase(it))) }
+        if (bus.notDeparted) plannedDetail(bus.planned)?.let(::add)
         if (age != ReportAge.Fresh) add(seenAgo(ageSeconds))
     }.joinToString(" · ").replaceFirstChar { it.uppercase() }
     ItemRow(
         onClick = onClick,
         selected = selected,
         leading = { LineBadge(arrival.line, age = age) },
-        trailing = {
-            val eta = bus.etaSeconds
-            if (eta != null) Minutes(eta, receivedAt) else NotLeft()
-        },
+        trailing = { ArrivalTime(bus.etaSeconds, bus.planned, receivedAt) },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ItemTitle(busWhere(bus.notDeparted, bus.stopsAway), Modifier.weight(1f, fill = false))

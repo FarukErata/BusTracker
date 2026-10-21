@@ -32,6 +32,26 @@ abstract class Strings {
     abstract fun towards(name: String): String
     abstract fun nowAt(name: String): String
 
+    abstract fun leaves(time: String): String
+    abstract val planned: String
+    abstract val nextTrips: String
+    abstract val estimatedHere: String
+    abstract val cancelled: String
+    abstract fun cancelledTrip(stop: String, time: String): String
+    abstract fun announcementCount(n: Int): String
+    abstract val announcementsTitle: String
+    abstract val showTimetable: String
+    abstract val hideTimetable: String
+    abstract fun departuresFrom(stop: String): String
+    abstract val weekdays: String
+    abstract val saturday: String
+    abstract val sunday: String
+    abstract val holidayTimetable: String
+    abstract val noTrips: String
+    abstract val timetableUnavailable: String
+    abstract fun showMoreLines(n: Int): String
+    abstract val showLess: String
+
     abstract val alerts: String
     abstract val devices: String
     abstract val searchPlaceholder: String
