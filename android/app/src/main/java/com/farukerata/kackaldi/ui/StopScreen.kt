@@ -195,7 +195,7 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, St
         stop?.let { app.recents.remember(Recent(Recent.STOP, it.code, it.name, it.district)) }
     }
     val lastTrigger by app.settings.lastTrigger.collectAsStateWithLifecycle(initialValue = WatchTrigger(TriggerKind.Minutes, 5))
-    var watchFor by remember { mutableStateOf<StopArrivalView?>(null) }
+    var watchFor by remember { mutableStateOf<List<AlertLine>?>(null) }
     var pending by remember { mutableStateOf<AlertDraft?>(null) }
     val apply = { draft: AlertDraft, stopName: String ->
         scope.launch {
@@ -254,7 +254,7 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, St
             api = app.api,
             stopCode = viewModel.code,
             options = data.lines.map { AlertLine(it.line, it.direction, it.directionName) }.distinct(),
-            first = AlertLine(target.line, target.direction, target.directionName),
+            preselected = target,
             approaching = data.arrivals.map { SeenBus(it.line, it.bus) },
             initial = lastTrigger,
             onSave = { draft ->
@@ -342,7 +342,7 @@ private fun ArrivalsList(
     viewModel: StopViewModel,
     onLine: (String, String?, String?) -> Unit,
     watch: Watch?,
-    onNotify: (StopArrivalView) -> Unit,
+    onAlert: (List<AlertLine>) -> Unit,
     onStopWatching: () -> Unit,
 ) {
     val allLines = data.lines.map { it.line }.distinct()
@@ -352,9 +352,12 @@ private fun ArrivalsList(
     val bothWays = lines.groupBy { it.line }.filterValues { it.size > 1 }.keys
     val waiting = lines.filter { it.error != null }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
-        if (watch != null && watch.stopCode == viewModel.code) item { WatchBar(watch, onStopWatching) }
         if (allLines.size > 1) item {
             LineFilter(allLines, visible.takeIf { it.size < allLines.size }.orEmpty(), { viewModel.toggleLine(it, allLines) }, viewModel::showAllLines)
+        }
+        item {
+            if (watch != null && watch.stopCode == viewModel.code) WatchBar(watch, onStopWatching)
+            else NewAlertButton { onAlert(alertLinesFor(lines, arrivals, filtered = visible.size < allLines.size)) }
         }
         if (arrivals.isEmpty()) item {
             EmptyState("No bus on the way", "Lines here: ${visible.joinToString(", ")}.")
@@ -365,7 +368,7 @@ private fun ArrivalsList(
             val isSelected = viewModel.selection?.let { it.line == arrival.line && it.direction == arrival.direction && it.doorNo == arrival.bus.doorNo } == true
             Column(Modifier.animateContentSize().background(if (isSelected) Kit.colors.secondary.copy(alpha = 0.6f) else androidx.compose.ui.graphics.Color.Transparent)) {
                 ArrivalRow(arrival, data.stop.name, arrival.line in bothWays, age, viewModel.receivedAt, false) { viewModel.toggle(arrival) }
-                if (isSelected) TrackingDetails(arrival, viewModel.tracking?.remainingStops, { onNotify(arrival) }) { onLine(arrival.line, arrival.direction, viewModel.code) }
+                if (isSelected) TrackingDetails(arrival, viewModel.tracking?.remainingStops, { onAlert(listOf(alertLine(arrival))) }) { onLine(arrival.line, arrival.direction, viewModel.code) }
             }
         }
         if (waiting.isNotEmpty()) item {
@@ -451,6 +454,23 @@ private fun TrackingDetails(arrival: StopArrivalView, remaining: List<PathStop>?
             )
         }
     }
+}
+
+private fun alertLine(arrival: StopArrivalView) = AlertLine(arrival.line, arrival.direction, arrival.directionName)
+
+private fun alertLinesFor(lines: List<LineStatusView>, arrivals: List<StopArrivalView>, filtered: Boolean): List<AlertLine> =
+    if (filtered) lines.map { AlertLine(it.line, it.direction, it.directionName) }.distinct()
+    else listOfNotNull(arrivals.firstOrNull()?.let(::alertLine))
+
+@Composable
+private fun NewAlertButton(onClick: () -> Unit) {
+    KitButton(
+        "Set an alert",
+        onClick,
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp).fillMaxWidth(),
+        kind = ButtonKind.Outline,
+        icon = Icons.Outlined.NotificationsNone,
+    )
 }
 
 @Composable

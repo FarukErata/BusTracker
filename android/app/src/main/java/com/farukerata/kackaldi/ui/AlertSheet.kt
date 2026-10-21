@@ -63,14 +63,14 @@ fun AlertSheet(
     api: KacKaldiApi,
     stopCode: String,
     options: List<AlertLine>,
-    first: AlertLine,
+    preselected: List<AlertLine>,
     approaching: List<SeenBus>,
     initial: WatchTrigger,
     onSave: (AlertDraft) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = Kit.colors
-    var picked by remember { mutableStateOf(listOf(first)) }
+    var picked by remember { mutableStateOf(preselected.ifEmpty { options.take(1) }) }
     var readyAt by remember { mutableStateOf<LocalTime?>(null) }
     var days by remember { mutableStateOf(emptySet<Int>()) }
     var choosingTime by remember { mutableStateOf(false) }
