@@ -6,9 +6,10 @@ namespace BusTracker.Api.Timetables;
 
 public sealed record WaitingBus(string DoorNo, string RouteCode);
 
-public sealed record PlannedTripView(DateTimeOffset Departs, DateTimeOffset? AtStop, string RouteCode, string Variant, bool Cancelled);
+public sealed record PlannedTripView(DateTimeOffset Departs, DateTimeOffset? AtStop, string RouteCode, string Variant, bool Cancelled, bool NextDay);
 
-public sealed record PlannedView(string Direction, string FirstStop, string DayType, bool Holiday, IReadOnlyList<PlannedTripView> Next);
+public sealed record PlannedView(
+    string Direction, string FirstStop, string DayType, bool Holiday, IReadOnlyList<PlannedTripView> Next, DateOnly NextDate);
 
 public sealed record AnnouncementView(
     string Line, string Kind, string Message, string PostedAt, string? Direction, string? FromStop, string? Departure, string? Reason)
@@ -60,7 +61,7 @@ public sealed class LinePlan(Timetable? table, LineTracks tracks, ServiceDay day
             .Where((trip, i) => !taken.Contains(i) && (trip.AtStop ?? trip.Departs) >= now - LateDeparture)
             .Take(NextShown)
             .ToList();
-        return (new PlannedView(direction, main.Stops.FirstOrDefault()?.Name ?? "", day.DayType, day.Holiday, next), assigned);
+        return (new PlannedView(direction, main.Stops.FirstOrDefault()?.Name ?? "", day.DayType, day.Holiday, next, day.Next.Date), assigned);
     }
 
     private static int Pick(IReadOnlyList<PlannedTripView> trips, HashSet<int> taken, string routeCode)
@@ -75,7 +76,7 @@ public sealed class LinePlan(Timetable? table, LineTracks tracks, ServiceDay day
         stopCode is null || tracks.For(routeCode, direction)?.FindStop(stopCode) is not null;
 
     private PlannedTripView ToView(DatedDeparture d, string direction, string? stopCode) =>
-        new(d.At, AtStop(d, direction, stopCode), d.Trip.RouteCode, d.Trip.Variant, IsCancelled(direction, d.Trip, d.Day));
+        new(d.At, AtStop(d, direction, stopCode), d.Trip.RouteCode, d.Trip.Variant, IsCancelled(direction, d.Trip, d.Day), d.Day != day);
 
     private DateTimeOffset? AtStop(DatedDeparture d, string direction, string? stopCode)
     {

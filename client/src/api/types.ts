@@ -53,6 +53,7 @@ export interface PlannedTripView {
   routeCode: string
   variant: string
   cancelled: boolean
+  nextDay: boolean
 }
 
 export interface PlannedView {
@@ -61,6 +62,7 @@ export interface PlannedView {
   dayType: DayType
   holiday: boolean
   next: PlannedTripView[]
+  nextDate: string
 }
 
 export interface AnnouncementView {

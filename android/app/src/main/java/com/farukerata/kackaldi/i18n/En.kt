@@ -63,6 +63,8 @@ object En : Strings() {
     override val timetableUnavailable = "The timetable isn't available right now."
     override fun showMoreLines(n: Int) = "Show $n more"
     override val showLess = "Show less"
+    override fun nextDayTrips(day: String) = "$day trips"
+    override val weekdayNames = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
     override val alerts = "Alerts"
     override val devices = "Your devices"

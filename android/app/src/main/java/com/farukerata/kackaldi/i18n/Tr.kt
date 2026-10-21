@@ -59,6 +59,8 @@ object Tr : Strings() {
     override val timetableUnavailable = "Sefer saatleri şu an alınamıyor."
     override fun showMoreLines(n: Int) = "$n hat daha göster"
     override val showLess = "Daha az göster"
+    override fun nextDayTrips(day: String) = "$day seferleri"
+    override val weekdayNames = listOf("Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar")
 
     override val alerts = "Hatırlatıcılar"
     override val devices = "Cihazlarım"

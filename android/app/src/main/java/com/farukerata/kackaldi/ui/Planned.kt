@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -42,6 +43,8 @@ import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.PlannedTripView
 import com.farukerata.kackaldi.data.TimetableResponse
 import com.farukerata.kackaldi.i18n.S
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 private const val NEXT_TRIPS_SHOWN = 5
 private val DayTypes = listOf("I", "C", "P")
@@ -151,19 +154,30 @@ fun TripTimes(trips: List<PlannedTripView>, atStop: Boolean) {
         trips.forEach { trip ->
             val stopTime = trip.atStop
             val time = if (atStop && stopTime != null) "~${clock(stopTime)}" else clock(trip.departs)
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     time,
                     style = Kit.sm.copy(textDecoration = if (trip.cancelled) TextDecoration.LineThrough else null),
                     color = if (trip.cancelled) colors.mutedForeground else colors.foreground,
                 )
+                if (trip.nextDay) NextDayDot()
                 if (trip.cancelled) Text(S.cancelled, style = Kit.xs, color = colors.destructive)
             }
         }
     }
 }
 
-data class NextTripsRow(val key: String, val line: String, val label: String?, val trips: List<PlannedTripView>)
+@Composable
+private fun NextDayDot() {
+    Box(Modifier.size(6.dp).background(Kit.colors.mutedForeground, CircleShape))
+}
+
+data class NextTripsRow(val key: String, val line: String, val label: String?, val trips: List<PlannedTripView>, val nextDate: String? = null)
+
+private fun dayWithDate(date: String): String = runCatching {
+    val day = LocalDate.parse(date)
+    "${S.weekdayNames[day.dayOfWeek.value - 1]} ${day.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))}"
+}.getOrDefault(date)
 
 private fun firstTripAt(row: NextTripsRow, atStop: Boolean): Long {
     val trip = row.trips.firstOrNull { !it.cancelled } ?: row.trips.first()
@@ -195,6 +209,17 @@ fun NextTrips(rows: List<NextTripsRow>, atStop: Boolean) {
                 Modifier.padding(horizontal = 4.dp),
                 kind = ButtonKind.Ghost,
             )
+        }
+        val nextDate = shown.firstOrNull { row -> row.trips.any { it.nextDay } }?.nextDate
+        if (nextDate != null) {
+            Row(
+                Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                NextDayDot()
+                Text(S.nextDayTrips(dayWithDate(nextDate)), style = Kit.xs, color = Kit.colors.mutedForeground)
+            }
         }
         if (atStop) Text(S.estimatedHere, Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = Kit.xs, color = Kit.colors.mutedForeground)
     }

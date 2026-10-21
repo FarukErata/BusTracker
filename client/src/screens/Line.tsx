@@ -233,7 +233,7 @@ function BusPositions({ code, planned, buses, direction, selectedBus, onSelect, 
           ))}
         </ItemGroup>
       )}
-      {planned && <NextTrips rows={[{ key: planned.direction, line: code, trips: planned.next }]} atStop={false} />}
+      {planned && <NextTrips rows={[{ key: planned.direction, line: code, trips: planned.next, nextDate: planned.nextDate }]} atStop={false} />}
       {direction && <TimetableSection line={code} direction={direction.direction} />}
       <StopPicker stops={direction?.stops ?? []} onPick={onPick} />
     </>
@@ -304,7 +304,7 @@ function PinnedArrivals({ stop, approaching, passedCount, loading, receivedAt, o
         </ItemGroup>
       )}
       {passedCount > 0 && <p className="px-3 text-xs text-muted-foreground">{strings().line.passed(passedCount)}</p>}
-      {planned && <NextTrips rows={[{ key: planned.direction, line: code, trips: planned.next }]} atStop />}
+      {planned && <NextTrips rows={[{ key: planned.direction, line: code, trips: planned.next, nextDate: planned.nextDate }]} atStop />}
     </>
   )
 }

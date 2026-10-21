@@ -99,6 +99,8 @@ public sealed class TimetableTests
         Assert.Equal("I", view.DayType);
         Assert.Equal([(At(13, 40), true), (At(14, 0), false), (At(6, 10).AddDays(1), false)],
             view.Next.Select(t => (t.Departs, t.Cancelled)));
+        Assert.Equal([false, false, true], view.Next.Select(t => t.NextDay));
+        Assert.Equal(new DateOnly(2026, 10, 15), view.NextDate);
     }
 
     [Fact]

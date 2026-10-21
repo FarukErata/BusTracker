@@ -28,6 +28,7 @@ data class PlannedTripView(
     val routeCode: String = "",
     val variant: String = "",
     val cancelled: Boolean = false,
+    val nextDay: Boolean = false,
 )
 
 @Serializable
@@ -37,6 +38,7 @@ data class PlannedView(
     val dayType: String = "",
     val holiday: Boolean = false,
     val next: List<PlannedTripView> = emptyList(),
+    val nextDate: String? = null,
 )
 
 @Serializable

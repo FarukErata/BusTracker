@@ -52,6 +52,8 @@ abstract class Strings {
     abstract val timetableUnavailable: String
     abstract fun showMoreLines(n: Int): String
     abstract val showLess: String
+    abstract fun nextDayTrips(day: String): String
+    abstract val weekdayNames: List<String>
 
     abstract val alerts: String
     abstract val devices: String

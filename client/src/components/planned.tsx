@@ -72,6 +72,7 @@ export function TripTimes({ trips, atStop }: { trips: PlannedTripView[]; atStop:
         return (
           <span key={`${trip.routeCode}-${trip.departs}`} className="flex items-baseline gap-1">
             <span className={cn(trip.cancelled && 'text-muted-foreground line-through')}>{time}</span>
+            {trip.nextDay && <NextDayDot />}
             {trip.cancelled && <span className="text-xs text-destructive">{t.plan.cancelled}</span>}
           </span>
         )
@@ -80,11 +81,24 @@ export function TripTimes({ trips, atStop }: { trips: PlannedTripView[]; atStop:
   )
 }
 
+function NextDayDot() {
+  return (
+    <span className="size-1.5 shrink-0 self-center rounded-full bg-muted-foreground" role="img" aria-label={strings().plan.nextDay} />
+  )
+}
+
 export interface NextTripsRow {
   key: string
   line: string
   label?: string
   trips: PlannedTripView[]
+  nextDate?: string
+}
+
+function dayWithDate(date: string) {
+  const [year, month, day] = date.split('-')
+  const weekday = (new Date(Date.UTC(+year, +month - 1, +day)).getUTCDay() + 6) % 7
+  return `${strings().plan.weekdayNames[weekday]} ${day}.${month}.${year}`
 }
 
 const NEXT_TRIPS_SHOWN = 5
@@ -100,6 +114,7 @@ export function NextTrips({ rows, atStop }: { rows: NextTripsRow[]; atStop: bool
   const sorted = rows.filter(r => r.trips.length > 0).sort((a, b) => firstTripAt(a, atStop) - firstTripAt(b, atStop))
   const shown = all ? sorted : sorted.slice(0, NEXT_TRIPS_SHOWN)
   const hidden = sorted.length - shown.length
+  const nextDate = shown.find(row => row.trips.some(trip => trip.nextDay))?.nextDate
   if (sorted.length === 0) return null
   return (
     <section>
@@ -119,6 +134,9 @@ export function NextTrips({ rows, atStop }: { rows: NextTripsRow[]; atStop: bool
         <Button variant="ghost" size="sm" className="pressable mx-1.5 text-muted-foreground" onClick={() => setAll(a => !a)}>
           {all ? t.plan.showLess : t.plan.showMore(hidden)}
         </Button>
+      )}
+      {nextDate && (
+        <p className="flex items-center gap-1.5 px-3 pt-1 text-xs text-muted-foreground"><NextDayDot />{t.plan.nextDayTrips(dayWithDate(nextDate))}</p>
       )}
       {atStop && <p className="px-3 pt-1 text-xs text-muted-foreground">{t.plan.estimatedHere}</p>}
     </section>

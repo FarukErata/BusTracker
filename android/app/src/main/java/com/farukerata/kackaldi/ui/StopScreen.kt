@@ -355,7 +355,7 @@ private fun ArrivalsList(
         a.line in visible && (a.direction == null || lines.any { it.line == a.line && it.direction == a.direction })
     }
     val nextTrips = lines.mapNotNull { status ->
-        status.planned?.let { NextTripsRow("${status.line}-${status.direction}", status.line, if (status.line in bothWays) S.towards(titleCase(status.directionName)) else null, it.next) }
+        status.planned?.let { NextTripsRow("${status.line}-${status.direction}", status.line, if (status.line in bothWays) S.towards(titleCase(status.directionName)) else null, it.next, it.nextDate) }
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = WindowInsets.navigationBars.asPaddingValues()) {
         if (allLines.size > 1) item {

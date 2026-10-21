@@ -62,6 +62,9 @@ export const en = {
     noTrips: 'No trips on this day',
     showMore: (n: number) => `Show ${n} more`,
     showLess: 'Show less',
+    nextDay: 'Next day',
+    nextDayTrips: (day: string) => `${day} trips`,
+    weekdayNames: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     unavailable: "The timetable isn't available right now.",
   },
   home: {

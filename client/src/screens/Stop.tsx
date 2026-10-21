@@ -169,6 +169,7 @@ function ArrivalsList({ data, selection, tracking, onSelect, picked, onPick, rec
     line: l.line,
     label: bothWays.has(l.line) ? strings().bus.towards(titleCase(l.directionName)) : undefined,
     trips: l.planned.next,
+    nextDate: l.planned.nextDate,
   }] : [])
   const isSelected = (a: StopArrivalView) =>
     selection?.line === a.line && selection.direction === a.direction && selection.doorNo === a.bus.doorNo

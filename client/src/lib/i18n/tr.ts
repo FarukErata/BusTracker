@@ -62,6 +62,9 @@ export const tr: Strings = {
     noTrips: 'Bu gün sefer yok',
     showMore: (n: number) => `${n} hat daha göster`,
     showLess: 'Daha az göster',
+    nextDay: 'Ertesi gün',
+    nextDayTrips: (day: string) => `${day} seferleri`,
+    weekdayNames: ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'],
     unavailable: 'Sefer saatleri şu an alınamıyor.',
   },
   home: {

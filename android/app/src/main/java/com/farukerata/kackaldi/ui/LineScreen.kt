@@ -336,7 +336,7 @@ private fun LazyListScope.pinnedArrivals(viewModel: LineViewModel, direction: Li
                 Text(S.passed(passed), Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = Kit.xs, color = Kit.colors.mutedForeground)
             }
             state.value.planned?.let { planned ->
-                item { NextTrips(listOf(NextTripsRow(planned.direction, viewModel.code, null, planned.next)), atStop = true) }
+                item { NextTrips(listOf(NextTripsRow(planned.direction, viewModel.code, null, planned.next, planned.nextDate)), atStop = true) }
             }
         }
     }
@@ -383,7 +383,7 @@ private fun LazyListScope.busPositions(viewModel: LineViewModel, direction: Line
         }
     }
     viewModel.live?.planned?.firstOrNull { it.direction == direction?.direction }?.let { planned ->
-        item { NextTrips(listOf(NextTripsRow(planned.direction, viewModel.code, null, planned.next)), atStop = false) }
+        item { NextTrips(listOf(NextTripsRow(planned.direction, viewModel.code, null, planned.next, planned.nextDate)), atStop = false) }
     }
     if (direction != null) {
         item(key = "timetable-${direction.direction}") { TimetableSection(viewModel.api, viewModel.code, direction.direction) }
