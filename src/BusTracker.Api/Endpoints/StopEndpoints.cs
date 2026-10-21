@@ -48,6 +48,7 @@ public static class StopEndpoints
         Telemetry.Note("lines", statuses.Count);
         Telemetry.Note("waitingLines", statuses.Count(l => l.Error is not null));
         Telemetry.Note("waiting", string.Join(", ", statuses.Where(l => l.Error is not null).Select(l => $"{l.Line} {l.Error}")));
+        Telemetry.Note("etas", EtaNote.Of(merged.Select(a => (a.Line, a.Bus))));
         return Results.Ok(new StopArrivalsView(result.Stop, merged, statuses));
     }
 
@@ -56,6 +57,14 @@ public static class StopEndpoints
 
     private static IResult UnknownStop(string code) =>
         Results.Problem($"Stop {code} is not in the stop index.", statusCode: StatusCodes.Status404NotFound);
+}
+
+public static class EtaNote
+{
+    private const int Shown = 6;
+
+    public static string Of(IEnumerable<(string Line, ArrivalView Bus)> arrivals) =>
+        string.Join(", ", arrivals.Take(Shown).Select(a => $"{a.Line} {a.Bus.DoorNo} {a.Bus.StopsAway}st {(a.Bus.EtaSeconds is { } s ? $"{s / 60}m" : "-")}"));
 }
 
 public sealed record StopSearchResult(StopInfo Stop, IReadOnlyList<string> Lines);

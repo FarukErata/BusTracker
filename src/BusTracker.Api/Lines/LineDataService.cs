@@ -42,6 +42,7 @@ public sealed class LineDataService(
     private readonly ConcurrentDictionary<string, LineTracker> _trackers = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _lineLocks = new();
     private readonly ConcurrentDictionary<string, Lazy<Task<GateDecision?>>> _rosterRefreshes = new();
+    private readonly ConcurrentDictionary<string, GateDecision> _rosterDenied = new();
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, DateTimeOffset>> _newcomers = new();
     private readonly ConcurrentDictionary<string, DateTimeOffset> _newcomerRechecks = new();
     private readonly TrackerEvents _events = new(hops.Record, accuracy.Crossed);
@@ -117,6 +118,7 @@ public sealed class LineDataService(
     private async Task<GateDecision?> RefreshRosterAsync(string lineCode, CancellationToken ct)
     {
         var known = memory.RosterAt(lineCode) is not null || (await memory.OnLineAsync(lineCode, ct)).Count > 0;
+        if (StillDenied(lineCode) is { } denied) return known ? null : denied;
         var refresh = _rosterRefreshes.GetOrAdd(lineCode, code => new Lazy<Task<GateDecision?>>(() => Task.Run(() => FetchRosterAsync(code)))).Value;
         if (!known)
         {
@@ -132,7 +134,10 @@ public sealed class LineDataService(
         using var trace = Telemetry.Background("roster refresh", lineCode);
         try
         {
-            return await FetchRosterCoreAsync(lineCode);
+            var decision = await FetchRosterCoreAsync(lineCode);
+            if (decision is { Allowed: false }) _rosterDenied[lineCode] = decision;
+            else _rosterDenied.TryRemove(lineCode, out _);
+            return decision;
         }
         finally
         {
@@ -179,6 +184,9 @@ public sealed class LineDataService(
             return GateDecision.Deny("ibb-error", clock.GetUtcNow() + RetryAfterError);
         }
     }
+
+    private GateDecision? StillDenied(string lineCode) =>
+        _rosterDenied.TryGetValue(lineCode, out var denied) && denied.RetryAt > clock.GetUtcNow() ? denied : null;
 
     private bool IsRosterDue(string lineCode)
     {

@@ -21,7 +21,7 @@ public sealed class StopArrivalsService(StopIndexRepository stopIndex, LineDataS
             fromMemory.Add(await LoadAsync(stopCode, line, refreshRoster: false, ct));
 
         var results = await Task.WhenAll(MissingThenClosest(fromMemory).Select(known =>
-            wanted is null || wanted.Contains(known.Line.LineCode) ? LoadAsync(stopCode, known.Line, refreshRoster: true, ct) : Task.FromResult(known)));
+            wanted is null || wanted.Contains(known.Line.LineCode) ? LoadAsync(stopCode, known.Line, refreshRoster: true, ct) : Task.FromResult(known with { Error = null, RetryAt = null })));
 
         return new StopArrivalsResult(stop, results.OrderBy(r => r.Line.LineCode).ThenBy(r => r.Line.Direction).ToList());
     }

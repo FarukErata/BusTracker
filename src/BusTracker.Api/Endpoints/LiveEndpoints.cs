@@ -1,5 +1,6 @@
 using BusTracker.Api.Ibb;
 using BusTracker.Api.Lines;
+using BusTracker.Api.Tracing;
 using BusTracker.Api.Tracking;
 
 namespace BusTracker.Api.Endpoints;
@@ -43,9 +44,11 @@ public static class LiveEndpoints
         return await WithLiveAsync(line, data, clock, ct, live =>
         {
             var arrivals = Arrivals.ForStop(stop, direction, live.Snapshot.Buses, tracks, data.Eta(clock.GetUtcNow()));
+            var approaching = arrivals.Approaching.Select(ToArrivalView).ToList();
+            Telemetry.Note("etas", EtaNote.Of(approaching.Select(a => (line, a))));
             return Results.Ok(new StopArrivalsResponse(
                 line, direction, new StopRef(target.StopCode, target.Seq, target.Name), Freshness.From(live, clock),
-                arrivals.Approaching.Select(ToArrivalView).ToList(),
+                approaching,
                 arrivals.RecentlyPassed.Select(ToView).ToList()));
         });
     }

@@ -36,6 +36,7 @@ public sealed class RequestTracingMiddleware(RequestDelegate next)
     {
         activity.SetTag("method", context.Request.Method);
         activity.SetTag("path", context.Request.Path.Value);
+        if (context.Request.QueryString.HasValue) activity.SetTag("query", context.Request.QueryString.Value);
         activity.SetTag("route", (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText);
         activity.SetTag("status", status);
         if (context.User.Identity?.IsAuthenticated != true) return;
