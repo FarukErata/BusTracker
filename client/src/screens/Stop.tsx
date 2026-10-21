@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { Skeleton } from '@/components/ui/skeleton'
 import { busWhere, clock, reportAge, secondsSince, seenAgo, titleCase } from '@/lib/format'
-import { strings, useT } from '@/lib/i18n'
+import { strings, useLang, useT } from '@/lib/i18n'
 import { useIsWide } from '@/lib/media'
 import { rememberRecent } from '@/lib/recents'
 import { useStopLineFilter } from '@/lib/stopFilters'
@@ -18,6 +18,7 @@ import { useTracking, type TrackedSelection, type TrackingView } from '@/lib/tra
 import { cn } from '@/lib/utils'
 
 export function Stop() {
+  useLang()
   const { code = '' } = useParams()
   const stop = useStop(code)
   const [picked, setPicked] = useStopLineFilter(code)

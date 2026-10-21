@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { clock, directionLabel, distance, reportAge, secondsSince, seenAgo, stopsAway, titleCase } from '@/lib/format'
-import { strings } from '@/lib/i18n'
+import { strings, useLang } from '@/lib/i18n'
 import { useIsWide } from '@/lib/media'
 import { rememberRecent } from '@/lib/recents'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,7 @@ function snapHeight(snap: string | number) {
 }
 
 export function Line() {
+  useLang()
   const { code = '' } = useParams()
   const [params, setParams] = useSearchParams()
   const [selectedBus, setSelectedBus] = useState<string | null>(() => params.get('bus'))

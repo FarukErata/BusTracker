@@ -9,10 +9,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { ago, countdown, isCompleteLinkCode, linkCodeInput } from '@/lib/format'
-import { strings } from '@/lib/i18n'
+import { strings, useLang } from '@/lib/i18n'
 import { useSecondsUntil } from '@/lib/useSecondsUntil'
 
 export function Devices() {
+  useLang()
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col pb-8">
       <header className="flex items-center gap-2 px-3 pt-3">

@@ -35,6 +35,7 @@ function useLatestRelease() {
 }
 
 export function AndroidApp() {
+  useLang()
   const release = useLatestRelease()
   const onAndroid = isAndroid()
   const signedIn = hasDevice()

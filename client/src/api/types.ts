@@ -99,10 +99,6 @@ export interface TimetableResponse {
   announcements: AnnouncementView[]
 }
 
-export interface AnnouncementsResponse {
-  announcements: AnnouncementView[]
-}
-
 export interface ArrivalView {
   doorNo: string
   routeCode: string
@@ -249,6 +245,7 @@ export interface FavoriteStop {
 export interface FavoritesResponse {
   lines: { favorite: FavoriteLine; directions: Record<string, string> }[]
   stops: { favorite: FavoriteStop; stop: StopInfo | null; lines: string[] }[]
+  announcements: AnnouncementView[]
 }
 
 export interface PathStop {

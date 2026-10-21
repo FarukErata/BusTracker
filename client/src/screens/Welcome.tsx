@@ -5,11 +5,12 @@ import { ErrorState } from '@/components/bits'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { isCompleteLinkCode, linkCodeInput } from '@/lib/format'
-import { strings } from '@/lib/i18n'
+import { strings, useLang } from '@/lib/i18n'
 
 type Access = 'checking' | 'ready' | 'invite' | 'error'
 
 export function AccessGate() {
+  useLang()
   const [access, setAccess] = useState<Access>(() => (hasDevice() ? 'ready' : 'checking'))
   const [message, setMessage] = useState('')
 

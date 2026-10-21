@@ -1,7 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import type {
-  AnnouncementsResponse,
   BusPathResponse,
   DayType,
   FavoritesResponse,
@@ -128,17 +127,6 @@ export function useLineTimetable(line: string, day: DayType | null) {
     enabled: !!line,
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
-  })
-}
-
-export function useAnnouncements(lines: string[], stops: string[]) {
-  const lineList = [...new Set(lines)].sort().join(',')
-  const stopList = [...new Set(stops)].sort().join(',')
-  return useQuery({
-    queryKey: ['announcements', lineList, stopList],
-    queryFn: () => api<AnnouncementsResponse>(`/api/announcements?lines=${enc(lineList)}&stops=${enc(stopList)}`),
-    enabled: lineList.length > 0 || stopList.length > 0,
-    refetchInterval: 5 * 60_000,
   })
 }
 

@@ -49,7 +49,6 @@ import androidx.lifecycle.viewModelScope
 import com.farukerata.kackaldi.data.BusAlert
 import com.farukerata.kackaldi.data.FavoriteLineEntry
 import com.farukerata.kackaldi.data.FavoriteStopEntry
-import com.farukerata.kackaldi.data.AnnouncementView
 import com.farukerata.kackaldi.data.FavoritesResponse
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineSummary
@@ -75,8 +74,6 @@ class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
 
     var favorites by mutableStateOf<Load<FavoritesResponse>>(Load.Loading)
         private set
-    var announcements by mutableStateOf<List<AnnouncementView>>(emptyList())
-        private set
 
     val results: StateFlow<Load<SearchResults>?> = query
         .debounce(250)
@@ -87,11 +84,6 @@ class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
         viewModelScope.launch {
             val next = load { api.favorites() }
             if (next is Load.Ready || favorites !is Load.Ready) favorites = next
-            val saved = next.valueOrNull ?: return@launch
-            val lines = saved.lines.map { it.favorite.lineCode }
-            val stops = saved.stops.map { it.favorite.stopCode }
-            announcements = if (lines.isEmpty() && stops.isEmpty()) emptyList()
-            else load { api.announcements(lines, stops) }.valueOrNull?.announcements ?: announcements
         }
     }
 
@@ -170,7 +162,7 @@ fun HomeScreen(
                         item { SectionTitle(S.yourAlerts) }
                         items(alerts, key = { "alert-${it.id}" }) { alert -> AlertRow(alert, onStop, onAlertEnabled, onAlertRemove) }
                     }
-                    favoritesSection(viewModel.favorites, viewModel.announcements, viewModel::refreshFavorites, onStop, onLine)
+                    favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine)
                 }
             }
             item { VersionFooter(updater.currentVersion) }
@@ -202,13 +194,13 @@ private fun LazyListScope.recentsSection(
 }
 
 private fun LazyListScope.favoritesSection(
-    favorites: Load<FavoritesResponse>, announcements: List<AnnouncementView>, onRetry: () -> Unit, onStop: (String) -> Unit, onLine: (String, String?) -> Unit,
+    favorites: Load<FavoritesResponse>, onRetry: () -> Unit, onStop: (String) -> Unit, onLine: (String, String?) -> Unit,
 ) {
     when (favorites) {
         Load.Loading -> item { RowsSkeleton() }
         is Load.Failed -> item { ErrorState(favorites.message, onRetry) }
         is Load.Ready -> {
-            val (lines, stops) = favorites.value
+            val (lines, stops, announcements) = favorites.value
             if (lines.isEmpty() && stops.isEmpty()) {
                 item { EmptyState(S.emptyTitle, S.emptyText) }
                 return

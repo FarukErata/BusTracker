@@ -3,11 +3,12 @@ import { Download, Smartphone } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { APK_URL, isAndroid, openAppUrl } from '@/lib/androidApp'
 import { countdown, linkCodeInput } from '@/lib/format'
-import { strings } from '@/lib/i18n'
+import { strings, useLang } from '@/lib/i18n'
 import { useSecondsUntil } from '@/lib/useSecondsUntil'
 import { cn } from '@/lib/utils'
 
 export function Join() {
+  useLang()
   const { code = '' } = useParams()
   const [params] = useSearchParams()
   const expiresAt = Number(params.get('e')) || undefined

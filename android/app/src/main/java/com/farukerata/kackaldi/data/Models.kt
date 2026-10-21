@@ -68,9 +68,6 @@ data class TimetableResponse(
 )
 
 @Serializable
-data class AnnouncementsResponse(val announcements: List<AnnouncementView> = emptyList())
-
-@Serializable
 data class ArrivalView(
     val doorNo: String,
     val routeCode: String,
@@ -202,7 +199,11 @@ data class FavoriteLine(val id: Long, val lineCode: String, val direction: Strin
 data class FavoriteLineEntry(val favorite: FavoriteLine, val directions: Map<String, String> = emptyMap())
 
 @Serializable
-data class FavoritesResponse(val lines: List<FavoriteLineEntry>, val stops: List<FavoriteStopEntry>)
+data class FavoritesResponse(
+    val lines: List<FavoriteLineEntry>,
+    val stops: List<FavoriteStopEntry>,
+    val announcements: List<AnnouncementView> = emptyList(),
+)
 
 @Serializable
 data class RegisterRequest(val platform: String, val name: String, val invite: String? = null, val linkCode: String? = null)
