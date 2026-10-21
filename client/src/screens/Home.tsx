@@ -19,41 +19,57 @@ export function Home() {
   const leave = (e: FocusEvent<HTMLDivElement>) => {
     if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false)
   }
-  const showRecents = focused && !searching && recents.length > 0
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
-      <header className="flex items-center gap-2 px-3 pt-3">
-        <h1 className="flex-1 text-lg font-semibold tracking-tight">Kaç Kaldı</h1>
-        <Link to="/android" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Get the Android app">
-          <Smartphone />
-        </Link>
-        <Link to="/devices" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Your devices">
-          <UserRound />
-        </Link>
-        <ThemeToggle />
-      </header>
+      <HomeHeader />
       <div onBlur={leave} className="flex flex-1 flex-col">
-      <div className="px-3 pt-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-          <Input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onKeyDown={e => e.key === 'Escape' && e.currentTarget.blur()}
-            placeholder="Stop or line, like Fabrikalar or 500T"
-            className="pr-9 pl-8"
-            aria-label="Search stops and lines"
-          />
-          {searching && (
-            <Button variant="ghost" size="icon" className="absolute top-1/2 right-0.5 -translate-y-1/2" onClick={() => setQuery('')} aria-label="Clear search">
-              <X />
-            </Button>
-          )}
-        </div>
+        <SearchBox query={query} onChange={setQuery} onFocus={() => setFocused(true)} />
+        {searching ? <SearchResults query={deferred} /> : focused && recents.length > 0 ? <Recents items={recents} /> : <Favorites />}
       </div>
-      {searching ? <SearchResults query={deferred} /> : showRecents ? <Recents items={recents} /> : <Favorites />}
+    </div>
+  )
+}
+
+function HomeHeader() {
+  return (
+    <header className="flex items-center gap-2 px-3 pt-3">
+      <h1 className="flex-1 text-lg font-semibold tracking-tight">Kaç Kaldı</h1>
+      <Link to="/android" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Get the Android app">
+        <Smartphone />
+      </Link>
+      <Link to="/devices" className={buttonVariants({ variant: 'ghost', size: 'icon' })} aria-label="Your devices">
+        <UserRound />
+      </Link>
+      <ThemeToggle />
+    </header>
+  )
+}
+
+function SearchBox({ query, onChange, onFocus }: { query: string; onChange: (query: string) => void; onFocus: () => void }) {
+  return (
+    <div className="px-3 pt-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <Input
+          value={query}
+          onChange={e => onChange(e.target.value)}
+          onFocus={onFocus}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          enterKeyHint="search"
+          onKeyDown={e => e.key === 'Escape' && e.currentTarget.blur()}
+          placeholder="Stop or line, like Fabrikalar or 500T"
+          className="pr-9 pl-8"
+          aria-label="Search stops and lines"
+        />
+        {query.trim().length > 0 && (
+          <Button variant="ghost" size="icon" className="absolute top-1/2 right-0.5 -translate-y-1/2" onClick={() => onChange('')} aria-label="Clear search">
+            <X />
+          </Button>
+        )}
       </div>
     </div>
   )
