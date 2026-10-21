@@ -87,6 +87,18 @@ public sealed class TimetableEndpointTests(TestAppFactory factory) : IClassFixtu
     }
 
     [Fact]
+    public async Task Favorites_ComeWithTheAnnouncementsOfTheirLines()
+    {
+        var client = await ClientAsync();
+        await client.PostAsJsonAsync("/api/favorites/stops", new AddFavoriteStopRequest("402011", null));
+
+        var favorites = await client.GetFromJsonAsync<FavoritesResponse>("/api/favorites");
+
+        Assert.Equal(3, favorites!.Announcements.Count);
+        Assert.All(favorites.Announcements, a => Assert.Equal("131Y", a.Line));
+    }
+
+    [Fact]
     public async Task HomeAnnouncements_CoverFavouriteLinesAndTheLinesOfFavouriteStops()
     {
         var client = await ClientAsync();

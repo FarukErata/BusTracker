@@ -7,7 +7,6 @@ namespace BusTracker.Api.Endpoints;
 public static class TimetableEndpoints
 {
     private const int MaxStops = 20;
-    private const int MaxLines = 40;
     private static readonly string[] DayTypes = ["I", "C", "P"];
 
     public static IEndpointRouteBuilder MapTimetableEndpoints(this IEndpointRouteBuilder app)
@@ -46,7 +45,7 @@ public static class TimetableEndpoints
         var codes = Split(lines).Select(LineCode.Normalize).OfType<string>().ToHashSet();
         foreach (var stop in Split(stops).Take(MaxStops))
             codes.UnionWith((await index.GetLinesAtStopAsync(stop, ct)).Select(l => l.LineCode));
-        return new AnnouncementsResponse(codes.Order().Take(MaxLines).SelectMany(plans.AnnouncementsFor).ToList());
+        return new AnnouncementsResponse(plans.AnnouncementsFor(codes));
     }
 
     private static IEnumerable<string> Split(string? list) =>

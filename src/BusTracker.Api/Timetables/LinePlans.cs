@@ -113,8 +113,13 @@ public sealed class LinePlans(TimetableService timetables, AnnouncementService a
         return codes.Zip(plans).Where(p => p.Second is not null).ToDictionary(p => p.First, p => p.Second!);
     }
 
+    private const int MaxAnnouncedLines = 40;
+
     public IReadOnlyList<AnnouncementView> AnnouncementsFor(string lineCode) =>
         announcements.For(lineCode).Select(a => AnnouncementView.From(a, null)).ToList();
+
+    public IReadOnlyList<AnnouncementView> AnnouncementsFor(IEnumerable<string> lineCodes) =>
+        lineCodes.Distinct().Order().Take(MaxAnnouncedLines).SelectMany(code => AnnouncementsFor(code)).ToList();
 
     public static IReadOnlyList<WaitingBus> WaitingAmong(IEnumerable<Arrival> arrivals) =>
         arrivals.Where(a => a.NotDeparted).Select(a => new WaitingBus(a.Bus.Bus.DoorNo, a.Bus.Bus.RouteCode)).ToList();

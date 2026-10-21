@@ -3,6 +3,7 @@ using BusTracker.Api.Favorites;
 using BusTracker.Api.Ibb;
 using BusTracker.Api.Lines;
 using BusTracker.Api.Stops;
+using BusTracker.Api.Timetables;
 using BusTracker.Api.Users;
 
 namespace BusTracker.Api.Endpoints;
@@ -23,7 +24,8 @@ public static class FavoriteEndpoints
     }
 
     private static async Task<FavoritesResponse> GetAll(
-        ClaimsPrincipal user, FavoriteRepository favorites, StopIndexRepository stopIndex, LineDataService data, CancellationToken ct)
+        ClaimsPrincipal user, FavoriteRepository favorites, StopIndexRepository stopIndex, LineDataService data, LinePlans plans,
+        CancellationToken ct)
     {
         var lines = new List<FavoriteLineView>();
         foreach (var line in await favorites.GetLinesAsync(user.UserId(), ct))
@@ -34,7 +36,8 @@ public static class FavoriteEndpoints
             stops.Add(new FavoriteStopView(stop, await stopIndex.GetStopAsync(stop.StopCode, ct),
                 (await stopIndex.GetLinesAtStopAsync(stop.StopCode, ct)).Select(l => l.LineCode).Distinct().ToList()));
 
-        return new FavoritesResponse(lines, stops);
+        var watched = lines.Select(l => l.Favorite.LineCode).Concat(stops.SelectMany(s => s.Lines));
+        return new FavoritesResponse(lines, stops, plans.AnnouncementsFor(watched));
     }
 
     private static async Task<IResult> AddLine(
@@ -95,4 +98,5 @@ public sealed record FavoriteLineView(FavoriteLine Favorite, IReadOnlyDictionary
 
 public sealed record FavoriteStopView(FavoriteStop Favorite, StopInfo? Stop, IReadOnlyList<string> Lines);
 
-public sealed record FavoritesResponse(IReadOnlyList<FavoriteLineView> Lines, IReadOnlyList<FavoriteStopView> Stops);
+public sealed record FavoritesResponse(
+    IReadOnlyList<FavoriteLineView> Lines, IReadOnlyList<FavoriteStopView> Stops, IReadOnlyList<AnnouncementView> Announcements);
