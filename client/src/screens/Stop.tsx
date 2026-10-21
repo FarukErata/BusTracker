@@ -14,6 +14,7 @@ import { strings, useLang, useT } from '@/lib/i18n'
 import { useIsWide } from '@/lib/media'
 import { rememberRecent } from '@/lib/recents'
 import { useStopLineFilter } from '@/lib/stopFilters'
+import { useSideScroll } from '@/lib/useSideScroll'
 import { useTracking, type TrackedSelection, type TrackingView } from '@/lib/tracking'
 import { cn } from '@/lib/utils'
 
@@ -215,8 +216,9 @@ function LineFilter({ lines, picked, onChange }: { lines: string[]; picked: stri
     onChange(next.length === lines.length ? [] : next)
   }
   const t = useT()
+  const scroller = useSideScroll<HTMLDivElement>()
   return (
-    <div role="group" aria-label={t.stop.linesToShow} className="flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
+    <div ref={scroller} role="group" aria-label={t.stop.linesToShow} className="flex gap-1.5 overflow-x-auto px-3 pb-1 select-none [scrollbar-width:none]">
       <FilterChip active={picked.length === 0} onClick={() => onChange([])}>{t.stop.all}</FilterChip>
       {pinnedFirst(lines, pinned).map(line => (
         <FilterChip key={line} active={picked.includes(line)} onClick={() => toggle(line)}>{line}</FilterChip>
