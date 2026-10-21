@@ -101,8 +101,8 @@ public sealed class FleetPollingTests
 
         Assert.True(timer.Elapsed < TimeSpan.FromSeconds(1.5), $"took {timer.Elapsed}");
         Assert.NotEmpty(live!.Buses);
-        Assert.Equal(2, factory.CallsTo(Roster));
         await factory.Services.GetRequiredService<LineDataService>().WhenIdleAsync();
+        Assert.Equal(2, factory.CallsTo(Roster));
     }
 
     [Fact]

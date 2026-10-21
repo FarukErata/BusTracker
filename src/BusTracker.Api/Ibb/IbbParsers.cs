@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace BusTracker.Api.Ibb;
@@ -34,6 +35,42 @@ public static class IbbParsers
                 r.DoorNo!.Trim(), ParseDouble(r.Lat!), ParseDouble(r.Lng!), InferIstanbulTime(r.Time!, now)))
             .ToList();
     }
+
+    public static IReadOnlyList<PlannedTrip> ParsePlannedTrips(XElement result)
+    {
+        var json = result.Value.Trim();
+        if (json.Length == 0) return [];
+
+        var rows = JsonSerializer.Deserialize<List<PlannedTripRow>>(json)
+            ?? throw new IbbException("Timetable is null");
+        return rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.RouteCode) && !string.IsNullOrWhiteSpace(r.DayType)
+                && TimeOnly.TryParseExact(r.Time?.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            .Select(r => new PlannedTrip(
+                (r.LineCode ?? "").Trim(), r.RouteCode!.Trim(), SplitRouteCode(r.RouteCode.Trim()).Direction,
+                r.DayType!.Trim(), TimeOnly.ParseExact(r.Time!.Trim(), "HH:mm", CultureInfo.InvariantCulture)))
+            .ToList();
+    }
+
+    public static IReadOnlyList<IbbAnnouncement> ParseAnnouncements(XElement result)
+    {
+        var json = result.Value.Trim();
+        if (json.Length == 0) return [];
+
+        var rows = JsonSerializer.Deserialize<List<AnnouncementRow>>(json)
+            ?? throw new IbbException("Announcement list is null");
+        return rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.LineCode) && !string.IsNullOrWhiteSpace(r.Message))
+            .Select(r => new IbbAnnouncement(
+                r.LineCode!.Trim(), (r.Kind ?? "").Trim(), PostedClock(r.PostedAt), CollapseSpaces(r.Message!)))
+            .DistinctBy(a => (a.LineCode, a.Message))
+            .ToList();
+    }
+
+    private static string PostedClock(string? text) =>
+        text is not null && Regex.Match(text, @"\d\d:\d\d") is { Success: true } m ? m.Value : "";
+
+    private static string CollapseSpaces(string text) => Regex.Replace(text.Trim(), @"\s+", " ");
 
     public static DateTimeOffset InferIstanbulTime(string clockText, DateTimeOffset now)
     {
@@ -94,6 +131,18 @@ public static class IbbParsers
 
     private static bool TryParseDouble(string? text, out double value) =>
         double.TryParse(text?.Replace(',', '.').Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+
+    private sealed record PlannedTripRow(
+        [property: JsonPropertyName("SHATKODU")] string? LineCode,
+        [property: JsonPropertyName("SGUZERAH")] string? RouteCode,
+        [property: JsonPropertyName("SGUNTIPI")] string? DayType,
+        [property: JsonPropertyName("DT")] string? Time);
+
+    private sealed record AnnouncementRow(
+        [property: JsonPropertyName("HATKODU")] string? LineCode,
+        [property: JsonPropertyName("TIP")] string? Kind,
+        [property: JsonPropertyName("GUNCELLEME_SAATI")] string? PostedAt,
+        [property: JsonPropertyName("MESAJ")] string? Message);
 
     private sealed record FleetRow(
         [property: JsonPropertyName("KapiNo")] string? DoorNo,

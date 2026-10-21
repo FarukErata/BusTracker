@@ -12,6 +12,8 @@ public sealed class IbbClient(HttpClient http, IOptions<BusTrackerOptions> optio
 {
     private const string FleetService = "FiloDurum/SeferGerceklesme.asmx";
     private const string RouteService = "ibb/ibb.asmx";
+    private const string TimetableService = "UlasimAnaVeri/PlanlananSeferSaati.asmx";
+    private const string AnnouncementService = "UlasimDinamikVeri/Duyurular.asmx";
     private const string RouteStopsOperation = "DurakDetay_GYY_wYonAdi";
 
     private readonly TimeSpan _callTimeout = TimeSpan.FromSeconds(options.Value.Ibb.TimeoutSeconds);
@@ -33,6 +35,18 @@ public sealed class IbbClient(HttpClient http, IOptions<BusTrackerOptions> optio
     {
         var result = await CallAsync(RouteService, RouteStopsOperation, new() { ["hat_kodu"] = lineCode }, ct);
         return IbbParsers.ParseRouteStops(result);
+    }
+
+    public async Task<IReadOnlyList<PlannedTrip>> GetPlannedTripsAsync(string lineCode, CancellationToken ct)
+    {
+        var result = await CallAsync(TimetableService, "GetPlanlananSeferSaati_json", new() { ["HatKodu"] = lineCode }, ct);
+        return IbbParsers.ParsePlannedTrips(result);
+    }
+
+    public async Task<IReadOnlyList<IbbAnnouncement>> GetAnnouncementsAsync(CancellationToken ct)
+    {
+        var result = await CallAsync(AnnouncementService, "GetDuyurular_json", new(), ct);
+        return IbbParsers.ParseAnnouncements(result);
     }
 
     public async IAsyncEnumerable<RouteStop> StreamAllRouteStopsAsync([EnumeratorCancellation] CancellationToken ct)

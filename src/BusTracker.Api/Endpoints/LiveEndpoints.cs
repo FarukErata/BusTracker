@@ -1,5 +1,6 @@
 using BusTracker.Api.Ibb;
 using BusTracker.Api.Lines;
+using BusTracker.Api.Timetables;
 using BusTracker.Api.Tracing;
 using BusTracker.Api.Tracking;
 
@@ -16,22 +17,35 @@ public static class LiveEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetLive(string code, LineDataService data, TimeProvider clock, CancellationToken ct)
+    private static async Task<IResult> GetLive(string code, LineDataService data, LinePlans plans, TimeProvider clock, CancellationToken ct)
     {
         if (LineCode.Normalize(code) is not { } line) return LineCode.Invalid();
         if (await LineCode.LoadStopsAsync(line, data, ct) is null) return LineCode.Unknown(line);
 
         var tracks = await data.GetTracksAsync(line, ct);
+        var plan = await plans.GetAsync(line, ct);
         return await WithLiveAsync(line, data, clock, ct, live =>
         {
             var now = clock.GetUtcNow();
-            var buses = live.Snapshot.Buses.Select(b => ToView(b, HeavyTrafficAhead(b, tracks, data.Hops, now))).ToList();
-            return Results.Ok(new LineLiveResponse(line, Freshness.From(live, clock), buses));
+            var planned = plan is null ? [] : tracks.Mains
+                .Select(t => plan.For(t.Direction, null, WaitingIn(live.Snapshot.Buses, t.Direction), now))
+                .ToList();
+            var waiting = planned.SelectMany(p => p.Waiting).ToDictionary();
+            var buses = live.Snapshot.Buses
+                .Select(b => ToView(b, HeavyTrafficAhead(b, tracks, data.Hops, now)) with { Planned = waiting.GetValueOrDefault(b.Bus.DoorNo) })
+                .ToList();
+            return Results.Ok(new LineLiveResponse(line, Freshness.From(live, clock), buses,
+                planned.Select(p => p.View).OfType<PlannedView>().ToList(), plan?.Announcements ?? []));
         });
     }
 
+    private static IReadOnlyList<WaitingBus> WaitingIn(IEnumerable<TrackedBus> buses, string direction) =>
+        buses.Where(b => b.Bus.Direction == direction && b.Status == BusStatus.AtTerminal)
+            .Select(b => new WaitingBus(b.Bus.DoorNo, b.Bus.RouteCode))
+            .ToList();
+
     private static async Task<IResult> GetArrivals(
-        string code, string stop, string dir, LineDataService data, TimeProvider clock, CancellationToken ct)
+        string code, string stop, string dir, LineDataService data, LinePlans plans, TimeProvider clock, CancellationToken ct)
     {
         if (LineCode.Normalize(code) is not { } line) return LineCode.Invalid();
         if (await LineCode.LoadStopsAsync(line, data, ct) is null) return LineCode.Unknown(line);
@@ -41,15 +55,21 @@ public static class LiveEndpoints
         if (tracks.Main(direction)?.FindStop(stop) is not { } target)
             return Results.Problem($"Stop {stop} is not on line {line} direction {direction}.", statusCode: StatusCodes.Status404NotFound);
 
+        var plan = await plans.GetAsync(line, ct);
         return await WithLiveAsync(line, data, clock, ct, live =>
         {
-            var arrivals = Arrivals.ForStop(stop, direction, live.Snapshot.Buses, tracks, data.Eta(clock.GetUtcNow()));
-            var approaching = arrivals.Approaching.Select(ToArrivalView).ToList();
+            var now = clock.GetUtcNow();
+            var arrivals = Arrivals.ForStop(stop, direction, live.Snapshot.Buses, tracks, data.Eta(now));
+            var planned = plan?.For(direction, target.StopCode, LinePlans.WaitingAmong(arrivals.Approaching), now);
+            var approaching = arrivals.Approaching
+                .Select(a => ToArrivalView(a) with { Planned = planned?.Waiting.GetValueOrDefault(a.Bus.Bus.DoorNo) })
+                .ToList();
             Telemetry.Note("etas", EtaNote.Of(approaching.Select(a => (line, a))));
             return Results.Ok(new StopArrivalsResponse(
                 line, direction, new StopRef(target.StopCode, target.Seq, target.Name), Freshness.From(live, clock),
                 approaching,
-                arrivals.RecentlyPassed.Select(ToView).ToList()));
+                arrivals.RecentlyPassed.Select(ToView).ToList(),
+                planned?.View, plan?.Announcements ?? []));
         });
     }
 
@@ -146,21 +166,26 @@ public sealed record TrackedBusView(
     string DoorNo, double Lat, double Lng, string Direction, string Variant, string RouteCode, string Destination,
     DateTimeOffset ReportedAt, int AgeSeconds, string Status, string TripId, bool OnOwnVariant,
     double? AlongMeters, double? OffsetMeters, double? RouteLengthMeters,
-    int? LastStopSeq, int? NextStopSeq, double? ProgressToNext, double? SpeedKmh, IReadOnlyList<int> PassedStopSeqs, bool HeavyTraffic);
+    int? LastStopSeq, int? NextStopSeq, double? ProgressToNext, double? SpeedKmh, IReadOnlyList<int> PassedStopSeqs, bool HeavyTraffic,
+    PlannedTripView? Planned = null);
 
-public sealed record LineLiveResponse(string Line, Freshness Data, IReadOnlyList<TrackedBusView> Buses);
+public sealed record LineLiveResponse(
+    string Line, Freshness Data, IReadOnlyList<TrackedBusView> Buses,
+    IReadOnlyList<PlannedView> Planned, IReadOnlyList<AnnouncementView> Announcements);
 
 public sealed record StopRef(string Code, int Seq, string Name);
 
 public sealed record ArrivalView(
     string DoorNo, string RouteCode, string Variant, int StopsAway, double DistanceMeters, int? EtaSeconds,
-    bool NotDeparted, int AgeSeconds, int? LastStopSeq, string? LastStopName, bool HeavyTraffic);
+    bool NotDeparted, int AgeSeconds, int? LastStopSeq, string? LastStopName, bool HeavyTraffic,
+    PlannedTripView? Planned = null);
 
 public sealed record PassedView(string DoorNo, string RouteCode, string Variant, double MetersPast, int? LastStopSeq);
 
 public sealed record StopArrivalsResponse(
     string Line, string Direction, StopRef Stop, Freshness Data,
-    IReadOnlyList<ArrivalView> Approaching, IReadOnlyList<PassedView> RecentlyPassed);
+    IReadOnlyList<ArrivalView> Approaching, IReadOnlyList<PassedView> RecentlyPassed,
+    PlannedView? Planned, IReadOnlyList<AnnouncementView> Announcements);
 
 public sealed record PathStopView(int Seq, string Code, string Name, double Lat, double Lng);
 

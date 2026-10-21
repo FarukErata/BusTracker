@@ -111,12 +111,18 @@ public class TestAppFactory : WebApplicationFactory<Program>
                     (HttpStatusCode.OK, isAllLines ? Fixture.Read("all-route-stops-sample.xml")
                         : is131Y ? Fixture.Read("route-stops-131Y.xml") : EmptyDataSet("DurakDetay_GYY_wYonAdi")),
                 _ when action.Contains("GetFiloAracKonum_json") => (HttpStatusCode.OK, fleetXml()),
+                _ when action.Contains("GetPlanlananSeferSaati_json") =>
+                    (HttpStatusCode.OK, is131Y ? Fixture.Read("timetable-131Y.xml") : EmptyJson("GetPlanlananSeferSaati_json")),
+                _ when action.Contains("GetDuyurular_json") => (HttpStatusCode.OK, Fixture.Read("announcements.xml")),
                 _ when action.Contains("GetHatOtoKonum_json") =>
                     is131Y ? (HttpStatusCode.OK, Fixture.Read("live-131Y.xml")) : (HttpStatusCode.InternalServerError, Fixture.Read("fault-unknown-line.xml")),
                 _ => (HttpStatusCode.InternalServerError, Fixture.Read("fault-unknown-line.xml")),
             };
             return new HttpResponseMessage(status) { Content = new StringContent(xml, Encoding.UTF8, "text/xml") };
         }
+
+        private static string EmptyJson(string operation) =>
+            $"""<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><{operation}Response xmlns="http://tempuri.org/"><{operation}Result>[]</{operation}Result></{operation}Response></soap:Body></soap:Envelope>""";
 
         private static string EmptyDataSet(string operation) =>
             $"""<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><{operation}Response xmlns="http://tempuri.org/"><{operation}Result><NewDataSet xmlns="" /></{operation}Result></{operation}Response></soap:Body></soap:Envelope>""";

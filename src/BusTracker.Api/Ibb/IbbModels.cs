@@ -28,6 +28,10 @@ public sealed record RouteStop(
     double Lng,
     string District);
 
+public sealed record PlannedTrip(string LineCode, string RouteCode, string Direction, string DayType, TimeOnly Departure);
+
+public sealed record IbbAnnouncement(string LineCode, string Kind, string PostedAt, string Message);
+
 public class IbbException(string message) : Exception(message);
 
 public sealed class IbbFaultException(string message) : IbbException(message);
