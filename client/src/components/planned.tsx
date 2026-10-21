@@ -4,7 +4,7 @@ import { useLineTimetable } from '@/api/hooks'
 import type { AnnouncementView, ArrivalView, DayType, PlannedTripView, TimetableResponse } from '@/api/types'
 import { LineBadge, Minutes, RowsSkeleton, SectionTitle, useNow } from '@/components/bits'
 import { Button } from '@/components/ui/button'
-import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
+import { ItemTitle } from '@/components/ui/item'
 import { clock, sentenceCase, titleCase } from '@/lib/format'
 import { strings, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
@@ -31,11 +31,11 @@ export function Announcements({ items, showLines = true }: { items: Announcement
         <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out', open && 'rotate-180')} aria-hidden />
       </button>
       {open && (
-        <ul className="flex flex-col gap-2 border-t px-2.5 py-2">
+        <ul className={cn('grid gap-x-2 gap-y-2 border-t px-2.5 py-2', showLines ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-1')}>
           {items.map(a => (
-            <li key={`${a.line}-${a.message}`} className="flex gap-2">
-              {showLines && <LineBadge code={a.line} className="shrink-0" />}
-              <span className="min-w-0 flex-1">
+            <li key={`${a.line}-${a.message}`} className="contents">
+              {showLines && <span className="flex items-start"><LineBadge code={a.line} /></span>}
+              <span className="min-w-0">
                 {announcementText(a)}
                 {a.postedAt && <span className="ml-1.5 text-xs text-muted-foreground tabular-nums">{a.postedAt}</span>}
               </span>
@@ -104,17 +104,17 @@ export function NextTrips({ rows, atStop }: { rows: NextTripsRow[]; atStop: bool
   return (
     <section>
       <SectionTitle>{t.plan.nextTrips}</SectionTitle>
-      <ItemGroup>
+      <ul className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 px-3 py-1.5">
         {shown.map(row => (
-          <Item key={row.key} size="xs">
-            <ItemMedia><LineBadge code={row.line} /></ItemMedia>
-            <ItemContent>
-              {row.label && <ItemDescription className="text-xs">{row.label}</ItemDescription>}
+          <li key={row.key} className="contents">
+            <span className="flex"><LineBadge code={row.line} /></span>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              {row.label && <span className="truncate text-xs text-muted-foreground">{row.label}</span>}
               <TripTimes trips={row.trips} atStop={atStop} />
-            </ItemContent>
-          </Item>
+            </span>
+          </li>
         ))}
-      </ItemGroup>
+      </ul>
       {(hidden > 0 || all) && sorted.length > NEXT_TRIPS_SHOWN && (
         <Button variant="ghost" size="sm" className="pressable mx-1.5 text-muted-foreground" onClick={() => setAll(a => !a)}>
           {all ? t.plan.showLess : t.plan.showMore(hidden)}

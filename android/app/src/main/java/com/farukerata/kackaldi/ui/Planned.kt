@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -27,9 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.farukerata.kackaldi.data.AnnouncementView
@@ -78,19 +82,42 @@ fun AnnouncementsCard(items: List<AnnouncementView>, modifier: Modifier = Modifi
             )
             Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp).rotate(turn), tint = colors.mutedForeground)
         }
-        if (open) {
-            Column(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items.forEach { a ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (showLines) LineBadge(a.line)
-                        Text(
-                            if (a.postedAt.isBlank()) announcementText(a) else "${announcementText(a)}  ${a.postedAt}",
-                            Modifier.weight(1f),
-                            style = Kit.sm,
-                            color = colors.foreground,
-                        )
-                    }
-                }
+        if (open) AnnouncementList(items, showLines)
+    }
+}
+
+@Composable
+private fun BadgeAligned(lines: List<String>, modifier: Modifier = Modifier, content: @Composable (badgeWidth: Dp) -> Unit) {
+    SubcomposeLayout(modifier) { constraints ->
+        val badgeWidth = subcompose("badges") { lines.distinct().forEach { LineBadge(it) } }
+            .maxOfOrNull { it.measure(Constraints()).width } ?: 0
+        val rows = subcompose("rows") { content(badgeWidth.toDp()) }.map { it.measure(constraints) }
+        layout(constraints.maxWidth, rows.sumOf { it.height }) {
+            var y = 0
+            rows.forEach { it.place(0, y); y += it.height }
+        }
+    }
+}
+
+@Composable
+private fun AnnouncementList(items: List<AnnouncementView>, showLines: Boolean) {
+    BadgeAligned(if (showLines) items.map { it.line } else emptyList(), Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) { width ->
+        AnnouncementRows(items, showLines, width)
+    }
+}
+
+@Composable
+private fun AnnouncementRows(items: List<AnnouncementView>, showLines: Boolean, badgeWidth: Dp) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { a ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (showLines) Box(Modifier.width(badgeWidth)) { LineBadge(a.line) }
+                Text(
+                    if (a.postedAt.isBlank()) announcementText(a) else "${announcementText(a)}  ${a.postedAt}",
+                    Modifier.weight(1f),
+                    style = Kit.sm,
+                    color = Kit.colors.foreground,
+                )
             }
         }
     }
@@ -150,10 +177,14 @@ fun NextTrips(rows: List<NextTripsRow>, atStop: Boolean) {
     val shown = if (all) sorted else sorted.take(NEXT_TRIPS_SHOWN)
     Column(Modifier.animateContentSize()) {
         SectionTitle(S.nextTrips)
-        shown.forEach { row ->
-            ItemRow(onClick = null, leading = { LineBadge(row.line) }) {
-                row.label?.let { Text(it, style = Kit.xs, color = Kit.colors.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                TripTimes(row.trips, atStop)
+        BadgeAligned(shown.map { it.line }) { width ->
+            Column {
+                shown.forEach { row ->
+                    ItemRow(onClick = null, leading = { Box(Modifier.width(width)) { LineBadge(row.line) } }) {
+                        row.label?.let { Text(it, style = Kit.xs, color = Kit.colors.mutedForeground, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        TripTimes(row.trips, atStop)
+                    }
+                }
             }
         }
         if (sorted.size > NEXT_TRIPS_SHOWN) {
