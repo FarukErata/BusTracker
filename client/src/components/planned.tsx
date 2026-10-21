@@ -71,8 +71,10 @@ export function TripTimes({ trips, atStop }: { trips: PlannedTripView[]; atStop:
         const time = atStop && trip.atStop ? t.plan.about(clock(trip.atStop)) : clock(trip.departs)
         return (
           <span key={`${trip.routeCode}-${trip.departs}`} className="flex items-baseline gap-1">
-            <span className={cn(trip.cancelled && 'text-muted-foreground line-through')}>{time}</span>
-            {trip.nextDay && <NextDayDot />}
+            <span className={cn('relative', trip.cancelled && 'text-muted-foreground line-through')}>
+              {trip.nextDay && <NextDayDot className="absolute -top-0.5 -left-1" />}
+              {time}
+            </span>
             {trip.cancelled && <span className="text-xs text-destructive">{t.plan.cancelled}</span>}
           </span>
         )
@@ -81,9 +83,9 @@ export function TripTimes({ trips, atStop }: { trips: PlannedTripView[]; atStop:
   )
 }
 
-function NextDayDot() {
+function NextDayDot({ className }: { className?: string }) {
   return (
-    <span className="size-1.5 shrink-0 self-center rounded-full bg-muted-foreground" role="img" aria-label={strings().plan.nextDay} />
+    <span className={cn('size-1.5 shrink-0 rounded-full bg-sky-600 dark:bg-sky-400', className)} role="img" aria-label={strings().plan.nextDay} />
   )
 }
 

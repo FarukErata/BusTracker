@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -155,12 +156,14 @@ fun TripTimes(trips: List<PlannedTripView>, atStop: Boolean) {
             val stopTime = trip.atStop
             val time = if (atStop && stopTime != null) "~${clock(stopTime)}" else clock(trip.departs)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    time,
-                    style = Kit.sm.copy(textDecoration = if (trip.cancelled) TextDecoration.LineThrough else null),
-                    color = if (trip.cancelled) colors.mutedForeground else colors.foreground,
-                )
-                if (trip.nextDay) NextDayDot()
+                Box {
+                    Text(
+                        time,
+                        style = Kit.sm.copy(textDecoration = if (trip.cancelled) TextDecoration.LineThrough else null),
+                        color = if (trip.cancelled) colors.mutedForeground else colors.foreground,
+                    )
+                    if (trip.nextDay) NextDayDot(Modifier.align(Alignment.TopStart).offset(x = (-4).dp, y = (-1).dp))
+                }
                 if (trip.cancelled) Text(S.cancelled, style = Kit.xs, color = colors.destructive)
             }
         }
@@ -168,8 +171,8 @@ fun TripTimes(trips: List<PlannedTripView>, atStop: Boolean) {
 }
 
 @Composable
-private fun NextDayDot() {
-    Box(Modifier.size(6.dp).background(Kit.colors.mutedForeground, CircleShape))
+private fun NextDayDot(modifier: Modifier = Modifier) {
+    Box(modifier.size(6.dp).background(Kit.colors.pinFill, CircleShape))
 }
 
 data class NextTripsRow(val key: String, val line: String, val label: String?, val trips: List<PlannedTripView>, val nextDate: String? = null)
