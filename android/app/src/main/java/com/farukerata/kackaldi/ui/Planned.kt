@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -216,12 +217,19 @@ fun TimetableSection(api: KacKaldiApi, line: String, direction: String) {
         if (next is Load.Ready || state !is Load.Ready) state = next
     }
     val turn by animateFloatAsState(if (open) 180f else 0f, label = "timetable")
-    Column(Modifier.padding(top = 12.dp).animateContentSize()) {
+    Column(Modifier.padding(top = 12.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
-            Modifier.padding(horizontal = 6.dp).fillMaxWidth().pressable({ open = !open }).padding(horizontal = 8.dp, vertical = 10.dp),
+            Modifier
+                .padding(horizontal = 12.dp)
+                .fillMaxWidth()
+                .border(1.dp, Kit.colors.border, CardShape)
+                .pressable({ open = !open }, shape = CardShape)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(if (open) S.hideTimetable else S.showTimetable, Modifier.weight(1f), style = Kit.sm.copy(fontWeight = FontWeight.Medium), color = Kit.colors.mutedForeground)
+            Icon(Icons.Outlined.Schedule, null, Modifier.size(18.dp), tint = Kit.colors.foreground)
+            Text(if (open) S.hideTimetable else S.showTimetable, Modifier.weight(1f), style = Kit.sm.copy(fontWeight = FontWeight.Medium), color = Kit.colors.foreground)
             Icon(Icons.Outlined.KeyboardArrowDown, null, Modifier.size(18.dp).rotate(turn), tint = Kit.colors.mutedForeground)
         }
         if (open) when (val current = state) {
@@ -257,19 +265,21 @@ private fun TimetableBody(data: TimetableResponse, direction: String, onDay: (St
             Text(S.noTrips, style = Kit.sm, color = colors.mutedForeground)
             return@Column
         }
-        FlowRow(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            dir.trips.forEach { trip ->
-                val past = today && epochMillis(trip.at) < now
-                Text(
-                    trip.time,
-                    Modifier.width(56.dp),
-                    style = Kit.sm.copy(textDecoration = if (trip.cancelled) TextDecoration.LineThrough else null),
-                    color = when {
-                        trip.cancelled -> colors.destructive
-                        past -> colors.mutedForeground.copy(alpha = 0.5f)
-                        else -> colors.foreground
-                    },
-                )
+        dir.trips.groupBy { it.at.take(13) }.values.forEach { hour ->
+            FlowRow(Modifier.padding(bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                hour.forEach { trip ->
+                    val past = today && epochMillis(trip.at) < now
+                    Text(
+                        trip.time,
+                        Modifier.width(56.dp),
+                        style = Kit.sm.copy(textDecoration = if (trip.cancelled) TextDecoration.LineThrough else null),
+                        color = when {
+                            trip.cancelled -> colors.destructive
+                            past -> colors.mutedForeground.copy(alpha = 0.5f)
+                            else -> colors.foreground
+                        },
+                    )
+                }
             }
         }
     }

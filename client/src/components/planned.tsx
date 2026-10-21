@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { ChevronDown, Megaphone } from 'lucide-react'
+import { ChevronDown, Clock, Megaphone } from 'lucide-react'
 import { useLineTimetable } from '@/api/hooks'
-import type { AnnouncementView, ArrivalView, DayType, PlannedTripView, TimetableResponse } from '@/api/types'
+import type { AnnouncementView, ArrivalView, DayType, PlannedTripView, TimetableResponse, TimetableTripView } from '@/api/types'
 import { LineBadge, Minutes, RowsSkeleton, SectionTitle, useNow } from '@/components/bits'
 import { Button } from '@/components/ui/button'
 import { ItemTitle } from '@/components/ui/item'
@@ -140,15 +140,27 @@ export function TimetableSection({ line, direction }: { line: string; direction:
 
   return (
     <section className="flex flex-col gap-2 pt-3">
-      <Button variant="ghost" className="pressable mx-1.5 justify-between text-muted-foreground" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-        {open ? t.plan.hideTimetable : t.plan.showTimetable}
-        <ChevronDown className={cn('transition-transform duration-200 ease-out', open && 'rotate-180')} aria-hidden />
+      <Button variant="outline" className="pressable mx-3 justify-start gap-2" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        <Clock aria-hidden />
+        <span className="flex-1 text-left">{open ? t.plan.hideTimetable : t.plan.showTimetable}</span>
+        <ChevronDown className={cn('text-muted-foreground transition-transform duration-200 ease-out', open && 'rotate-180')} aria-hidden />
       </Button>
       {open && timetable.isPending && <RowsSkeleton rows={2} />}
       {open && timetable.isError && <p className="px-3 text-sm text-muted-foreground">{t.plan.unavailable}</p>}
       {open && timetable.data && <TimetableBody data={timetable.data} direction={direction} onDay={setDay} />}
     </section>
   )
+}
+
+function byHour(trips: TimetableTripView[]) {
+  const hours: { key: string; trips: TimetableTripView[] }[] = []
+  for (const trip of trips) {
+    const key = trip.at.slice(0, 13)
+    const last = hours.at(-1)
+    if (last?.key === key) last.trips.push(trip)
+    else hours.push({ key, trips: [trip] })
+  }
+  return hours
 }
 
 function TimetableBody({ data, direction, onDay }: { data: TimetableResponse; direction: string; onDay: (day: DayType) => void }) {
@@ -172,20 +184,24 @@ function TimetableBody({ data, direction, onDay }: { data: TimetableResponse; di
       {!dir || dir.trips.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t.plan.noTrips}</p>
       ) : (
-        <ul className="grid grid-cols-5 gap-x-2 gap-y-1 text-sm tabular-nums sm:grid-cols-6">
-          {dir.trips.map(trip => (
-            <li
-              key={`${trip.routeCode}-${trip.at}`}
-              title={trip.cancelled ? t.plan.cancelled : undefined}
-              className={cn(
-                today && Date.parse(trip.at) < now && 'text-muted-foreground/50',
-                trip.cancelled && 'text-destructive line-through',
-              )}
-            >
-              {trip.time}
-            </li>
+        <div className="flex flex-col gap-3 text-sm tabular-nums">
+          {byHour(dir.trips).map(hour => (
+            <ul key={hour.key} className="grid grid-cols-5 gap-x-2 gap-y-1 sm:grid-cols-6">
+              {hour.trips.map(trip => (
+                <li
+                  key={`${trip.routeCode}-${trip.at}`}
+                  title={trip.cancelled ? t.plan.cancelled : undefined}
+                  className={cn(
+                    today && Date.parse(trip.at) < now && 'text-muted-foreground/50',
+                    trip.cancelled && 'text-destructive line-through',
+                  )}
+                >
+                  {trip.time}
+                </li>
+              ))}
+            </ul>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )
