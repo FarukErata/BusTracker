@@ -88,6 +88,11 @@ class KacKaldiApi(private val store: DeviceStore) {
     suspend fun railSearch(query: String): List<RailStationView> =
         authorized { auth -> get("api/rail/stations") { auth(); parameter("q", query) } }
 
+    suspend fun railLineSearch(query: String): List<RailLineView> =
+        authorized { auth -> get("api/rail/lines") { auth(); parameter("q", query) } }
+
+    suspend fun railLine(id: Int): RailLineResponse = authorized { auth -> get("api/rail/lines/$id") { auth() } }
+
     suspend fun railStations(): List<RailStationView> = authorized { auth -> get("api/rail/stations/all") { auth() } }
 
     suspend fun railStation(id: Int): RailStationResponse = authorized { auth -> get("api/rail/stations/$id") { auth() } }

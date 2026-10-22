@@ -28,6 +28,26 @@ public sealed class RailCatalog
 
     public IReadOnlyList<RailNotice> Notices(int lineId) => _notices.GetValueOrDefault(lineId) ?? [];
 
+    public IReadOnlyList<RailLine> SearchLines(string query)
+    {
+        var code = SearchText.Normalize(query).Replace(" ", "");
+        if (code.Length == 0) return [];
+        return _data.Lines.Values
+            .Where(l => SearchText.Normalize(l.Name).StartsWith(code))
+            .OrderBy(l => LineSortKey(l.Name))
+            .ToList();
+    }
+
+    public IReadOnlyList<RailStation> LineStations(int lineId) =>
+        _data.Stations.Values.Where(s => s.LineId == lineId).OrderBy(s => s.Order).ToList();
+
+    private static string LineSortKey(string name)
+    {
+        var letters = new string(name.TakeWhile(char.IsLetter).ToArray());
+        var digits = new string(name.Skip(letters.Length).TakeWhile(char.IsDigit).ToArray());
+        return $"{letters}{(int.TryParse(digits, out var n) ? n : 0):D3}{name[(letters.Length + digits.Length)..]}";
+    }
+
     public IReadOnlyList<RailStation> Search(string query, int limit)
     {
         var words = SearchText.Normalize(query).Split(' ', StringSplitOptions.RemoveEmptyEntries);

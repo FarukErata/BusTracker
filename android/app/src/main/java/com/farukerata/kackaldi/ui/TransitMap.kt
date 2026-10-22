@@ -88,6 +88,8 @@ data class MapScene(
     val topInsetDp: Int = 0,
     val rail: List<MapRail> = emptyList(),
     val pinColor: String? = null,
+    val railRoute: List<List<Double>> = emptyList(),
+    val railRouteColor: String? = null,
 )
 
 @Composable
@@ -185,10 +187,11 @@ private class MapController(private val palette: Palette, private val density: F
     fun attach(map: MapLibreMap, style: Style) {
         this.map = map
         this.style = style
-        listOf(ROUTE, VARIANT, HIGHLIGHT, RAIL, STOPS, PIN, BUSES).forEach { style.addSource(GeoJsonSource(it)) }
+        listOf(ROUTE, VARIANT, HIGHLIGHT, RAIL_ROUTE, RAIL, STOPS, PIN, BUSES).forEach { style.addSource(GeoJsonSource(it)) }
         style.addLayer(line(ROUTE, palette.route.toArgb(), 5f))
         style.addLayer(line(VARIANT, palette.routeVariant.toArgb(), 4f).withProperties(lineDasharray(arrayOf(2f, 1.5f))))
         style.addLayer(line(HIGHLIGHT, palette.routeHighlight.toArgb(), 7f))
+        style.addLayer(line(RAIL_ROUTE, palette.route.toArgb(), 5f))
         style.addLayer(
             CircleLayer(RAIL, RAIL).withProperties(
                 circleRadius(5.5f), circleColor(Expression.toColor(Expression.get(COLOR))), circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(2f),
@@ -246,6 +249,11 @@ private class MapController(private val palette: Palette, private val density: F
         style.source(STOPS).setGeoJson(FeatureCollection.fromFeatures(scene.stops.filter { it.code != scene.pinned?.code }.map(::stopFeature)))
         style.source(PIN).setGeoJson(FeatureCollection.fromFeatures(listOfNotNull(scene.pinned).map(::stopFeature)))
         style.source(RAIL).setGeoJson(FeatureCollection.fromFeatures(scene.rail.map(::railFeature)))
+        style.source(RAIL_ROUTE).setGeoJson(lineFeature(scene.railRoute))
+        scene.railRouteColor?.let { hex -> runCatching { android.graphics.Color.parseColor(hex) }.getOrNull() }?.let {
+            style.getLayerAs<LineLayer>(RAIL_ROUTE)?.setProperties(lineColor(it))
+        }
+        style.getLayerAs<CircleLayer>(RAIL)?.minZoom = if (scene.railRoute.isEmpty()) RAIL_MIN_ZOOM else 0f
         style.getLayerAs<CircleLayer>(PIN)?.setProperties(
             circleColor(scene.pinColor?.let { runCatching { android.graphics.Color.parseColor(it) }.getOrNull() } ?: palette.pinFill.toArgb()),
         )
@@ -355,6 +363,7 @@ private const val STOPS = "stops"
 private const val PIN = "pin"
 private const val BUSES = "buses"
 private const val RAIL = "rail"
+private const val RAIL_ROUTE = "railRoute"
 private const val RAIL_ID = "railId"
 private const val COLOR = "color"
 private const val RAIL_MIN_ZOOM = 13f

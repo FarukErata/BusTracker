@@ -5,6 +5,10 @@ using BusTracker.Api.Timetables;
 
 namespace BusTracker.Api.Rail;
 
+public sealed record RailLineView(int Id, string Name, string Color, string Description);
+
+public sealed record RailLineResponse(RailLineView Line, IReadOnlyList<RailStationView> Stations, IReadOnlyList<RailNoticeView> Notices);
+
 public sealed record RailStationView(int Id, string Name, int LineId, string Line, string Color, double? Lat, double? Lng);
 
 public sealed record RailDepartureView(DateTimeOffset At, bool NextDay);
@@ -66,6 +70,15 @@ public sealed class RailBoard(RailCatalog catalog, RailTimetables timetables, Ti
 
     public RailStationView View(RailStation station) =>
         new(station.Id, station.Name, station.LineId, station.Line, catalog.Line(station.LineId)?.Color ?? "#808080", station.Lat, station.Lng);
+
+    public static RailLineView View(RailLine line) => new(line.Id, line.Name, line.Color, line.Description);
+
+    public RailLineResponse? Line(int lineId)
+    {
+        if (catalog.Line(lineId) is not { } line) return null;
+        var notices = catalog.Notices(lineId).Select(n => new RailNoticeView(line.Name, n.Text, n.UpdatedAt)).ToList();
+        return new RailLineResponse(View(line), catalog.LineStations(lineId).Select(View).ToList(), notices);
+    }
 
     public async Task<RailStationResponse?> StationAsync(int stationId, CancellationToken ct)
     {

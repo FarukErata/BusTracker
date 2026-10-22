@@ -1,10 +1,11 @@
 import { useDeferredValue, useState, type FocusEvent } from 'react'
 import { Link } from 'react-router'
 import { Bus, ChevronRight, History, MapPin, Search, Smartphone, TrainFront, UserRound, X } from 'lucide-react'
-import { useFavorites, useLineSearch, useRailSearch, useStopSearch } from '@/api/hooks'
-import type { FavoritesResponse, LineSummary, RailStationView, StopSearchResult } from '@/api/types'
+import { useFavorites, useLineSearch, useRailLineSearch, useRailSearch, useStopSearch } from '@/api/hooks'
+import type { FavoritesResponse, LineSummary, RailLineView, RailStationView, StopSearchResult } from '@/api/types'
 import { EmptyState, ErrorState, LanguageMenu, LineBadge, LineBadges, Marquee, RailBadge, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards, useNow } from '@/components/bits'
 import { Announcements } from '@/components/planned'
+import { railStationLink } from '@/screens/RailStation'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
@@ -161,7 +162,7 @@ function FavoriteStationRow({ item }: { item: FavoritesResponse['stations'][numb
   const station = item.station
   const minutes = (at: string) => Math.max(0, Math.round((Date.parse(at) - now) / 60_000))
   return (
-    <Item className="pressable" render={<Link to={`/rail/${item.favorite.stationId}`} />}>
+    <Item className="pressable" render={<Link to={station ? railStationLink(station.lineId, station.id) : `/rail/${item.favorite.stationId}`} />}>
       <ItemMedia><RailBadge line={item.favorite.line} color={station?.color ?? '#808080'} /></ItemMedia>
       <ItemContent>
         <ItemTitle>{station?.name ?? item.favorite.stationName}</ItemTitle>
@@ -196,7 +197,9 @@ function SearchResults({ query }: { query: string }) {
   const lines = useLineSearch(query)
   const stops = useStopSearch(query)
   const rail = useRailSearch(query)
+  const railLines = useRailLineSearch(query)
   const lineResults = lines.data ?? []
+  const railLineResults = railLines.data ?? []
   const stopResults = query.trim().length >= 2 ? stops.data ?? [] : []
   const railResults = query.trim().length >= 2 ? rail.data ?? [] : []
   const loading = (lines.isPending && lines.fetchStatus !== 'idle') || (stops.isPending && stops.fetchStatus !== 'idle')
@@ -205,24 +208,38 @@ function SearchResults({ query }: { query: string }) {
   if (loading && lineResults.length === 0 && stopResults.length === 0) return <RowsSkeleton rows={3} />
   if (lines.isError || stops.isError)
     return <ErrorState message={t.home.searchDown} onRetry={() => { lines.refetch(); stops.refetch() }} />
-  if (lineResults.length === 0 && stopResults.length === 0 && railResults.length === 0)
+  if (lineResults.length === 0 && stopResults.length === 0 && railResults.length === 0 && railLineResults.length === 0)
     return <EmptyState title={t.home.nothingFound} description={t.home.nothingFoundText} />
 
   return (
     <>
       {lineResults.length > 0 && <SectionTitle>{t.home.lines}</SectionTitle>}
       <ItemGroup>{lineResults.map(l => <LineResultRow key={l.lineCode} line={l} />)}</ItemGroup>
-      {railResults.length > 0 && <SectionTitle>{t.home.rail}</SectionTitle>}
-      <ItemGroup>{railResults.map(s => <RailResultRow key={s.id} station={s} />)}</ItemGroup>
+      {railLineResults.length > 0 && <SectionTitle>{t.home.railLines}</SectionTitle>}
+      <ItemGroup>{railLineResults.map(l => <RailLineResultRow key={l.id} line={l} />)}</ItemGroup>
       {stopResults.length > 0 && <SectionTitle>{t.home.stops}</SectionTitle>}
       <ItemGroup>{stopResults.map(s => <StopResultRow key={s.stop.code} result={s} />)}</ItemGroup>
+      {railResults.length > 0 && <SectionTitle>{t.home.rail}</SectionTitle>}
+      <ItemGroup>{railResults.map(s => <RailResultRow key={s.id} station={s} />)}</ItemGroup>
     </>
+  )
+}
+
+function RailLineResultRow({ line }: { line: RailLineView }) {
+  return (
+    <Item className="pressable" render={<Link to={`/rail-lines/${line.id}`} />}>
+      <ItemMedia variant="icon"><TrainFront style={{ color: line.color }} /></ItemMedia>
+      <ItemContent>
+        <ItemTitle className="w-full min-w-0 gap-2"><RailBadge line={line.name} color={line.color} className="shrink-0" /><Marquee>{line.description}</Marquee></ItemTitle>
+      </ItemContent>
+      <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
+    </Item>
   )
 }
 
 function RailResultRow({ station }: { station: RailStationView }) {
   return (
-    <Item className="pressable" render={<Link to={`/rail/${station.id}`} />}>
+    <Item className="pressable" render={<Link to={railStationLink(station.lineId, station.id)} />}>
       <ItemMedia variant="icon"><TrainFront style={{ color: station.color }} /></ItemMedia>
       <ItemContent>
         <ItemTitle className="w-full min-w-0 gap-2"><RailBadge line={station.line} color={station.color} className="shrink-0" /><Marquee>{station.name}</Marquee></ItemTitle>

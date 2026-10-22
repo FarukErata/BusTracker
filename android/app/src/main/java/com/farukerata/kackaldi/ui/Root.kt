@@ -43,6 +43,9 @@ data class LineRoute(val code: String, val direction: String? = null, val stop: 
 data class RailRoute(val id: Int)
 
 @Serializable
+data class RailLineRoute(val id: Int, val station: Int? = null)
+
+@Serializable
 data object DevicesRoute
 
 @Serializable
@@ -80,6 +83,10 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
     val recents by app.recents.items.collectAsStateWithLifecycle(initialValue = emptyList())
     val rail by app.rail.stations.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { app.rail.ensureLoaded() }
+    val openStation = { stationId: Int ->
+        val lineId = rail.firstOrNull { it.id == stationId }?.lineId
+        if (lineId != null) nav.navigate(RailLineRoute(lineId, stationId)) else nav.navigate(RailRoute(stationId))
+    }
     val setEnabled = { alert: BusAlert, enabled: Boolean -> scope.launch { AlertScheduler.save(context, app.alerts, alert.copy(enabled = enabled)) }; Unit }
     val remove = { alert: BusAlert -> scope.launch { AlertScheduler.remove(context, app.alerts, alert.id) }; Unit }
     val openStop by app.pendingStop.collectAsStateWithLifecycle()
@@ -97,7 +104,8 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
                 onToggleTheme = onToggleTheme,
                 onStop = { nav.navigate(StopRoute(it)) },
                 onLine = { code, direction -> nav.navigate(LineRoute(code, direction)) },
-                onRail = { nav.navigate(RailRoute(it)) },
+                onRail = openStation,
+                onRailLine = { nav.navigate(RailLineRoute(it)) },
                 onDevices = { nav.navigate(DevicesRoute) },
                 onAlerts = { nav.navigate(AlertsRoute) },
                 alertRunning = running != null,
@@ -129,17 +137,21 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
                 onBack = { nav.popBackStack() },
                 onLine = { code, direction, stop -> nav.navigate(LineRoute(code, direction, stop)) },
                 rail = rail,
-                onRail = { nav.navigate(RailRoute(it)) },
+                onRail = openStation,
+            )
+        }
+        composable<RailLineRoute> { entry ->
+            val route = entry.toRoute<RailLineRoute>()
+            RailLineScreen(
+                viewModel = viewModel { RailLineViewModel(app.api, route.id, route.station) },
+                onBack = { nav.popBackStack() },
             )
         }
         composable<RailRoute> { entry ->
             val id = entry.toRoute<RailRoute>().id
-            RailStationScreen(
-                viewModel = viewModel { RailStationViewModel(app.api, id) },
-                rail = rail,
-                onBack = { nav.popBackStack() },
-                onRail = { nav.navigate(RailRoute(it)) },
-            )
+            RailStationRedirect(app.api, id, onBack = { nav.popBackStack() }) { lineId, stationId ->
+                nav.navigate(RailLineRoute(lineId, stationId)) { popUpTo<RailRoute> { inclusive = true } }
+            }
         }
         composable<LineRoute> { entry ->
             val route = entry.toRoute<LineRoute>()
@@ -147,7 +159,7 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
                 viewModel = viewModel { LineViewModel(app.api, route.code, route.direction, route.stop) },
                 onBack = { nav.popBackStack() },
                 rail = rail,
-                onRail = { nav.navigate(RailRoute(it)) },
+                onRail = openStation,
                 onDirectionShown = { direction ->
                     val title = directionLabel(direction.stops.firstOrNull()?.name.orEmpty(), direction.name)
                     scope.launch { app.recents.remember(Recent(Recent.LINE, route.code, title, direction = direction.direction)) }

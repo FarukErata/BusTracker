@@ -10,6 +10,7 @@ import { AndroidApp } from '@/screens/AndroidApp'
 import { Devices } from '@/screens/Devices'
 import { Home } from '@/screens/Home'
 import { Line } from '@/screens/Line'
+import { RailLine } from '@/screens/RailLine'
 import { RailStation } from '@/screens/RailStation'
 import { Stop } from '@/screens/Stop'
 import { Join } from '@/screens/Join'
@@ -30,6 +31,7 @@ const router = createBrowserRouter([
       { path: '/stops/:code', element: <Stop /> },
       { path: '/lines/:code', element: <Line /> },
       { path: '/rail/:id', element: <RailStation /> },
+      { path: '/rail-lines/:id', element: <RailLine /> },
       { path: '/devices', element: <Devices /> },
     ],
   },

@@ -13,6 +13,8 @@ import type {
   MeResponse,
   StopArrivalsView,
   StopDetails,
+  RailLineResponse,
+  RailLineView,
   RailStationResponse,
   RailStationView,
   StopSearchResult,
@@ -143,6 +145,25 @@ export function useRailSearch(query: string) {
   })
 }
 
+export function useRailLineSearch(query: string) {
+  const q = query.trim()
+  return useQuery({
+    queryKey: ['search', 'rail-lines', q],
+    queryFn: () => api<RailLineView[]>(`/api/rail/lines?q=${enc(q)}`),
+    enabled: q.length >= 1,
+    placeholderData: keepPreviousData,
+    staleTime: STATIC_STALE_MS,
+  })
+}
+
+export function useRailLine(id: string) {
+  return useQuery({
+    queryKey: ['rail', 'line', id],
+    queryFn: () => api<RailLineResponse>(`/api/rail/lines/${enc(id)}`),
+    staleTime: 5 * 60_000,
+  })
+}
+
 export function useRailStations() {
   return useQuery({
     queryKey: ['rail', 'stations'],
@@ -155,6 +176,7 @@ export function useRailStation(id: string) {
   return useQuery({
     queryKey: ['rail', 'station', id],
     queryFn: () => api<RailStationResponse>(`/api/rail/stations/${enc(id)}`),
+    enabled: !!id,
     refetchInterval: LIVE_REFRESH_MS * 2,
   })
 }

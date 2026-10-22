@@ -56,6 +56,7 @@ import com.farukerata.kackaldi.data.FavoriteLineEntry
 import com.farukerata.kackaldi.data.FavoriteStopEntry
 import com.farukerata.kackaldi.data.FavoriteStationEntry
 import com.farukerata.kackaldi.data.FavoritesResponse
+import com.farukerata.kackaldi.data.RailLineView
 import com.farukerata.kackaldi.data.RailStationView
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineSummary
@@ -73,7 +74,12 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class SearchResults(val lines: List<LineSummary>, val stops: List<StopSearchResult>, val rail: List<RailStationView> = emptyList())
+data class SearchResults(
+    val lines: List<LineSummary>,
+    val stops: List<StopSearchResult>,
+    val rail: List<RailStationView> = emptyList(),
+    val railLines: List<RailLineView> = emptyList(),
+)
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
@@ -101,6 +107,7 @@ class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
                 lines = api.searchLines(text),
                 stops = if (text.length >= 2) api.searchStops(text) else emptyList(),
                 rail = if (text.length >= 2) runCatching { api.railSearch(text) }.getOrDefault(emptyList()) else emptyList(),
+                railLines = runCatching { api.railLineSearch(text) }.getOrDefault(emptyList()),
             )
         }
     }
@@ -115,6 +122,7 @@ fun HomeScreen(
     onStop: (String) -> Unit,
     onLine: (String, String?) -> Unit,
     onRail: (Int) -> Unit,
+    onRailLine: (Int) -> Unit,
     onDevices: () -> Unit,
     onAlerts: () -> Unit,
     alertRunning: Boolean,
@@ -165,7 +173,7 @@ fun HomeScreen(
             val showRecents = searchFocused && query.isBlank() && recents.isNotEmpty()
             when {
                 showRecents -> recentsSection(recents, onClearRecents, { leaveSearch(); onStop(it) }, { code, dir -> leaveSearch(); onLine(code, dir) })
-                query.isNotBlank() && current != null -> resultsSection(current, onStop, onLine, onRail)
+                query.isNotBlank() && current != null -> resultsSection(current, onStop, onLine, onRail, onRailLine)
                 else -> {
                     if (query.isBlank() && alerts.isNotEmpty()) {
                         item { SectionTitle(S.yourAlerts) }
@@ -228,13 +236,15 @@ private fun LazyListScope.favoritesSection(
     }
 }
 
-private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (String) -> Unit, onLine: (String, String?) -> Unit, onRail: (Int) -> Unit) {
+private fun LazyListScope.resultsSection(
+    results: Load<SearchResults>, onStop: (String) -> Unit, onLine: (String, String?) -> Unit, onRail: (Int) -> Unit, onRailLine: (Int) -> Unit,
+) {
     when (results) {
         Load.Loading -> item { RowsSkeleton(rows = 3) }
         is Load.Failed -> item { EmptyState(S.searchDown, results.message) }
         is Load.Ready -> {
-            val (lines, stops, rail) = results.value
-            if (lines.isEmpty() && stops.isEmpty() && rail.isEmpty()) {
+            val (lines, stops, rail, railLines) = results.value
+            if (lines.isEmpty() && stops.isEmpty() && rail.isEmpty() && railLines.isEmpty()) {
                 item { EmptyState(S.nothingFound, S.nothingFoundText) }
                 return
             }
@@ -252,6 +262,19 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
                     }
                 }
             }
+            if (railLines.isNotEmpty()) item { SectionTitle(S.railLines) }
+            items(railLines, key = { "rail-line-${it.id}" }) { line ->
+                ItemRow(onClick = { onRailLine(line.id) }, leading = { KindIcon(Icons.Outlined.Train, tint = railColor(line.color)) }, trailing = { Chevron() }) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        RailBadge(line.name, line.color)
+                        MarqueeTitle(line.description)
+                    }
+                }
+            }
+            if (stops.isNotEmpty()) item { SectionTitle(S.stops) }
+            items(stops, key = { "stop-${it.stop.code}" }) { result ->
+                StopRow(result.stop.name, result.stop.district, result.stop.towards, result.lines) { onStop(result.stop.code) }
+            }
             if (rail.isNotEmpty()) item { SectionTitle(S.rail) }
             items(rail, key = { "rail-${it.id}" }) { station ->
                 ItemRow(onClick = { onRail(station.id) }, leading = { KindIcon(Icons.Outlined.Train, tint = railColor(station.color)) }, trailing = { Chevron() }) {
@@ -260,10 +283,6 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
                         MarqueeTitle(station.name)
                     }
                 }
-            }
-            if (stops.isNotEmpty()) item { SectionTitle(S.stops) }
-            items(stops, key = { "stop-${it.stop.code}" }) { result ->
-                StopRow(result.stop.name, result.stop.district, result.stop.towards, result.lines) { onStop(result.stop.code) }
             }
         }
     }

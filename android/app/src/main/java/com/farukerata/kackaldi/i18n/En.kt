@@ -73,7 +73,9 @@ object En : Strings() {
     override val railNow = "now"
     override val railPlanned = "Planned times from Metro İstanbul"
     override val railNoTrains = "No more trains in this direction today."
-    override val rail = "Rail"
+    override val rail = "Stations"
+    override val railLines = "Rail lines"
+    override val stations = "Stations"
     override val yourStations = "Your stations"
 
     override val alerts = "Alerts"
@@ -91,8 +93,8 @@ object En : Strings() {
     override val searchDown = "Search isn’t available right now"
     override val nothingFound = "Nothing found"
     override val nothingFoundText = "Try part of a stop name or a line code."
-    override val lines = "Lines"
-    override val stops = "Stops"
+    override val lines = "Bus lines"
+    override val stops = "Bus stops"
     override val alreadySignedIn = "This phone is already signed in to Kaç Kaldı"
 
     override val saveStop = "Save to your stops"

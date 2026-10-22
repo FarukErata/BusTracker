@@ -1,62 +1,39 @@
 import { useState } from 'react'
-import { useParams } from 'react-router'
+import { Navigate, useParams } from 'react-router'
 import { ChevronDown, Clock, Star } from 'lucide-react'
 import { useAddFavoriteStation, useFavorites, useRailStation, useRemoveFavoriteStation } from '@/api/hooks'
-import type { AnnouncementView, RailDepartureView, RailDirectionView, RailStationResponse } from '@/api/types'
-import { BackButton, ErrorState, RailBadge, RowsSkeleton, useNow } from '@/components/bits'
-import { MapSurface, StopMap } from '@/components/maps'
-import { Announcements, dayWithDate, HourGrid, NextDayDot } from '@/components/planned'
+import type { RailDepartureView, RailDirectionView, RailStationResponse } from '@/api/types'
+import { BackButton, ErrorState, RowsSkeleton, useNow } from '@/components/bits'
+import { dayWithDate, HourGrid, NextDayDot } from '@/components/planned'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { clock } from '@/lib/format'
 import { useLang, useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+
+export function railStationLink(lineId: number, stationId: number) {
+  return `/rail-lines/${lineId}?station=${stationId}`
+}
 
 export function RailStation() {
   useLang()
   const { id = '' } = useParams()
   const station = useRailStation(id)
   const info = station.data?.station
-
+  if (info) return <Navigate to={railStationLink(info.lineId, info.id)} replace />
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
-      <header className="flex items-center gap-1 px-1 pt-2">
-        <BackButton />
-        <div className="flex min-w-0 flex-1 items-center gap-2 px-1">
-          {info ? (
-            <>
-              <RailBadge line={info.line} color={info.color} />
-              <h1 className="truncate text-base font-semibold tracking-tight">{info.name}</h1>
-            </>
-          ) : (
-            <Skeleton className="h-5 w-40" />
-          )}
-        </div>
-        {info && <FavoriteStationButton stationId={info.id} />}
-      </header>
-      <div className="isolate mx-3 mt-2 h-40 overflow-hidden rounded-xl border">
-        {info?.lat != null && info.lng != null
-          ? <StopMap lat={info.lat} lng={info.lng} className="size-full" railStation={info.id} pinColor={info.color} />
-          : <MapSurface />}
-      </div>
-      <div className="flex flex-1 flex-col gap-2 pt-2 pb-6">
-        {station.isPending && <RowsSkeleton rows={2} />}
-        {station.isError && <ErrorState message={station.error.message} onRetry={() => station.refetch()} />}
-        {station.data && <StationBody data={station.data} />}
-      </div>
+      <header className="flex items-center gap-1 px-1 pt-2"><BackButton /></header>
+      {station.isPending && <RowsSkeleton rows={3} />}
+      {station.isError && <ErrorState message={station.error.message} onRetry={() => station.refetch()} />}
     </div>
   )
 }
 
-function StationBody({ data }: { data: RailStationResponse }) {
+export function StationBody({ data }: { data: RailStationResponse }) {
   const t = useT()
-  const notices: AnnouncementView[] = data.notices.map(n => ({
-    line: n.line, kind: 'notice', message: n.text, postedAt: '', direction: null, fromStop: null, departure: null, reason: null,
-  }))
   const nextDate = data.directions.find(d => d.next.some(n => n.nextDay))?.nextDate
   return (
     <>
-      <Announcements items={notices} showLines={false} />
       {data.directions.map(direction => <DirectionRow key={direction.id} direction={direction} />)}
       {nextDate && (
         <p className="flex items-center gap-1.5 px-3 text-xs text-muted-foreground"><NextDayDot />{t.plan.nextDayTrips(dayWithDate(nextDate))}</p>
@@ -130,7 +107,7 @@ function StationTimetable({ directions }: { directions: RailDirectionView[] }) {
   )
 }
 
-function FavoriteStationButton({ stationId }: { stationId: number }) {
+export function FavoriteStationButton({ stationId }: { stationId: number }) {
   const favorites = useFavorites()
   const add = useAddFavoriteStation()
   const remove = useRemoveFavoriteStation()

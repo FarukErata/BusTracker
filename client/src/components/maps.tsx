@@ -104,12 +104,37 @@ function RailStations({ except }: { except?: number }) {
           radius={RAIL_DOT_RADIUS}
           className="rail-dot"
           pathOptions={{ color: '#ffffff', weight: 2, fillColor: station.color, fillOpacity: 1 }}
-          eventHandlers={{ click: () => navigate(`/rail/${station.id}`) }}
+          eventHandlers={{ click: () => navigate(`/rail-lines/${station.lineId}?station=${station.id}`) }}
         >
           <Tooltip direction="top" offset={[0, -6]}>{station.line} {station.name}</Tooltip>
         </CircleMarker>
       ))}
     </>
+  )
+}
+
+export function RailLineMap({ stations, color, selected, onPick }: {
+  stations: { id: number; name: string; lat: number | null; lng: number | null }[]; color: string; selected: number | null; onPick: (id: number) => void
+}) {
+  const points = stations.filter(s => s.lat != null && s.lng != null).map(s => ({ ...s, at: [s.lat!, s.lng!] as [number, number] }))
+  if (points.length === 0) return <MapSurface />
+  return (
+    <MapContainer bounds={L.latLngBounds(points.map(p => p.at))} boundsOptions={{ padding: [24, 24] }} zoomControl={false} fadeAnimation={false} attributionControl={false} className="size-full">
+      <ThemedTiles />
+      <Polyline positions={points.map(p => p.at)} pathOptions={{ color, weight: 5, opacity: 0.85 }} />
+      {points.map(p => (
+        <CircleMarker
+          key={p.id === selected ? `${p.id}-picked` : p.id}
+          center={p.at}
+          radius={p.id === selected ? STOP_PIN_RADIUS : RAIL_DOT_RADIUS}
+          className="rail-dot"
+          pathOptions={{ color: '#ffffff', weight: p.id === selected ? 3 : 2, fillColor: color, fillOpacity: 1 }}
+          eventHandlers={{ click: () => onPick(p.id) }}
+        >
+          <Tooltip direction="top" offset={[0, -6]}>{p.name}</Tooltip>
+        </CircleMarker>
+      ))}
+    </MapContainer>
   )
 }
 

@@ -77,6 +77,7 @@ export const en = {
     noTrains: 'No more trains in this direction today.',
     timetable: 'Timetable',
     loading: 'Loading the stations…',
+    stations: 'Stations',
   },
   home: {
     search: 'Search stops and lines',
@@ -94,10 +95,11 @@ export const en = {
     searchDown: "Search isn't available right now.",
     nothingFound: 'Nothing found',
     nothingFoundText: 'Try part of a stop name or a line code.',
-    lines: 'Lines',
-    stops: 'Stops',
+    lines: 'Bus lines',
+    stops: 'Bus stops',
     announcements: 'Announcements',
-    rail: 'Rail',
+    rail: 'Stations',
+    railLines: 'Rail lines',
     yourStations: 'Your stations',
   },
   stop: {

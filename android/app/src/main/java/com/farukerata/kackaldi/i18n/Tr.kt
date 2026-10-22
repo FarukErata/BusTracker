@@ -69,7 +69,9 @@ object Tr : Strings() {
     override val railNow = "şimdi"
     override val railPlanned = "Metro İstanbul planlanan saatleri"
     override val railNoTrains = "Bu yönde bugün başka sefer yok."
-    override val rail = "Raylı sistem"
+    override val rail = "İstasyonlar"
+    override val railLines = "Raylı sistem hatları"
+    override val stations = "İstasyonlar"
     override val yourStations = "İstasyonlarım"
 
     override val alerts = "Hatırlatıcılar"
@@ -87,7 +89,7 @@ object Tr : Strings() {
     override val searchDown = "Arama şu an kullanılamıyor"
     override val nothingFound = "Sonuç yok"
     override val nothingFoundText = "Durak adının bir kısmını ya da hat kodunu dene."
-    override val lines = "Hatlar"
+    override val lines = "Otobüs hatları"
     override val stops = "Duraklar"
     override val alreadySignedIn = "Bu telefonda Kaç Kaldı’ya zaten giriş yapılmış"
 

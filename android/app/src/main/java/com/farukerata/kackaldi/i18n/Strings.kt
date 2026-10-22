@@ -63,6 +63,8 @@ abstract class Strings {
     abstract val railPlanned: String
     abstract val railNoTrains: String
     abstract val rail: String
+    abstract val railLines: String
+    abstract val stations: String
     abstract val yourStations: String
 
     abstract val alerts: String

@@ -244,6 +244,19 @@ export interface FavoriteStop {
   createdAt: string
 }
 
+export interface RailLineView {
+  id: number
+  name: string
+  color: string
+  description: string
+}
+
+export interface RailLineResponse {
+  line: RailLineView
+  stations: RailStationView[]
+  notices: RailNoticeView[]
+}
+
 export interface RailStationView {
   id: number
   name: string

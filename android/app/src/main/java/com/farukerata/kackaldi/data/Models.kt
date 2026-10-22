@@ -201,6 +201,12 @@ data class FavoriteLine(val id: Long, val lineCode: String, val direction: Strin
 data class FavoriteLineEntry(val favorite: FavoriteLine, val directions: Map<String, String> = emptyMap())
 
 @Serializable
+data class RailLineView(val id: Int, val name: String, val color: String, val description: String = "")
+
+@Serializable
+data class RailLineResponse(val line: RailLineView, val stations: List<RailStationView> = emptyList(), val notices: List<RailNoticeView> = emptyList())
+
+@Serializable
 data class RailStationView(
     val id: Int,
     val name: String,

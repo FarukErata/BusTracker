@@ -77,6 +77,7 @@ export const tr: Strings = {
     noTrains: 'Bu yönde bugün başka sefer yok.',
     timetable: 'Sefer saatleri',
     loading: 'İstasyonlar yükleniyor…',
+    stations: 'İstasyonlar',
   },
   home: {
     search: 'Durak ve hat ara',
@@ -94,10 +95,11 @@ export const tr: Strings = {
     searchDown: 'Arama şu an kullanılamıyor.',
     nothingFound: 'Sonuç yok',
     nothingFoundText: 'Durak adının bir kısmını ya da hat kodunu dene.',
-    lines: 'Hatlar',
+    lines: 'Otobüs hatları',
     stops: 'Duraklar',
     announcements: 'Duyurular',
-    rail: 'Raylı sistem',
+    rail: 'İstasyonlar',
+    railLines: 'Raylı sistem hatları',
     yourStations: 'İstasyonlarım',
   },
   stop: {
