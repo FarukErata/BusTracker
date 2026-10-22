@@ -3,7 +3,6 @@
 .claude
 android
 docs
-tests
 tools
 **/bin
 **/obj

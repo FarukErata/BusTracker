@@ -108,10 +108,6 @@ public sealed class LineDataService(
 
     public EtaContext Eta(DateTimeOffset now) => new(hops, now, _options.Tracking.UseHopTimes);
 
-    public Task WhenIdleAsync() =>
-        Task.WhenAll(_rosterRefreshes.Values.Select(r => r.Value).Append(fleetFeed.WhenIdleAsync()))
-            .ContinueWith(_ => { }, TaskScheduler.Default);
-
     private T? TryGetFresh<T>(ConcurrentDictionary<string, Cached<T>> cache, string lineCode) where T : class =>
         cache.TryGetValue(lineCode, out var cached) && clock.GetUtcNow() - cached.At < StaticMaxAge ? cached.Value : null;
 
