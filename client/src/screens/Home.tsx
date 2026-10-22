@@ -1,6 +1,6 @@
 import { useDeferredValue, useState, type FocusEvent } from 'react'
 import { Link } from 'react-router'
-import { ChevronRight, History, MapPin, Search, Smartphone, UserRound, X } from 'lucide-react'
+import { Bus, ChevronRight, History, MapPin, Search, Smartphone, TrainFront, UserRound, X } from 'lucide-react'
 import { useFavorites, useLineSearch, useRailSearch, useStopSearch } from '@/api/hooks'
 import type { FavoritesResponse, LineSummary, RailStationView, StopSearchResult } from '@/api/types'
 import { EmptyState, ErrorState, LanguageMenu, LineBadge, LineBadges, RailBadge, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards, useNow } from '@/components/bits'
@@ -223,8 +223,10 @@ function SearchResults({ query }: { query: string }) {
 function RailResultRow({ station }: { station: RailStationView }) {
   return (
     <Item className="pressable" render={<Link to={`/rail/${station.id}`} />}>
-      <ItemMedia><RailBadge line={station.line} color={station.color} /></ItemMedia>
-      <ItemContent><ItemTitle>{station.name}</ItemTitle></ItemContent>
+      <ItemMedia variant="icon"><TrainFront style={{ color: station.color }} /></ItemMedia>
+      <ItemContent>
+        <ItemTitle className="gap-2"><RailBadge line={station.line} color={station.color} className="shrink-0" /><span className="truncate">{station.name}</span></ItemTitle>
+      </ItemContent>
       <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
     </Item>
   )
@@ -234,9 +236,9 @@ function LineResultRow({ line }: { line: LineSummary }) {
   const first = line.directions[0]
   return (
     <Item className="pressable" render={<Link to={`/lines/${line.lineCode}`} />}>
-      <ItemMedia><LineBadge code={line.lineCode} /></ItemMedia>
+      <ItemMedia variant="icon"><Bus className="text-muted-foreground" /></ItemMedia>
       <ItemContent>
-        <ItemTitle>{first ? directionLabel(first.from, first.to) : line.lineCode}</ItemTitle>
+        <ItemTitle className="gap-2"><LineBadge code={line.lineCode} className="shrink-0" /><span className="truncate">{first ? directionLabel(first.from, first.to) : line.lineCode}</span></ItemTitle>
       </ItemContent>
       <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
     </Item>

@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -21,12 +22,14 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.DirectionsBus
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.Train
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +40,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -238,14 +243,22 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
                 val first = line.directions.firstOrNull()
                 ItemRow(
                     onClick = { onLine(line.lineCode, null) },
-                    leading = { LineBadge(line.lineCode) },
+                    leading = { KindIcon(Icons.Outlined.DirectionsBus) },
                     trailing = { Chevron() },
-                ) { ItemTitle(first?.let { directionLabel(it.from, it.to) } ?: line.lineCode) }
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        LineBadge(line.lineCode)
+                        ItemTitle(first?.let { directionLabel(it.from, it.to) } ?: line.lineCode)
+                    }
+                }
             }
             if (rail.isNotEmpty()) item { SectionTitle(S.rail) }
             items(rail, key = { "rail-${it.id}" }) { station ->
-                ItemRow(onClick = { onRail(station.id) }, leading = { RailBadge(station.line, station.color) }, trailing = { Chevron() }) {
-                    ItemTitle(station.name)
+                ItemRow(onClick = { onRail(station.id) }, leading = { KindIcon(Icons.Outlined.Train, tint = railColor(station.color)) }, trailing = { Chevron() }) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        RailBadge(station.line, station.color)
+                        ItemTitle(station.name)
+                    }
                 }
             }
             if (stops.isNotEmpty()) item { SectionTitle(S.stops) }
@@ -290,11 +303,16 @@ private fun FavoriteLineRow(entry: FavoriteLineEntry, onLine: (String, String?) 
 }
 
 @Composable
+private fun KindIcon(icon: ImageVector, modifier: Modifier = Modifier, tint: Color = Kit.colors.mutedForeground) {
+    Icon(icon, null, modifier.size(18.dp), tint = tint)
+}
+
+@Composable
 private fun StopRow(name: String, district: String?, towards: String?, lines: List<String>, label: String? = null, onClick: () -> Unit) {
     ItemRow(
         onClick = onClick,
         alignTop = true,
-        leading = { Icon(Icons.Outlined.Place, null, Modifier.padding(top = 1.dp).size(18.dp), tint = Kit.colors.mutedForeground) },
+        leading = { KindIcon(Icons.Outlined.Place, Modifier.padding(top = 1.dp)) },
         trailing = { Box(Modifier.padding(top = 20.dp)) { Chevron() } },
     ) {
         if (label != null) {
