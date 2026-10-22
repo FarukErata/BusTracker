@@ -7,7 +7,7 @@ public sealed class TimetableService(IbbClient ibb, TimeProvider clock, ILogger<
 {
     private static readonly TimeSpan RetryAfterError = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan RetryAfterEmpty = TimeSpan.FromHours(1);
-    private const int MaxWarmedLines = 60;
+    private const int MaxWarmedLines = 20;
 
     private readonly ConcurrentDictionary<string, Entry> _cache = new();
     private readonly ConcurrentDictionary<string, Lazy<Task<Timetable?>>> _loading = new();
@@ -17,6 +17,13 @@ public sealed class TimetableService(IbbClient ibb, TimeProvider clock, ILogger<
         if (_cache.TryGetValue(lineCode, out var entry) && clock.GetUtcNow() < entry.RefreshAt)
             return Task.FromResult(entry.Table);
         return _loading.GetOrAdd(lineCode, line => new Lazy<Task<Timetable?>>(() => LoadAsync(line))).Value.WaitAsync(ct);
+    }
+
+    public Timetable? Peek(string lineCode)
+    {
+        if (_cache.TryGetValue(lineCode, out var entry) && clock.GetUtcNow() < entry.RefreshAt) return entry.Table;
+        _ = GetAsync(lineCode, CancellationToken.None);
+        return entry?.Table;
     }
 
     public void Warm(IEnumerable<string> lineCodes)

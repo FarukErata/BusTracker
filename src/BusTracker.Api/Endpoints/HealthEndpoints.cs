@@ -1,3 +1,4 @@
+using BusTracker.Api.Ibb;
 using BusTracker.Api.Lines;
 using BusTracker.Api.Shapes;
 
@@ -14,7 +15,7 @@ public static class HealthEndpoints
     }
 
     private static async Task<HealthResponse> GetHealth(
-        IConfiguration configuration, FleetCallGate gate, FleetFeed fleet, BusLineMemory memory,
+        IConfiguration configuration, FleetCallGate gate, OutboundGate outbound, FleetFeed fleet, BusLineMemory memory,
         RouteShapeRepository shapes, CancellationToken ct)
     {
         var source = await shapes.GetSourceStateAsync(ct);
@@ -30,6 +31,7 @@ public static class HealthEndpoints
             FleetVehicles: fleet.Latest?.Vehicles.Count ?? 0,
             KnownBuses: memory.Count,
             FleetBlockedUntil: gate.BlockedUntil,
+            OutboundPausedUntil: outbound.PausedUntil,
             RouteShapes: new RouteShapesHealth(
                 await shapes.CountAsync(ct), source?.ETag, source?.LastModified, source?.CheckedAt, source?.ImportedAt));
     }
@@ -49,6 +51,7 @@ public sealed record HealthResponse(
     int FleetVehicles,
     int KnownBuses,
     DateTimeOffset? FleetBlockedUntil,
+    DateTimeOffset? OutboundPausedUntil,
     RouteShapesHealth RouteShapes);
 
 public sealed record IbbCallsHealth(int Total, int Fleet, int Roster);

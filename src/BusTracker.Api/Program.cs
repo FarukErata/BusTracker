@@ -35,6 +35,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<Database>();
 builder.Services.AddHostedService<DatabaseInitializer>();
 builder.Services.AddSingleton<FleetCallGate>();
+builder.Services.AddSingleton<OutboundGate>();
+builder.Services.AddTransient<OutboundGateHandler>();
 builder.Services.AddHostedService<IbbCallLog>();
 builder.Services.AddSingleton<RequestLog>();
 builder.Services.AddHostedService(services => services.GetRequiredService<RequestLog>());
@@ -66,13 +68,13 @@ builder.Services.AddHttpClient<IbbClient>((services, http) =>
 {
     http.BaseAddress = new Uri(services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb.BaseUrl);
     http.Timeout = Timeout.InfiniteTimeSpan;
-});
+}).AddHttpMessageHandler<OutboundGateHandler>();
 
 builder.Services.AddHttpClient<MetroClient>((services, http) =>
 {
     http.BaseAddress = new Uri(services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb.MetroBaseUrl);
     http.Timeout = TimeSpan.FromSeconds(15);
-});
+}).AddHttpMessageHandler<OutboundGateHandler>();
 
 builder.Services.AddHttpClient<OpenDataClient>((services, http) =>
     http.Timeout = TimeSpan.FromMinutes(

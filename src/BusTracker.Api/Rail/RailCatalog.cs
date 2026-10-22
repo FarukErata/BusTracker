@@ -73,18 +73,20 @@ public sealed class RailSyncService(MetroClient metro, RailCatalog catalog, Time
 {
     private static readonly TimeSpan CatalogEvery = TimeSpan.FromHours(24);
     private static readonly TimeSpan NoticesEvery = TimeSpan.FromMinutes(5);
-    private static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan[] RetryAfter = [TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(30), TimeSpan.FromHours(1)];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var failures = 0;
         try
         {
             while (!stoppingToken.IsCancellationRequested)
             {
                 var catalogDue = clock.GetUtcNow() - catalog.Data.LoadedAt >= CatalogEvery;
                 var ok = (!catalogDue || await TryAsync("rail catalog", LoadCatalogAsync, stoppingToken))
-                    & await TryAsync("rail notices", LoadNoticesAsync, stoppingToken);
-                await Task.Delay(ok ? NoticesEvery : RetryAfter, clock, stoppingToken);
+                    && await TryAsync("rail notices", LoadNoticesAsync, stoppingToken);
+                failures = ok ? 0 : failures + 1;
+                await Task.Delay(ok ? NoticesEvery : RetryAfter[Math.Min(failures, RetryAfter.Length) - 1], clock, stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
