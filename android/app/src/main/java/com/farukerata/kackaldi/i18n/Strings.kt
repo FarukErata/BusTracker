@@ -55,6 +55,16 @@ abstract class Strings {
     abstract fun nextDayTrips(day: String): String
     abstract val weekdayNames: List<String>
 
+    abstract val saveStation: String
+    abstract val unsaveStation: String
+    abstract fun railTowards(name: String): String
+    abstract fun railFrom(name: String): String
+    abstract val railNow: String
+    abstract val railPlanned: String
+    abstract val railNoTrains: String
+    abstract val rail: String
+    abstract val yourStations: String
+
     abstract val alerts: String
     abstract val devices: String
     abstract val searchPlaceholder: String

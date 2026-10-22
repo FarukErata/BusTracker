@@ -19,6 +19,14 @@ export function LineBadge({ code, className }: { code: string; className?: strin
   )
 }
 
+export function RailBadge({ line, color, className }: { line: string; color: string; className?: string }) {
+  return (
+    <span className={cn('inline-flex h-5 items-center rounded-md px-1.5 text-xs font-semibold text-white tabular-nums', className)} style={{ backgroundColor: color }}>
+      {line}
+    </span>
+  )
+}
+
 export const ageRing = (age: ReportAge) => (age === 'fresh' ? '' : 'ring-2 ring-zinc-500/50')
 
 export function LineBadges({ lines, max = 4 }: { lines: string[]; max?: number }) {

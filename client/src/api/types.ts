@@ -244,10 +244,67 @@ export interface FavoriteStop {
   createdAt: string
 }
 
+export interface RailStationView {
+  id: number
+  name: string
+  lineId: number
+  line: string
+  color: string
+  lat: number | null
+  lng: number | null
+}
+
+export interface RailDepartureView {
+  at: string
+  nextDay: boolean
+}
+
+export interface RailTripView {
+  time: string
+  at: string
+}
+
+export interface RailDirectionView {
+  id: number
+  from: string
+  to: string
+  next: RailDepartureView[]
+  trips: RailTripView[]
+  nextDate: string
+}
+
+export interface RailNoticeView {
+  line: string
+  text: string
+  updatedAt: string | null
+}
+
+export interface RailStationResponse {
+  station: RailStationView
+  directions: RailDirectionView[]
+  notices: RailNoticeView[]
+}
+
+export interface RailDirectionSummary {
+  id: number
+  to: string
+  next: RailDepartureView[]
+  nextDate: string
+}
+
+export interface FavoriteStation {
+  id: number
+  stationId: number
+  stationName: string
+  line: string
+  createdAt: string
+}
+
 export interface FavoritesResponse {
   lines: { favorite: FavoriteLine; directions: Record<string, string> }[]
   stops: { favorite: FavoriteStop; stop: StopInfo | null; lines: string[] }[]
   announcements: AnnouncementView[]
+  stations: { favorite: FavoriteStation; station: RailStationView | null; directions: RailDirectionSummary[] }[]
 }
 
 export interface PathStop {

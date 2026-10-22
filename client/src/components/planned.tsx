@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, Clock, Megaphone } from 'lucide-react'
 import { useLineTimetable } from '@/api/hooks'
-import type { AnnouncementView, ArrivalView, DayType, PlannedTripView, TimetableResponse, TimetableTripView } from '@/api/types'
+import type { AnnouncementView, ArrivalView, DayType, PlannedTripView, TimetableResponse } from '@/api/types'
 import { LineBadge, Minutes, RowsSkeleton, SectionTitle, useNow } from '@/components/bits'
 import { Button } from '@/components/ui/button'
 import { ItemTitle } from '@/components/ui/item'
@@ -83,7 +83,7 @@ export function TripTimes({ trips, atStop }: { trips: PlannedTripView[]; atStop:
   )
 }
 
-function NextDayDot({ className }: { className?: string }) {
+export function NextDayDot({ className }: { className?: string }) {
   return (
     <span className={cn('size-1.5 shrink-0 rounded-full bg-sky-600 dark:bg-sky-400', className)} role="img" aria-label={strings().plan.nextDay} />
   )
@@ -97,7 +97,7 @@ export interface NextTripsRow {
   nextDate?: string
 }
 
-function dayWithDate(date: string) {
+export function dayWithDate(date: string) {
   const [year, month, day] = date.split('-')
   const weekday = (new Date(Date.UTC(+year, +month - 1, +day)).getUTCDay() + 6) % 7
   return `${strings().plan.weekdayNames[weekday]} ${day}.${month}.${year}`
@@ -172,8 +172,14 @@ export function TimetableSection({ line, direction }: { line: string; direction:
   )
 }
 
-function byHour(trips: TimetableTripView[]) {
-  const hours: { key: string; trips: TimetableTripView[] }[] = []
+interface GridTrip {
+  time: string
+  at: string
+  cancelled?: boolean
+}
+
+function byHour<T extends GridTrip>(trips: T[]) {
+  const hours: { key: string; trips: T[] }[] = []
   for (const trip of trips) {
     const key = trip.at.slice(0, 13)
     const last = hours.at(-1)
@@ -183,8 +189,32 @@ function byHour(trips: TimetableTripView[]) {
   return hours
 }
 
-function TimetableBody({ data, direction, onDay }: { data: TimetableResponse; direction: string; onDay: (day: DayType) => void }) {
+export function HourGrid({ trips, today }: { trips: GridTrip[]; today: boolean }) {
   const now = useNow(60_000)
+  const t = useT()
+  return (
+    <div className="flex flex-col gap-3 text-sm tabular-nums">
+      {byHour(trips).map(hour => (
+        <ul key={hour.key} className="grid grid-cols-5 gap-x-2 gap-y-1 sm:grid-cols-6">
+          {hour.trips.map((trip, i) => (
+            <li
+              key={`${trip.at}-${i}`}
+              title={trip.cancelled ? t.plan.cancelled : undefined}
+              className={cn(
+                today && Date.parse(trip.at) < now && 'text-muted-foreground/50',
+                trip.cancelled && 'text-destructive line-through',
+              )}
+            >
+              {trip.time}
+            </li>
+          ))}
+        </ul>
+      ))}
+    </div>
+  )
+}
+
+function TimetableBody({ data, direction, onDay }: { data: TimetableResponse; direction: string; onDay: (day: DayType) => void }) {
   const t = useT()
   const dir = data.directions.find(d => d.direction === direction)
   const today = data.dayType === data.todayDayType
@@ -204,24 +234,7 @@ function TimetableBody({ data, direction, onDay }: { data: TimetableResponse; di
       {!dir || dir.trips.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t.plan.noTrips}</p>
       ) : (
-        <div className="flex flex-col gap-3 text-sm tabular-nums">
-          {byHour(dir.trips).map(hour => (
-            <ul key={hour.key} className="grid grid-cols-5 gap-x-2 gap-y-1 sm:grid-cols-6">
-              {hour.trips.map(trip => (
-                <li
-                  key={`${trip.routeCode}-${trip.at}`}
-                  title={trip.cancelled ? t.plan.cancelled : undefined}
-                  className={cn(
-                    today && Date.parse(trip.at) < now && 'text-muted-foreground/50',
-                    trip.cancelled && 'text-destructive line-through',
-                  )}
-                >
-                  {trip.time}
-                </li>
-              ))}
-            </ul>
-          ))}
-        </div>
+        <HourGrid trips={dir.trips} today={today} />
       )}
     </div>
   )

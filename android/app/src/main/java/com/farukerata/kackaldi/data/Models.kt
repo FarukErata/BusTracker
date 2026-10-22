@@ -201,10 +201,60 @@ data class FavoriteLine(val id: Long, val lineCode: String, val direction: Strin
 data class FavoriteLineEntry(val favorite: FavoriteLine, val directions: Map<String, String> = emptyMap())
 
 @Serializable
+data class RailStationView(
+    val id: Int,
+    val name: String,
+    val lineId: Int,
+    val line: String,
+    val color: String,
+    val lat: Double? = null,
+    val lng: Double? = null,
+)
+
+@Serializable
+data class RailDepartureView(val at: String, val nextDay: Boolean = false)
+
+@Serializable
+data class RailTripView(val time: String, val at: String)
+
+@Serializable
+data class RailDirectionView(
+    val id: Int,
+    val from: String,
+    val to: String,
+    val next: List<RailDepartureView> = emptyList(),
+    val trips: List<RailTripView> = emptyList(),
+    val nextDate: String? = null,
+)
+
+@Serializable
+data class RailNoticeView(val line: String, val text: String, val updatedAt: String? = null)
+
+@Serializable
+data class RailStationResponse(
+    val station: RailStationView,
+    val directions: List<RailDirectionView> = emptyList(),
+    val notices: List<RailNoticeView> = emptyList(),
+)
+
+@Serializable
+data class RailDirectionSummary(val id: Int, val to: String, val next: List<RailDepartureView> = emptyList(), val nextDate: String? = null)
+
+@Serializable
+data class FavoriteStation(val id: Long, val stationId: Int, val stationName: String, val line: String)
+
+@Serializable
+data class FavoriteStationEntry(val favorite: FavoriteStation, val station: RailStationView? = null, val directions: List<RailDirectionSummary> = emptyList())
+
+@Serializable
+data class AddFavoriteStationRequest(val station: Int)
+
+@Serializable
 data class FavoritesResponse(
     val lines: List<FavoriteLineEntry>,
     val stops: List<FavoriteStopEntry>,
     val announcements: List<AnnouncementView> = emptyList(),
+    val stations: List<FavoriteStationEntry> = emptyList(),
 )
 
 @Serializable

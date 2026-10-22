@@ -42,6 +42,9 @@ public sealed class IbbOptions
 
     [Range(5, 120)]
     public int TimeoutSeconds { get; init; } = 30;
+
+    [Required, Url]
+    public string MetroBaseUrl { get; init; } = "https://api.ibb.gov.tr/MetroIstanbul/api/MetroMobile/V2/";
 }
 
 public sealed class PollingOptions

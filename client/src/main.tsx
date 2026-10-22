@@ -10,6 +10,7 @@ import { AndroidApp } from '@/screens/AndroidApp'
 import { Devices } from '@/screens/Devices'
 import { Home } from '@/screens/Home'
 import { Line } from '@/screens/Line'
+import { RailStation } from '@/screens/RailStation'
 import { Stop } from '@/screens/Stop'
 import { Join } from '@/screens/Join'
 import { AccessGate } from '@/screens/Welcome'
@@ -28,6 +29,7 @@ const router = createBrowserRouter([
       { path: '/', element: <Home /> },
       { path: '/stops/:code', element: <Stop /> },
       { path: '/lines/:code', element: <Line /> },
+      { path: '/rail/:id', element: <RailStation /> },
       { path: '/devices', element: <Devices /> },
     ],
   },

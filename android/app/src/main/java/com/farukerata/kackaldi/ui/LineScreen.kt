@@ -61,6 +61,7 @@ import com.farukerata.kackaldi.data.LineDirection
 import com.farukerata.kackaldi.data.LineLiveResponse
 import com.farukerata.kackaldi.data.LineStopsResponse
 import com.farukerata.kackaldi.data.LiveBus
+import com.farukerata.kackaldi.data.RailStationView
 import com.farukerata.kackaldi.data.RouteShape
 import com.farukerata.kackaldi.i18n.S
 import kotlinx.coroutines.delay
@@ -167,7 +168,13 @@ class LineViewModel(val api: KacKaldiApi, val code: String, initialDirection: St
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LineScreen(viewModel: LineViewModel, onBack: () -> Unit, onDirectionShown: (LineDirection) -> Unit) {
+fun LineScreen(
+    viewModel: LineViewModel,
+    onBack: () -> Unit,
+    onDirectionShown: (LineDirection) -> Unit,
+    rail: List<RailStationView> = emptyList(),
+    onRail: (Int) -> Unit = {},
+) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val shown = viewModel.direction()
     LaunchedEffect(shown?.direction) { shown?.let(onDirectionShown) }
@@ -206,7 +213,7 @@ fun LineScreen(viewModel: LineViewModel, onBack: () -> Unit, onDirectionShown: (
             Box(Modifier.fillMaxSize()) {
                 when (val state = viewModel.stops) {
                     is Load.Failed -> ErrorState(state.message, viewModel::reload, Modifier.padding(top = 120.dp))
-                    else -> LineMapLayer(viewModel, peek.value.toInt())
+                    else -> LineMapLayer(viewModel, peek.value.toInt(), rail, onRail)
                 }
                 LineHeaderCard(viewModel, onBack)
             }
@@ -215,7 +222,7 @@ fun LineScreen(viewModel: LineViewModel, onBack: () -> Unit, onDirectionShown: (
 }
 
 @Composable
-private fun LineMapLayer(viewModel: LineViewModel, bottomInsetDp: Int) {
+private fun LineMapLayer(viewModel: LineViewModel, bottomInsetDp: Int, rail: List<RailStationView>, onRail: (Int) -> Unit) {
     val direction = viewModel.direction()
     val route = routeFor(viewModel.shapes, direction)
     val buses = busesIn(viewModel.live, direction)
@@ -236,10 +243,12 @@ private fun LineMapLayer(viewModel: LineViewModel, bottomInsetDp: Int) {
             selectedBus = viewModel.selectedBus,
             bottomInsetDp = bottomInsetDp,
             topInsetDp = 64,
+            rail = railMarkers(rail),
         ),
         Modifier.fillMaxSize(),
         onStop = viewModel::pin,
         onBus = viewModel::select,
+        onRail = onRail,
     )
 }
 

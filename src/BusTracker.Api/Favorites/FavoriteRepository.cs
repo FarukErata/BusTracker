@@ -8,6 +8,8 @@ public sealed record FavoriteLine(long Id, string LineCode, string? Direction, s
 
 public sealed record FavoriteStop(long Id, string StopCode, string StopName, string? Label, DateTimeOffset CreatedAt);
 
+public sealed record FavoriteStation(long Id, int StationId, string StationName, string Line, DateTimeOffset CreatedAt);
+
 public sealed class FavoriteRepository(Database database)
 {
     private const int SqliteConstraint = 19;
@@ -34,6 +36,30 @@ public sealed class FavoriteRepository(Database database)
             """,
             new { userId });
         return rows.Select(r => new FavoriteStop(r.Id, r.StopCode, r.StopName, r.Label, DbTime.Parse(r.CreatedAt)!.Value)).ToList();
+    }
+
+    public async Task<IReadOnlyList<FavoriteStation>> GetStationsAsync(long userId, CancellationToken ct)
+    {
+        await using var connection = await database.OpenAsync(ct);
+        var rows = await connection.QueryAsync<StationRow>(
+            """
+            SELECT id AS Id, station_id AS StationId, station_name AS StationName, line AS Line, created_at AS CreatedAt
+            FROM favorite_stations WHERE user_id = @userId ORDER BY id;
+            """,
+            new { userId });
+        return rows.Select(r => new FavoriteStation(r.Id, (int)r.StationId, r.StationName, r.Line, DbTime.Parse(r.CreatedAt)!.Value)).ToList();
+    }
+
+    public async Task<FavoriteStation?> AddStationAsync(long userId, FavoriteStation station, CancellationToken ct)
+    {
+        await using var connection = await database.OpenAsync(ct);
+        var id = await InsertOrNullAsync(() => connection.ExecuteScalarAsync<long>(
+            """
+            INSERT INTO favorite_stations (user_id, station_id, station_name, line, created_at)
+            VALUES (@userId, @StationId, @StationName, @Line, @CreatedAt) RETURNING id;
+            """,
+            new { userId, station.StationId, station.StationName, station.Line, CreatedAt = DbTime.Format(station.CreatedAt) }));
+        return id is null ? null : station with { Id = id.Value };
     }
 
     public async Task<FavoriteLine?> AddLineAsync(long userId, FavoriteLine line, CancellationToken ct)
@@ -64,6 +90,8 @@ public sealed class FavoriteRepository(Database database)
 
     public Task<bool> DeleteStopAsync(long userId, long id, CancellationToken ct) => DeleteAsync("favorite_stops", userId, id, ct);
 
+    public Task<bool> DeleteStationAsync(long userId, long id, CancellationToken ct) => DeleteAsync("favorite_stations", userId, id, ct);
+
     private async Task<bool> DeleteAsync(string table, long userId, long id, CancellationToken ct)
     {
         await using var connection = await database.OpenAsync(ct);
@@ -85,4 +113,6 @@ public sealed class FavoriteRepository(Database database)
     private sealed record LineRow(long Id, string LineCode, string? Direction, string? Label, string CreatedAt);
 
     private sealed record StopRow(long Id, string StopCode, string StopName, string? Label, string CreatedAt);
+
+    private sealed record StationRow(long Id, long StationId, string StationName, string Line, string CreatedAt);
 }

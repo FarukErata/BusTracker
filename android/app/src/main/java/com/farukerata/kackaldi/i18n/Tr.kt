@@ -62,6 +62,16 @@ object Tr : Strings() {
     override fun nextDayTrips(day: String) = "$day seferleri"
     override val weekdayNames = listOf("Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar")
 
+    override val saveStation = "İstasyonlarıma ekle"
+    override val unsaveStation = "İstasyonlarımdan çıkar"
+    override fun railTowards(name: String) = "$name yönü"
+    override fun railFrom(name: String) = "$name kalkışlı"
+    override val railNow = "şimdi"
+    override val railPlanned = "Metro İstanbul planlanan saatleri"
+    override val railNoTrains = "Bu yönde bugün başka sefer yok."
+    override val rail = "Raylı sistem"
+    override val yourStations = "İstasyonlarım"
+
     override val alerts = "Hatırlatıcılar"
     override val devices = "Cihazlarım"
     override val searchPlaceholder = "Durak veya hat, ör. Fabrikalar ya da 500T"

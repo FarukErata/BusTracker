@@ -174,6 +174,17 @@ public sealed class DatabaseInitializer(Database database, ILogger<DatabaseIniti
         );
         CREATE INDEX ix_eta_checks_at ON eta_checks (predicted_at);
         """,
+        """
+        CREATE TABLE favorite_stations (
+            id           INTEGER PRIMARY KEY,
+            user_id      INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+            station_id   INTEGER NOT NULL,
+            station_name TEXT NOT NULL,
+            line         TEXT NOT NULL,
+            created_at   TEXT NOT NULL,
+            UNIQUE (user_id, station_id)
+        );
+        """,
     ];
 
     public async Task StartAsync(CancellationToken ct)

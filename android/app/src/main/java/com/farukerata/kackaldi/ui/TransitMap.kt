@@ -56,6 +56,8 @@ import org.maplibre.geojson.Point
 
 data class MapStop(val code: String, val lat: Double, val lng: Double)
 
+data class MapRail(val id: Int, val lat: Double, val lng: Double, val color: String)
+
 data class MapBus(
     val doorNo: String,
     val lat: Double,
@@ -84,6 +86,8 @@ data class MapScene(
     val selectedBus: String? = null,
     val bottomInsetDp: Int = 0,
     val topInsetDp: Int = 0,
+    val rail: List<MapRail> = emptyList(),
+    val pinColor: String? = null,
 )
 
 @Composable
@@ -92,6 +96,7 @@ fun TransitMap(
     modifier: Modifier = Modifier,
     onStop: (String) -> Unit = {},
     onBus: (String) -> Unit = {},
+    onRail: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -100,6 +105,7 @@ fun TransitMap(
     val styleUrl = if (palette.dark) DARK_STYLE else LIGHT_STYLE
     val currentOnStop by rememberUpdatedState(onStop)
     val currentOnBus by rememberUpdatedState(onBus)
+    val currentOnRail by rememberUpdatedState(onRail)
     val controller = remember(palette) { MapController(palette, density, labelTypeface(context)) }
     val mapView = remember(styleUrl) {
         MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true)).apply {
@@ -115,6 +121,7 @@ fun TransitMap(
                 map.addOnMapClickListener { point ->
                     controller.busAt(point)?.let { currentOnBus(it); return@addOnMapClickListener true }
                     controller.stopAt(point)?.let { currentOnStop(it); return@addOnMapClickListener true }
+                    controller.railAt(point)?.let { currentOnRail(it); return@addOnMapClickListener true }
                     false
                 }
                 map.setStyle(Style.Builder().fromUri(styleUrl)) { style -> controller.attach(map, style) }
@@ -178,10 +185,15 @@ private class MapController(private val palette: Palette, private val density: F
     fun attach(map: MapLibreMap, style: Style) {
         this.map = map
         this.style = style
-        listOf(ROUTE, VARIANT, HIGHLIGHT, STOPS, PIN, BUSES).forEach { style.addSource(GeoJsonSource(it)) }
+        listOf(ROUTE, VARIANT, HIGHLIGHT, RAIL, STOPS, PIN, BUSES).forEach { style.addSource(GeoJsonSource(it)) }
         style.addLayer(line(ROUTE, palette.route.toArgb(), 5f))
         style.addLayer(line(VARIANT, palette.routeVariant.toArgb(), 4f).withProperties(lineDasharray(arrayOf(2f, 1.5f))))
         style.addLayer(line(HIGHLIGHT, palette.routeHighlight.toArgb(), 7f))
+        style.addLayer(
+            CircleLayer(RAIL, RAIL).withProperties(
+                circleRadius(5.5f), circleColor(Expression.toColor(Expression.get(COLOR))), circleStrokeColor(android.graphics.Color.WHITE), circleStrokeWidth(2f),
+            ).apply { minZoom = RAIL_MIN_ZOOM },
+        )
         style.addLayer(
             CircleLayer(STOPS, STOPS).withProperties(
                 circleRadius(4.5f), circleColor(palette.stopFill.toArgb()), circleStrokeColor(palette.stopStroke.toArgb()), circleStrokeWidth(1.5f),
@@ -212,6 +224,8 @@ private class MapController(private val palette: Palette, private val density: F
 
     fun stopAt(point: LatLng): String? = featureAt(point, STOPS, 22f)?.getStringProperty(CODE)
 
+    fun railAt(point: LatLng): Int? = featureAt(point, RAIL, 18f)?.getNumberProperty(RAIL_ID)?.toInt()
+
     private fun featureAt(point: LatLng, layer: String, slop: Float): Feature? {
         val map = map ?: return null
         val screen = map.projection.toScreenLocation(point)
@@ -231,6 +245,10 @@ private class MapController(private val palette: Palette, private val density: F
         style.source(HIGHLIGHT).setGeoJson(lineFeature(scene.highlight))
         style.source(STOPS).setGeoJson(FeatureCollection.fromFeatures(scene.stops.filter { it.code != scene.pinned?.code }.map(::stopFeature)))
         style.source(PIN).setGeoJson(FeatureCollection.fromFeatures(listOfNotNull(scene.pinned).map(::stopFeature)))
+        style.source(RAIL).setGeoJson(FeatureCollection.fromFeatures(scene.rail.map(::railFeature)))
+        style.getLayerAs<CircleLayer>(PIN)?.setProperties(
+            circleColor(scene.pinColor?.let { runCatching { android.graphics.Color.parseColor(it) }.getOrNull() } ?: palette.pinFill.toArgb()),
+        )
         style.source(BUSES).setGeoJson(FeatureCollection.fromFeatures(scene.buses.map { busFeature(style, it, it.doorNo == scene.selectedBus) }))
         frame(scene)
     }
@@ -251,6 +269,12 @@ private class MapController(private val palette: Palette, private val density: F
 
     private fun stopFeature(stop: MapStop): Feature =
         Feature.fromGeometry(Point.fromLngLat(stop.lng, stop.lat)).apply { addStringProperty(CODE, stop.code) }
+
+    private fun railFeature(station: MapRail): Feature =
+        Feature.fromGeometry(Point.fromLngLat(station.lng, station.lat)).apply {
+            addNumberProperty(RAIL_ID, station.id)
+            addStringProperty(COLOR, station.color)
+        }
 
     private fun busFeature(style: Style, bus: MapBus, selected: Boolean): Feature {
         val color = when {
@@ -330,6 +354,10 @@ private const val HIGHLIGHT = "highlight"
 private const val STOPS = "stops"
 private const val PIN = "pin"
 private const val BUSES = "buses"
+private const val RAIL = "rail"
+private const val RAIL_ID = "railId"
+private const val COLOR = "color"
+private const val RAIL_MIN_ZOOM = 13f
 private const val CODE = "code"
 private const val ICON = "icon"
 private const val ORDER = "order"

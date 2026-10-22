@@ -72,6 +72,7 @@ import com.farukerata.kackaldi.data.BusPathResponse
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineStatusView
 import com.farukerata.kackaldi.data.PathStop
+import com.farukerata.kackaldi.data.RailStationView
 import com.farukerata.kackaldi.data.Recent
 import com.farukerata.kackaldi.data.SeenBus
 import com.farukerata.kackaldi.data.StopArrivalView
@@ -174,7 +175,13 @@ class StopViewModel(private val api: KacKaldiApi, private val filters: StopFilte
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, String?, String?) -> Unit) {
+fun StopScreen(
+    viewModel: StopViewModel,
+    onBack: () -> Unit,
+    onLine: (String, String?, String?) -> Unit,
+    rail: List<RailStationView> = emptyList(),
+    onRail: (Int) -> Unit = {},
+) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel.code) {
         viewModel.loadFavorite()
@@ -239,7 +246,7 @@ fun StopScreen(viewModel: StopViewModel, onBack: () -> Unit, onLine: (String, St
                 }
             }
         }
-        StopMapCard(viewModel, stop?.lat, stop?.lng)
+        StopMapCard(viewModel, stop?.lat, stop?.lng, rail, onRail)
         PullToRefreshBox(viewModel.refreshing, viewModel::pullToRefresh, Modifier.fillMaxSize()) {
             when (val state = viewModel.arrivals) {
                 Load.Loading -> RowsSkeleton()
@@ -303,7 +310,7 @@ private fun needsNotificationPermission(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
 
 @Composable
-private fun StopMapCard(viewModel: StopViewModel, lat: Double?, lng: Double?) {
+private fun StopMapCard(viewModel: StopViewModel, lat: Double?, lng: Double?, rail: List<RailStationView>, onRail: (Int) -> Unit) {
     val colors = Kit.colors
     val tracking = viewModel.tracking
     val selected = viewModel.selection != null
@@ -327,11 +334,12 @@ private fun StopMapCard(viewModel: StopViewModel, lat: Double?, lng: Double?) {
                 pinned = stop,
                 buses = listOf(MapBus(tracking.bus.doorNo, tracking.bus.lat, tracking.bus.lng, age = reportAge(secondsSince(tracking.bus.reportedAt)), heavyTraffic = tracking.bus.heavyTraffic)),
                 selectedBus = tracking.bus.doorNo,
+                rail = railMarkers(rail),
             )
         } else {
-            MapScene(frame = MapFrame.Center("stop-${viewModel.code}", lat, lng, 16.5), pinned = stop)
+            MapScene(frame = MapFrame.Center("stop-${viewModel.code}", lat, lng, 16.5), pinned = stop, rail = railMarkers(rail))
         }
-        TransitMap(scene, Modifier.fillMaxSize())
+        TransitMap(scene, Modifier.fillMaxSize(), onRail = onRail)
     }
 }
 

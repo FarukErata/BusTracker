@@ -1,9 +1,9 @@
 import { useDeferredValue, useState, type FocusEvent } from 'react'
 import { Link } from 'react-router'
 import { ChevronRight, History, MapPin, Search, Smartphone, UserRound, X } from 'lucide-react'
-import { useFavorites, useLineSearch, useStopSearch } from '@/api/hooks'
-import type { FavoritesResponse, LineSummary, StopSearchResult } from '@/api/types'
-import { EmptyState, ErrorState, LanguageMenu, LineBadge, LineBadges, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards } from '@/components/bits'
+import { useFavorites, useLineSearch, useRailSearch, useStopSearch } from '@/api/hooks'
+import type { FavoritesResponse, LineSummary, RailStationView, StopSearchResult } from '@/api/types'
+import { EmptyState, ErrorState, LanguageMenu, LineBadge, LineBadges, RailBadge, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards, useNow } from '@/components/bits'
 import { Announcements } from '@/components/planned'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -116,7 +116,8 @@ function Favorites() {
   if (favorites.isError) return <ErrorState message={favorites.error.message} onRetry={() => favorites.refetch()} />
 
   const { stops, lines } = favorites.data
-  if (stops.length === 0 && lines.length === 0)
+  const stations = favorites.data.stations ?? []
+  if (stops.length === 0 && lines.length === 0 && stations.length === 0)
     return <EmptyState title={t.home.emptyTitle} description={t.home.emptyText} />
 
   const notices = favorites.data.announcements ?? []
@@ -130,6 +131,8 @@ function Favorites() {
       )}
       {stops.length > 0 && <SectionTitle>{t.home.yourStops}</SectionTitle>}
       <ItemGroup>{stops.map(s => <FavoriteStopRow key={s.favorite.id} item={s} />)}</ItemGroup>
+      {stations.length > 0 && <SectionTitle>{t.home.yourStations}</SectionTitle>}
+      <ItemGroup>{stations.map(s => <FavoriteStationRow key={s.favorite.id} item={s} />)}</ItemGroup>
       {lines.length > 0 && <SectionTitle>{t.home.yourLines}</SectionTitle>}
       <ItemGroup>{lines.map(l => <FavoriteLineRow key={l.favorite.id} item={l} />)}</ItemGroup>
     </>
@@ -146,6 +149,27 @@ function FavoriteStopRow({ item }: { item: FavoritesResponse['stops'][number] })
         {item.favorite.label && <ItemDescription><StopName name={name} district={item.stop?.district} /></ItemDescription>}
         {item.stop?.towards && <ItemDescription><Towards stop={item.stop.towards} /></ItemDescription>}
         <LineBadges lines={item.lines} />
+      </ItemContent>
+      <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
+    </Item>
+  )
+}
+
+function FavoriteStationRow({ item }: { item: FavoritesResponse['stations'][number] }) {
+  const now = useNow(15_000)
+  const t = useT()
+  const station = item.station
+  const minutes = (at: string) => Math.max(0, Math.round((Date.parse(at) - now) / 60_000))
+  return (
+    <Item className="pressable" render={<Link to={`/rail/${item.favorite.stationId}`} />}>
+      <ItemMedia><RailBadge line={item.favorite.line} color={station?.color ?? '#808080'} /></ItemMedia>
+      <ItemContent>
+        <ItemTitle>{station?.name ?? item.favorite.stationName}</ItemTitle>
+        {item.directions.map(d => (
+          <ItemDescription key={d.id} className="tabular-nums">
+            {t.rail.towards(d.to)} · {d.next.slice(0, 2).map(n => minutes(n.at)).join(', ')} {t.common.min}
+          </ItemDescription>
+        ))}
       </ItemContent>
       <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
     </Item>
@@ -171,24 +195,38 @@ function FavoriteLineRow({ item }: { item: FavoritesResponse['lines'][number] })
 function SearchResults({ query }: { query: string }) {
   const lines = useLineSearch(query)
   const stops = useStopSearch(query)
+  const rail = useRailSearch(query)
   const lineResults = lines.data ?? []
   const stopResults = query.trim().length >= 2 ? stops.data ?? [] : []
+  const railResults = query.trim().length >= 2 ? rail.data ?? [] : []
   const loading = (lines.isPending && lines.fetchStatus !== 'idle') || (stops.isPending && stops.fetchStatus !== 'idle')
   const t = useT()
 
   if (loading && lineResults.length === 0 && stopResults.length === 0) return <RowsSkeleton rows={3} />
   if (lines.isError || stops.isError)
     return <ErrorState message={t.home.searchDown} onRetry={() => { lines.refetch(); stops.refetch() }} />
-  if (lineResults.length === 0 && stopResults.length === 0)
+  if (lineResults.length === 0 && stopResults.length === 0 && railResults.length === 0)
     return <EmptyState title={t.home.nothingFound} description={t.home.nothingFoundText} />
 
   return (
     <>
       {lineResults.length > 0 && <SectionTitle>{t.home.lines}</SectionTitle>}
       <ItemGroup>{lineResults.map(l => <LineResultRow key={l.lineCode} line={l} />)}</ItemGroup>
+      {railResults.length > 0 && <SectionTitle>{t.home.rail}</SectionTitle>}
+      <ItemGroup>{railResults.map(s => <RailResultRow key={s.id} station={s} />)}</ItemGroup>
       {stopResults.length > 0 && <SectionTitle>{t.home.stops}</SectionTitle>}
       <ItemGroup>{stopResults.map(s => <StopResultRow key={s.stop.code} result={s} />)}</ItemGroup>
     </>
+  )
+}
+
+function RailResultRow({ station }: { station: RailStationView }) {
+  return (
+    <Item className="pressable" render={<Link to={`/rail/${station.id}`} />}>
+      <ItemMedia><RailBadge line={station.line} color={station.color} /></ItemMedia>
+      <ItemContent><ItemTitle>{station.name}</ItemTitle></ItemContent>
+      <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
+    </Item>
   )
 }
 

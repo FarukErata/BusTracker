@@ -85,6 +85,18 @@ class KacKaldiApi(private val store: DeviceStore) {
         }
     }
 
+    suspend fun railSearch(query: String): List<RailStationView> =
+        authorized { auth -> get("api/rail/stations") { auth(); parameter("q", query) } }
+
+    suspend fun railStations(): List<RailStationView> = authorized { auth -> get("api/rail/stations/all") { auth() } }
+
+    suspend fun railStation(id: Int): RailStationResponse = authorized { auth -> get("api/rail/stations/$id") { auth() } }
+
+    suspend fun addFavoriteStation(id: Int): Unit =
+        authorized { auth -> post("api/favorites/stations") { auth(); setBody(AddFavoriteStationRequest(id)) } }
+
+    suspend fun removeFavoriteStation(id: Long): Unit = authorized { auth -> delete("api/favorites/stations/$id") { auth() } }
+
     suspend fun busPath(code: String, bus: String, stop: String): BusPathResponse = authorized { auth ->
         get("api/lines/$code/path") {
             auth()

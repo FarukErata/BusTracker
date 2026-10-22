@@ -13,6 +13,8 @@ import type {
   MeResponse,
   StopArrivalsView,
   StopDetails,
+  RailStationResponse,
+  RailStationView,
   StopSearchResult,
   TimetableResponse,
 } from './types'
@@ -130,6 +132,33 @@ export function useLineTimetable(line: string, day: DayType | null) {
   })
 }
 
+export function useRailSearch(query: string) {
+  const q = query.trim()
+  return useQuery({
+    queryKey: ['search', 'rail', q],
+    queryFn: () => api<RailStationView[]>(`/api/rail/stations?q=${enc(q)}`),
+    enabled: q.length >= 2,
+    placeholderData: keepPreviousData,
+    staleTime: STATIC_STALE_MS,
+  })
+}
+
+export function useRailStations() {
+  return useQuery({
+    queryKey: ['rail', 'stations'],
+    queryFn: () => api<RailStationView[]>('/api/rail/stations/all'),
+    staleTime: STATIC_STALE_MS,
+  })
+}
+
+export function useRailStation(id: string) {
+  return useQuery({
+    queryKey: ['rail', 'station', id],
+    queryFn: () => api<RailStationResponse>(`/api/rail/stations/${enc(id)}`),
+    refetchInterval: LIVE_REFRESH_MS * 2,
+  })
+}
+
 export function useMe() {
   return useQuery({ queryKey: ['me'], queryFn: () => api<MeResponse>('/api/me') })
 }
@@ -160,6 +189,14 @@ export function useAddFavoriteStop() {
 
 export function useRemoveFavoriteStop() {
   return useFavoriteMutation((id: number) => api(`/api/favorites/stops/${id}`, { method: 'DELETE' }))
+}
+
+export function useAddFavoriteStation() {
+  return useFavoriteMutation((station: number) => api('/api/favorites/stations', { method: 'POST', body: JSON.stringify({ station }) }))
+}
+
+export function useRemoveFavoriteStation() {
+  return useFavoriteMutation((id: number) => api(`/api/favorites/stations/${id}`, { method: 'DELETE' }))
 }
 
 export function useAddFavoriteLine() {

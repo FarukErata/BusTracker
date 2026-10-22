@@ -40,6 +40,9 @@ data class StopRoute(val code: String)
 data class LineRoute(val code: String, val direction: String? = null, val stop: String? = null)
 
 @Serializable
+data class RailRoute(val id: Int)
+
+@Serializable
 data object DevicesRoute
 
 @Serializable
@@ -75,6 +78,8 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
     val alerts by app.alerts.alerts.collectAsStateWithLifecycle(initialValue = emptyList())
     val running by app.watch.collectAsStateWithLifecycle()
     val recents by app.recents.items.collectAsStateWithLifecycle(initialValue = emptyList())
+    val rail by app.rail.stations.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { app.rail.ensureLoaded() }
     val setEnabled = { alert: BusAlert, enabled: Boolean -> scope.launch { AlertScheduler.save(context, app.alerts, alert.copy(enabled = enabled)) }; Unit }
     val remove = { alert: BusAlert -> scope.launch { AlertScheduler.remove(context, app.alerts, alert.id) }; Unit }
     val openStop by app.pendingStop.collectAsStateWithLifecycle()
@@ -92,6 +97,7 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
                 onToggleTheme = onToggleTheme,
                 onStop = { nav.navigate(StopRoute(it)) },
                 onLine = { code, direction -> nav.navigate(LineRoute(code, direction)) },
+                onRail = { nav.navigate(RailRoute(it)) },
                 onDevices = { nav.navigate(DevicesRoute) },
                 onAlerts = { nav.navigate(AlertsRoute) },
                 alertRunning = running != null,
@@ -122,6 +128,17 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
                 viewModel = viewModel { StopViewModel(app.api, app.stopFilters, code) },
                 onBack = { nav.popBackStack() },
                 onLine = { code, direction, stop -> nav.navigate(LineRoute(code, direction, stop)) },
+                rail = rail,
+                onRail = { nav.navigate(RailRoute(it)) },
+            )
+        }
+        composable<RailRoute> { entry ->
+            val id = entry.toRoute<RailRoute>().id
+            RailStationScreen(
+                viewModel = viewModel { RailStationViewModel(app.api, id) },
+                rail = rail,
+                onBack = { nav.popBackStack() },
+                onRail = { nav.navigate(RailRoute(it)) },
             )
         }
         composable<LineRoute> { entry ->
@@ -129,6 +146,8 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
             LineScreen(
                 viewModel = viewModel { LineViewModel(app.api, route.code, route.direction, route.stop) },
                 onBack = { nav.popBackStack() },
+                rail = rail,
+                onRail = { nav.navigate(RailRoute(it)) },
                 onDirectionShown = { direction ->
                     val title = directionLabel(direction.stops.firstOrNull()?.name.orEmpty(), direction.name)
                     scope.launch { app.recents.remember(Recent(Recent.LINE, route.code, title, direction = direction.direction)) }

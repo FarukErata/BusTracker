@@ -4,6 +4,7 @@ using BusTracker.Api.Data;
 using BusTracker.Api.Endpoints;
 using BusTracker.Api.Favorites;
 using BusTracker.Api.Ibb;
+using BusTracker.Api.Rail;
 using BusTracker.Api.Lines;
 using BusTracker.Api.Shapes;
 using BusTracker.Api.Stops;
@@ -53,6 +54,10 @@ builder.Services.AddSingleton<TimetableService>();
 builder.Services.AddSingleton<AnnouncementService>();
 builder.Services.AddHostedService(services => services.GetRequiredService<AnnouncementService>());
 builder.Services.AddSingleton<LinePlans>();
+builder.Services.AddSingleton<RailCatalog>();
+builder.Services.AddSingleton<RailTimetables>();
+builder.Services.AddSingleton<RailBoard>();
+builder.Services.AddHostedService<RailSyncService>();
 builder.Services.AddHostedService<StaticDataSyncService>();
 builder.Services.AddSingleton<UserRepository>();
 builder.Services.AddSingleton<FavoriteRepository>();
@@ -61,6 +66,12 @@ builder.Services.AddHttpClient<IbbClient>((services, http) =>
 {
     http.BaseAddress = new Uri(services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb.BaseUrl);
     http.Timeout = Timeout.InfiniteTimeSpan;
+});
+
+builder.Services.AddHttpClient<MetroClient>((services, http) =>
+{
+    http.BaseAddress = new Uri(services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb.MetroBaseUrl);
+    http.Timeout = TimeSpan.FromSeconds(15);
 });
 
 builder.Services.AddHttpClient<OpenDataClient>((services, http) =>
@@ -129,6 +140,7 @@ app.MapStopEndpoints();
 app.MapLineEndpoints();
 app.MapLiveEndpoints();
 app.MapTimetableEndpoints();
+app.MapRailEndpoints();
 app.MapStatsEndpoints();
 app.MapFallbackToFile("{*path:regex(^(?!api/|dev/|health).*$)}", "index.html", webApp).AllowAnonymous();
 

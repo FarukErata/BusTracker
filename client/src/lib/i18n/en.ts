@@ -67,6 +67,17 @@ export const en = {
     weekdayNames: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     unavailable: "The timetable isn't available right now.",
   },
+  rail: {
+    save: 'Save to your stations',
+    unsave: 'Remove from your stations',
+    towards: (name: string) => `To ${name}`,
+    from: (name: string) => `from ${name}`,
+    now: 'now',
+    planned: 'Planned times from Metro İstanbul',
+    noTrains: 'No more trains in this direction today.',
+    timetable: 'Timetable',
+    loading: 'Loading the stations…',
+  },
   home: {
     search: 'Search stops and lines',
     placeholder: 'Stop or line, like Fabrikalar or 500T',
@@ -86,6 +97,8 @@ export const en = {
     lines: 'Lines',
     stops: 'Stops',
     announcements: 'Announcements',
+    rail: 'Rail',
+    yourStations: 'Your stations',
   },
   stop: {
     save: 'Save to your stops',

@@ -171,13 +171,13 @@ fun TripTimes(trips: List<PlannedTripView>, atStop: Boolean) {
 }
 
 @Composable
-private fun NextDayDot(modifier: Modifier = Modifier) {
+fun NextDayDot(modifier: Modifier = Modifier) {
     Box(modifier.size(6.dp).background(Kit.colors.pinFill, CircleShape))
 }
 
 data class NextTripsRow(val key: String, val line: String, val label: String?, val trips: List<PlannedTripView>, val nextDate: String? = null)
 
-private fun dayWithDate(date: String): String = runCatching {
+fun dayWithDate(date: String): String = runCatching {
     val day = LocalDate.parse(date)
     "${S.weekdayNames[day.dayOfWeek.value - 1]} ${day.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))}"
 }.getOrDefault(date)
@@ -280,7 +280,6 @@ private fun TimetableBody(data: TimetableResponse, direction: String, onDay: (St
         return
     }
     val colors = Kit.colors
-    val now = rememberNow(60_000)
     val dir = data.directions.firstOrNull { it.direction == direction }
     val today = data.dayType == data.todayDayType
     Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -293,7 +292,18 @@ private fun TimetableBody(data: TimetableResponse, direction: String, onDay: (St
             Text(S.noTrips, style = Kit.sm, color = colors.mutedForeground)
             return@Column
         }
-        dir.trips.groupBy { it.at.take(13) }.values.forEach { hour ->
+        HourGrid(dir.trips.map { GridTrip(it.time, it.at, it.cancelled) }, today)
+    }
+}
+
+data class GridTrip(val time: String, val at: String, val cancelled: Boolean = false)
+
+@Composable
+fun HourGrid(trips: List<GridTrip>, today: Boolean) {
+    val colors = Kit.colors
+    val now = rememberNow(60_000)
+    Column {
+        trips.groupBy { it.at.take(13) }.values.forEach { hour ->
             FlowRow(Modifier.padding(bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 hour.forEach { trip ->
                     val past = today && epochMillis(trip.at) < now

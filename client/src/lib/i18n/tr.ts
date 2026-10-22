@@ -67,6 +67,17 @@ export const tr: Strings = {
     weekdayNames: ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'],
     unavailable: 'Sefer saatleri şu an alınamıyor.',
   },
+  rail: {
+    save: 'İstasyonlarıma ekle',
+    unsave: 'İstasyonlarımdan çıkar',
+    towards: (name: string) => `${name} yönü`,
+    from: (name: string) => `${name} kalkışlı`,
+    now: 'şimdi',
+    planned: 'Metro İstanbul planlanan saatleri',
+    noTrains: 'Bu yönde bugün başka sefer yok.',
+    timetable: 'Sefer saatleri',
+    loading: 'İstasyonlar yükleniyor…',
+  },
   home: {
     search: 'Durak ve hat ara',
     placeholder: 'Durak veya hat, ör. Fabrikalar ya da 500T',
@@ -86,6 +97,8 @@ export const tr: Strings = {
     lines: 'Hatlar',
     stops: 'Duraklar',
     announcements: 'Duyurular',
+    rail: 'Raylı sistem',
+    yourStations: 'İstasyonlarım',
   },
   stop: {
     save: 'Duraklarıma kaydet',

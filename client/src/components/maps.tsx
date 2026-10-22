@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
-import { AttributionControl, CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { useNavigate } from 'react-router'
+import { AttributionControl, CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvent } from 'react-leaflet'
+import { useRailStations } from '@/api/hooks'
 import type { LineStop, TrackedBusView } from '@/api/types'
 import type { TrackingView } from '@/lib/tracking'
 import { reportAge, secondsSince, titleCase } from '@/lib/format'
@@ -9,6 +11,8 @@ const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">Op
 const ISTANBUL: [number, number] = [41.015, 28.979]
 const STOP_DOT_RADIUS = 5
 const STOP_PIN_RADIUS = 8
+const RAIL_DOT_RADIUS = 6
+const RAIL_MIN_ZOOM = 13
 
 function ThemedTiles() {
   return (
@@ -84,8 +88,33 @@ function StopFocus({ lat, lng, tracking }: { lat: number; lng: number; tracking:
   return null
 }
 
-export function StopMap({ lat, lng, className, tracking = null, inline = true }: {
-  lat: number; lng: number; className?: string; tracking?: TrackingView | null; inline?: boolean
+function RailStations({ except }: { except?: number }) {
+  const map = useMap()
+  const navigate = useNavigate()
+  const stations = useRailStations()
+  const [zoom, setZoom] = useState(() => map.getZoom())
+  useMapEvent('zoomend', () => setZoom(map.getZoom()))
+  if (zoom < RAIL_MIN_ZOOM) return null
+  return (
+    <>
+      {(stations.data ?? []).filter(s => s.lat != null && s.lng != null && s.id !== except).map(station => (
+        <CircleMarker
+          key={station.id}
+          center={[station.lat!, station.lng!]}
+          radius={RAIL_DOT_RADIUS}
+          className="rail-dot"
+          pathOptions={{ color: '#ffffff', weight: 2, fillColor: station.color, fillOpacity: 1 }}
+          eventHandlers={{ click: () => navigate(`/rail/${station.id}`) }}
+        >
+          <Tooltip direction="top" offset={[0, -6]}>{station.line} {station.name}</Tooltip>
+        </CircleMarker>
+      ))}
+    </>
+  )
+}
+
+export function StopMap({ lat, lng, className, tracking = null, inline = true, railStation, pinColor }: {
+  lat: number; lng: number; className?: string; tracking?: TrackingView | null; inline?: boolean; railStation?: number; pinColor?: string
 }) {
   return (
     <MapContainer
@@ -99,6 +128,7 @@ export function StopMap({ lat, lng, className, tracking = null, inline = true }:
     >
       <ThemedTiles />
       <StopFocus lat={lat} lng={lng} tracking={tracking} />
+      <RailStations except={railStation} />
       {tracking && (
         <>
           <Polyline positions={tracking.path} className="route-line" pathOptions={{ weight: 5 }} />
@@ -111,7 +141,12 @@ export function StopMap({ lat, lng, className, tracking = null, inline = true }:
           <KeepInView lat={tracking.bus.lat} lng={tracking.bus.lng} bottomInset={0} topInset={0} edge={20} />
         </>
       )}
-      <CircleMarker center={[lat, lng]} radius={STOP_PIN_RADIUS} className="stop-pin" />
+      <CircleMarker
+        center={[lat, lng]}
+        radius={STOP_PIN_RADIUS}
+        className={pinColor ? 'rail-pin' : 'stop-pin'}
+        pathOptions={pinColor ? { color: '#ffffff', weight: 3, fillColor: pinColor, fillOpacity: 1 } : undefined}
+      />
     </MapContainer>
   )
 }
@@ -166,6 +201,7 @@ export function LineMap({ route, stops, buses, pinnedStop, selectedBus, onStopCl
       <FitOnce points={route} fitId={fitId} bottomInset={bottomInset} />
       <KeepInView lat={selected?.lat} lng={selected?.lng} bottomInset={bottomInset} />
       <Polyline positions={route} className="route-line" pathOptions={{ weight: 5 }} />
+      <RailStations />
       {busRoute && <Polyline positions={busRoute} className="route-variant" pathOptions={{ weight: 4, dashArray: '8 6' }} />}
       {highlight && <Polyline positions={highlight} className="route-highlight" pathOptions={{ weight: 7 }} />}
       {stops.map(stop => (

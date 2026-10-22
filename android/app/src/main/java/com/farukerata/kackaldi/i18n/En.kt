@@ -66,6 +66,16 @@ object En : Strings() {
     override fun nextDayTrips(day: String) = "$day trips"
     override val weekdayNames = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
+    override val saveStation = "Save to your stations"
+    override val unsaveStation = "Remove from your stations"
+    override fun railTowards(name: String) = "To $name"
+    override fun railFrom(name: String) = "from $name"
+    override val railNow = "now"
+    override val railPlanned = "Planned times from Metro İstanbul"
+    override val railNoTrains = "No more trains in this direction today."
+    override val rail = "Rail"
+    override val yourStations = "Your stations"
+
     override val alerts = "Alerts"
     override val devices = "Your devices"
     override val searchPlaceholder = "Stop or line, like Fabrikalar or 500T"

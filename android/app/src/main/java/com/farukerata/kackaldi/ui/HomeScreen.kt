@@ -49,7 +49,9 @@ import androidx.lifecycle.viewModelScope
 import com.farukerata.kackaldi.data.BusAlert
 import com.farukerata.kackaldi.data.FavoriteLineEntry
 import com.farukerata.kackaldi.data.FavoriteStopEntry
+import com.farukerata.kackaldi.data.FavoriteStationEntry
 import com.farukerata.kackaldi.data.FavoritesResponse
+import com.farukerata.kackaldi.data.RailStationView
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.LineSummary
 import com.farukerata.kackaldi.data.Recent
@@ -66,7 +68,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-data class SearchResults(val lines: List<LineSummary>, val stops: List<StopSearchResult>)
+data class SearchResults(val lines: List<LineSummary>, val stops: List<StopSearchResult>, val rail: List<RailStationView> = emptyList())
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
@@ -93,6 +95,7 @@ class HomeViewModel(private val api: KacKaldiApi) : ViewModel() {
             SearchResults(
                 lines = api.searchLines(text),
                 stops = if (text.length >= 2) api.searchStops(text) else emptyList(),
+                rail = if (text.length >= 2) runCatching { api.railSearch(text) }.getOrDefault(emptyList()) else emptyList(),
             )
         }
     }
@@ -106,6 +109,7 @@ fun HomeScreen(
     onToggleTheme: () -> Unit,
     onStop: (String) -> Unit,
     onLine: (String, String?) -> Unit,
+    onRail: (Int) -> Unit,
     onDevices: () -> Unit,
     onAlerts: () -> Unit,
     alertRunning: Boolean,
@@ -156,13 +160,13 @@ fun HomeScreen(
             val showRecents = searchFocused && query.isBlank() && recents.isNotEmpty()
             when {
                 showRecents -> recentsSection(recents, onClearRecents, { leaveSearch(); onStop(it) }, { code, dir -> leaveSearch(); onLine(code, dir) })
-                query.isNotBlank() && current != null -> resultsSection(current, onStop, onLine)
+                query.isNotBlank() && current != null -> resultsSection(current, onStop, onLine, onRail)
                 else -> {
                     if (query.isBlank() && alerts.isNotEmpty()) {
                         item { SectionTitle(S.yourAlerts) }
                         items(alerts, key = { "alert-${it.id}" }) { alert -> AlertRow(alert, onStop, onAlertEnabled, onAlertRemove) }
                     }
-                    favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine)
+                    favoritesSection(viewModel.favorites, viewModel::refreshFavorites, onStop, onLine, onRail)
                 }
             }
             item { VersionFooter(updater.currentVersion) }
@@ -194,14 +198,14 @@ private fun LazyListScope.recentsSection(
 }
 
 private fun LazyListScope.favoritesSection(
-    favorites: Load<FavoritesResponse>, onRetry: () -> Unit, onStop: (String) -> Unit, onLine: (String, String?) -> Unit,
+    favorites: Load<FavoritesResponse>, onRetry: () -> Unit, onStop: (String) -> Unit, onLine: (String, String?) -> Unit, onRail: (Int) -> Unit,
 ) {
     when (favorites) {
         Load.Loading -> item { RowsSkeleton() }
         is Load.Failed -> item { ErrorState(favorites.message, onRetry) }
         is Load.Ready -> {
-            val (lines, stops, announcements) = favorites.value
-            if (lines.isEmpty() && stops.isEmpty()) {
+            val (lines, stops, announcements, stations) = favorites.value
+            if (lines.isEmpty() && stops.isEmpty() && stations.isEmpty()) {
                 item { EmptyState(S.emptyTitle, S.emptyText) }
                 return
             }
@@ -211,19 +215,21 @@ private fun LazyListScope.favoritesSection(
             }
             if (stops.isNotEmpty()) item { SectionTitle(S.yourStops) }
             items(stops, key = { "stop-${it.favorite.id}" }) { entry -> FavoriteStopRow(entry, onStop) }
+            if (stations.isNotEmpty()) item { SectionTitle(S.yourStations) }
+            items(stations, key = { "station-${it.favorite.id}" }) { entry -> FavoriteStationRow(entry, onRail) }
             if (lines.isNotEmpty()) item { SectionTitle(S.yourLines) }
             items(lines, key = { "line-${it.favorite.id}" }) { entry -> FavoriteLineRow(entry, onLine) }
         }
     }
 }
 
-private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (String) -> Unit, onLine: (String, String?) -> Unit) {
+private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (String) -> Unit, onLine: (String, String?) -> Unit, onRail: (Int) -> Unit) {
     when (results) {
         Load.Loading -> item { RowsSkeleton(rows = 3) }
         is Load.Failed -> item { EmptyState(S.searchDown, results.message) }
         is Load.Ready -> {
-            val (lines, stops) = results.value
-            if (lines.isEmpty() && stops.isEmpty()) {
+            val (lines, stops, rail) = results.value
+            if (lines.isEmpty() && stops.isEmpty() && rail.isEmpty()) {
                 item { EmptyState(S.nothingFound, S.nothingFoundText) }
                 return
             }
@@ -235,6 +241,12 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
                     leading = { LineBadge(line.lineCode) },
                     trailing = { Chevron() },
                 ) { ItemTitle(first?.let { directionLabel(it.from, it.to) } ?: line.lineCode) }
+            }
+            if (rail.isNotEmpty()) item { SectionTitle(S.rail) }
+            items(rail, key = { "rail-${it.id}" }) { station ->
+                ItemRow(onClick = { onRail(station.id) }, leading = { RailBadge(station.line, station.color) }, trailing = { Chevron() }) {
+                    ItemTitle(station.name)
+                }
             }
             if (stops.isNotEmpty()) item { SectionTitle(S.stops) }
             items(stops, key = { "stop-${it.stop.code}" }) { result ->
@@ -248,6 +260,22 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
 private fun FavoriteStopRow(entry: FavoriteStopEntry, onStop: (String) -> Unit) {
     StopRow(entry.stop?.name ?: entry.favorite.stopName, entry.stop?.district, entry.stop?.towards, entry.lines, entry.favorite.label) {
         onStop(entry.favorite.stopCode)
+    }
+}
+
+@Composable
+private fun FavoriteStationRow(entry: FavoriteStationEntry, onRail: (Int) -> Unit) {
+    val now = rememberNow(15_000)
+    ItemRow(
+        onClick = { onRail(entry.favorite.stationId) },
+        alignTop = true,
+        leading = { RailBadge(entry.favorite.line, entry.station?.color) },
+        trailing = { Chevron() },
+    ) {
+        ItemTitle(entry.station?.name ?: entry.favorite.stationName)
+        entry.directions.forEach { d ->
+            ItemDescription("${S.railTowards(d.to)} · ${d.next.take(2).joinToString(", ") { minutesUntil(it.at, now).toString() }} ${S.min}")
+        }
     }
 }
 
