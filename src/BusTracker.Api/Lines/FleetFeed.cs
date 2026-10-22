@@ -27,19 +27,18 @@ public sealed class FleetFeed(
 
     public async Task<FleetSnapshot?> GetAsync(CancellationToken ct)
     {
-        if (!IsDue()) return _latest;
         if (_latest is not null && IsRecent(_latest))
         {
-            RefreshInBackground();
+            if (IsDue()) RefreshInBackground();
             return _latest;
         }
 
         return await RefreshUnderLockAsync(ct);
     }
 
-    public Task WhenIdleAsync()
+    public void Warm()
     {
-        lock (_backgroundLock) return _background;
+        if (IsDue()) RefreshInBackground();
     }
 
     private void RefreshInBackground()
