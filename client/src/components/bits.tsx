@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { Menu } from '@base-ui/react/menu'
 import { ArrowLeft, ArrowRight, Moon, RotateCw, Sun, TrafficCone } from 'lucide-react'
@@ -23,6 +23,35 @@ export function RailBadge({ line, color, className }: { line: string; color: str
   return (
     <span className={cn('inline-flex h-5 items-center rounded-md px-1.5 text-xs font-semibold text-white tabular-nums', className)} style={{ backgroundColor: color }}>
       {line}
+    </span>
+  )
+}
+
+const MARQUEE_PX_PER_SECOND = 30
+const MARQUEE_MOVING_SHARE = 0.65
+
+export function Marquee({ children, className }: { children: ReactNode; className?: string }) {
+  const outer = useRef<HTMLSpanElement>(null)
+  const inner = useRef<HTMLSpanElement>(null)
+  const [shift, setShift] = useState(0)
+  useLayoutEffect(() => {
+    const box = outer.current
+    const text = inner.current
+    if (!box || !text) return
+    const measure = () => setShift(Math.max(0, Math.ceil(text.scrollWidth - box.clientWidth)))
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(box)
+    observer.observe(text)
+    return () => observer.disconnect()
+  }, [])
+  const moving = shift > 0
+  const style = moving
+    ? ({ '--marquee-shift': `-${shift}px`, '--marquee-duration': `${(2 * shift) / MARQUEE_PX_PER_SECOND / MARQUEE_MOVING_SHARE}s` } as CSSProperties)
+    : undefined
+  return (
+    <span ref={outer} className={cn('block min-w-0 overflow-hidden whitespace-nowrap', moving && 'marquee-clip', className)}>
+      <span ref={inner} className={cn('inline-block', moving && 'marquee pr-6')} style={style}>{children}</span>
     </span>
   )
 }

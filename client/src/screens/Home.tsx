@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { Bus, ChevronRight, History, MapPin, Search, Smartphone, TrainFront, UserRound, X } from 'lucide-react'
 import { useFavorites, useLineSearch, useRailSearch, useStopSearch } from '@/api/hooks'
 import type { FavoritesResponse, LineSummary, RailStationView, StopSearchResult } from '@/api/types'
-import { EmptyState, ErrorState, LanguageMenu, LineBadge, LineBadges, RailBadge, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards, useNow } from '@/components/bits'
+import { EmptyState, ErrorState, LanguageMenu, LineBadge, LineBadges, Marquee, RailBadge, RowsSkeleton, SectionTitle, StopName, ThemeToggle, Towards, useNow } from '@/components/bits'
 import { Announcements } from '@/components/planned'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -225,7 +225,7 @@ function RailResultRow({ station }: { station: RailStationView }) {
     <Item className="pressable" render={<Link to={`/rail/${station.id}`} />}>
       <ItemMedia variant="icon"><TrainFront style={{ color: station.color }} /></ItemMedia>
       <ItemContent>
-        <ItemTitle className="gap-2"><RailBadge line={station.line} color={station.color} className="shrink-0" /><span className="truncate">{station.name}</span></ItemTitle>
+        <ItemTitle className="w-full min-w-0 gap-2"><RailBadge line={station.line} color={station.color} className="shrink-0" /><Marquee>{station.name}</Marquee></ItemTitle>
       </ItemContent>
       <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
     </Item>
@@ -238,7 +238,7 @@ function LineResultRow({ line }: { line: LineSummary }) {
     <Item className="pressable" render={<Link to={`/lines/${line.lineCode}`} />}>
       <ItemMedia variant="icon"><Bus className="text-muted-foreground" /></ItemMedia>
       <ItemContent>
-        <ItemTitle className="gap-2"><LineBadge code={line.lineCode} className="shrink-0" /><span className="truncate">{first ? directionLabel(first.from, first.to) : line.lineCode}</span></ItemTitle>
+        <ItemTitle className="w-full min-w-0 gap-2"><LineBadge code={line.lineCode} className="shrink-0" /><Marquee>{first ? directionLabel(first.from, first.to) : line.lineCode}</Marquee></ItemTitle>
       </ItemContent>
       <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
     </Item>

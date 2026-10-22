@@ -272,7 +272,21 @@
   .dark .map-tiles {
     filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6);
   }
+  .marquee-clip {
+    mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
+  }
+  .marquee {
+    animation: marquee var(--marquee-duration) linear infinite;
+  }
+  @keyframes marquee {
+    0%, 20% { transform: translateX(0); }
+    60%, 75% { transform: translateX(var(--marquee-shift)); }
+    100% { transform: translateX(0); }
+  }
   @media (prefers-reduced-motion: reduce) {
+    .marquee {
+      animation: none;
+    }
     .pressable, .pressable:active, .bus-marker {
       transition: none;
       transform: none;

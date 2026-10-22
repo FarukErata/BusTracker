@@ -248,7 +248,7 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         LineBadge(line.lineCode)
-                        ItemTitle(first?.let { directionLabel(it.from, it.to) } ?: line.lineCode)
+                        MarqueeTitle(first?.let { directionLabel(it.from, it.to) } ?: line.lineCode)
                     }
                 }
             }
@@ -257,7 +257,7 @@ private fun LazyListScope.resultsSection(results: Load<SearchResults>, onStop: (
                 ItemRow(onClick = { onRail(station.id) }, leading = { KindIcon(Icons.Outlined.Train, tint = railColor(station.color)) }, trailing = { Chevron() }) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         RailBadge(station.line, station.color)
-                        ItemTitle(station.name)
+                        MarqueeTitle(station.name)
                     }
                 }
             }

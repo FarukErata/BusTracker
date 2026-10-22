@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -210,6 +211,19 @@ fun ItemRow(
 fun ItemTitle(text: String, modifier: Modifier = Modifier) {
     Text(text, modifier, style = Kit.sm.copy(fontWeight = FontWeight.Medium), color = Kit.colors.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
+
+@Composable
+fun MarqueeTitle(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = MARQUEE_DELAY_MILLIS, repeatDelayMillis = MARQUEE_DELAY_MILLIS),
+        style = Kit.sm.copy(fontWeight = FontWeight.Medium),
+        color = Kit.colors.foreground,
+        maxLines = 1,
+    )
+}
+
+private const val MARQUEE_DELAY_MILLIS = 1500
 
 @Composable
 fun ItemDescription(text: String, modifier: Modifier = Modifier) {
