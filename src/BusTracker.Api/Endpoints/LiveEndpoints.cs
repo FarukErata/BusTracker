@@ -87,14 +87,18 @@ public static class LiveEndpoints
             {
                 BusPathProblem.BusNotFound => Results.Problem($"Bus {bus} isn't on line {line} right now.", statusCode: StatusCodes.Status404NotFound),
                 BusPathProblem.StopNotOnRoute => Results.Problem($"This bus's route doesn't stop at {stop}.", statusCode: StatusCodes.Status404NotFound),
-                _ => Results.Ok(ToView(line, path!, Freshness.From(live, clock))),
+                _ => Results.Ok(ToView(line, path!, HeavyTrafficToStop(path!, data.Hops, clock.GetUtcNow()), Freshness.From(live, clock))),
             };
         });
     }
 
-    private static BusPathView ToView(string line, BusPath path, Freshness data) =>
+    private static bool HeavyTrafficToStop(BusPath path, HopTimes hops, DateTimeOffset now) =>
+        !path.Passed && path.Bus is { IsUsable: true, AlongMeters: not null } && path.Bus.Status != BusStatus.AtTerminal
+        && Arrivals.Estimate(path.Bus, path.Track, path.Stop, hops, now).HeavyTraffic;
+
+    private static BusPathView ToView(string line, BusPath path, bool heavyTraffic, Freshness data) =>
         new(line, path.Track.RouteCode, path.Track.Variant, path.Track.HasRoadGeometry,
-            ToView(path.Bus),
+            ToView(path.Bus, heavyTraffic),
             new PathStopView(path.Stop.Seq, path.Stop.StopCode, path.Stop.Name, path.Stop.Lat, path.Stop.Lng),
             path.Passed, Math.Round(path.DistanceMeters),
             path.Points.Select(p => new[] { p.Lat, p.Lng }).ToList(),
