@@ -126,24 +126,67 @@ public sealed class StopIndexRepository(Database database)
         var prefix = query.Trim().ToUpperInvariant();
         if (prefix.Length == 0) return [];
 
-        await using var connection = await database.OpenAsync(ct);
-        var rows = await connection.QueryAsync<LineEndsRow>(
-            """
-            SELECT l.line_code AS LineCode, l.direction AS Direction,
-                   (SELECT s.name FROM stop_lines f JOIN stops s ON s.stop_code = f.stop_code
-                    WHERE f.line_code = l.line_code AND f.direction = l.direction ORDER BY f.seq LIMIT 1) AS FromStop,
-                   (SELECT s.name FROM stop_lines t JOIN stops s ON s.stop_code = t.stop_code
-                    WHERE t.line_code = l.line_code AND t.direction = l.direction ORDER BY t.seq DESC LIMIT 1) AS ToStop
-            FROM (SELECT DISTINCT line_code, direction FROM stop_lines
-                  WHERE line_code IN (SELECT DISTINCT line_code FROM stop_lines WHERE line_code >= @Prefix AND line_code < @PrefixEnd
-                                      ORDER BY LENGTH(line_code), line_code LIMIT @limit)) l
-            ORDER BY LENGTH(l.line_code), l.line_code, l.direction;
-            """,
-            new { Prefix = prefix, PrefixEnd = prefix + "\U0010FFFF", limit });
-        return rows.GroupBy(r => r.LineCode)
-            .Select(g => new LineSummary(g.Key, g.Select(r => new LineEnds(r.Direction, r.FromStop, r.ToStop)).ToList()))
+        var ends = await LineEndsAsync(ct);
+        var codes = ends.Select(e => e.Line).Distinct()
+            .Where(c => c.StartsWith(prefix, StringComparison.Ordinal))
+            .OrderBy(c => c.Length).ThenBy(c => c, StringComparer.Ordinal)
+            .Take(limit)
+            .ToList();
+
+        var place = SearchText.Normalize(query);
+        if (codes.Count < limit && place.Length >= MinPlaceSearchLength)
+        {
+            var byPlace = ends
+                .Where(e => e.FromSearch.Contains(place) || e.ToSearch.Contains(place))
+                .GroupBy(e => e.Line)
+                .OrderBy(g => g.Any(e => e.FromSearch.StartsWith(place) || e.ToSearch.StartsWith(place)) ? 0 : 1)
+                .ThenBy(g => g.Key.Length)
+                .ThenBy(g => g.Key, StringComparer.Ordinal)
+                .Select(g => g.Key);
+            codes.AddRange(byPlace.Where(c => !codes.Contains(c)).Take(limit - codes.Count));
+        }
+
+        var byLine = ends.ToLookup(e => e.Line);
+        return codes
+            .Select(code => new LineSummary(code, byLine[code].OrderBy(e => e.Direction).Select(e => new LineEnds(e.Direction, e.From, e.To)).ToList()))
             .ToList();
     }
+
+    private const int MinPlaceSearchLength = 3;
+
+    private readonly SemaphoreSlim _endsLock = new(1, 1);
+    private (DateTimeOffset? ImportedAt, IReadOnlyList<LineEnd> Ends)? _ends;
+
+    private async Task<IReadOnlyList<LineEnd>> LineEndsAsync(CancellationToken ct)
+    {
+        var (importedAt, _) = await GetStateAsync(ct);
+        if (_ends is { } cached && cached.ImportedAt == importedAt) return cached.Ends;
+
+        await _endsLock.WaitAsync(ct);
+        try
+        {
+            if (_ends is { } again && again.ImportedAt == importedAt) return again.Ends;
+            await using var connection = await database.OpenAsync(ct);
+            var ends = (await connection.QueryAsync<LineEnd>(
+                """
+                SELECT e.line_code AS Line, e.direction AS Direction,
+                       sf.name AS "From", st.name AS "To", sf.search_name AS FromSearch, st.search_name AS ToSearch
+                FROM (SELECT line_code, direction, MIN(seq) AS first_seq, MAX(seq) AS last_seq FROM stop_lines GROUP BY line_code, direction) e
+                JOIN stop_lines f ON f.line_code = e.line_code AND f.direction = e.direction AND f.seq = e.first_seq
+                JOIN stops sf ON sf.stop_code = f.stop_code
+                JOIN stop_lines t ON t.line_code = e.line_code AND t.direction = e.direction AND t.seq = e.last_seq
+                JOIN stops st ON st.stop_code = t.stop_code;
+                """)).ToList();
+            _ends = (importedAt, ends);
+            return ends;
+        }
+        finally
+        {
+            _endsLock.Release();
+        }
+    }
+
+    private sealed record LineEnd(string Line, string Direction, string From, string To, string FromSearch, string ToSearch);
 
     private const string FillTowardsSql =
         """
@@ -158,7 +201,6 @@ public sealed class StopIndexRepository(Database database)
     private const string SelectStop =
         "SELECT stop_code AS Code, name AS Name, district AS District, lat AS Lat, lng AS Lng, towards AS Towards FROM stops";
 
-    private sealed record LineEndsRow(string LineCode, string Direction, string FromStop, string ToStop);
 
     private sealed record StopLineRow(string LineCode, string Direction, string DirectionName, long Seq);
 
