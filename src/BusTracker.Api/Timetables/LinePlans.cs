@@ -88,12 +88,12 @@ public sealed class LinePlan(Timetable? table, LineTracks tracks, ServiceDay day
 
 public sealed class LinePlans(TimetableService timetables, AnnouncementService announcements, LineDataService data, TimeProvider clock)
 {
-    public async Task<LinePlan?> GetAsync(string lineCode, CancellationToken ct, bool waitForTimetable = true)
+    public async Task<LinePlan?> GetAsync(string lineCode, CancellationToken ct)
     {
         try
         {
             var tracks = await data.GetTracksAsync(lineCode, ct);
-            var table = waitForTimetable ? await timetables.GetAsync(lineCode, ct) : timetables.Peek(lineCode);
+            var table = await timetables.GetAsync(lineCode, ct);
             var day = ServiceDay.Of(clock.GetUtcNow());
             var firstStops = tracks.Mains.ToDictionary(t => t.Direction, t => t.Stops.FirstOrDefault()?.Name ?? "");
             var notices = announcements.For(lineCode)
@@ -110,7 +110,7 @@ public sealed class LinePlans(TimetableService timetables, AnnouncementService a
     public async Task<IReadOnlyDictionary<string, LinePlan>> GetManyAsync(IEnumerable<string> lineCodes, CancellationToken ct)
     {
         var codes = lineCodes.Distinct().ToList();
-        var plans = await Task.WhenAll(codes.Select(c => GetAsync(c, ct, waitForTimetable: false)));
+        var plans = await Task.WhenAll(codes.Select(c => GetAsync(c, ct)));
         return codes.Zip(plans).Where(p => p.Second is not null).ToDictionary(p => p.First, p => p.Second!);
     }
 

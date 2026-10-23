@@ -28,7 +28,7 @@ public static class FavoriteEndpoints
 
     private static async Task<FavoritesResponse> GetAll(
         ClaimsPrincipal user, FavoriteRepository favorites, StopIndexRepository stopIndex, LineDataService data, LinePlans plans,
-        FleetFeed fleet, TimetableService timetables, RailCatalog rail, RailBoard board, CancellationToken ct)
+        FleetFeed fleet, RailCatalog rail, RailBoard board, CancellationToken ct)
     {
         fleet.Warm();
         var lines = new List<FavoriteLineView>();
@@ -40,8 +40,7 @@ public static class FavoriteEndpoints
             stops.Add(new FavoriteStopView(stop, await stopIndex.GetStopAsync(stop.StopCode, ct),
                 (await stopIndex.GetLinesAtStopAsync(stop.StopCode, ct)).Select(l => l.LineCode).Distinct().ToList()));
 
-        var watched = lines.Select(l => l.Favorite.LineCode).Concat(stops.SelectMany(s => s.Lines)).ToList();
-        timetables.Warm(watched);
+        var watched = lines.Select(l => l.Favorite.LineCode).Concat(stops.SelectMany(s => s.Lines));
         var stations = new List<FavoriteStationView>();
         foreach (var favorite in await favorites.GetStationsAsync(user.UserId(), ct))
             stations.Add(rail.Station(favorite.StationId) is { } station
