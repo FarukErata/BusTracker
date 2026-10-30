@@ -118,10 +118,14 @@ empty proxy the behaviour is byte-for-byte the same as today.
    the correct "relay down" degradation. We only make this visible in `/health`;
    we do not change when backoff happens.
 
-6. **Tests (`tests/BusTracker.Tests`)** — add:
-   - proxy handler is attached only when `Ibb.Proxy` is set,
-   - a transport failure routes through stale handling and does **not** call
-     `ReportRateLimited`.
+6. **Tests** — the repo currently has **no test project** (the `tests/` folder
+   referenced in the README/design is not present in this checkout, and no CI
+   workflow runs tests). Rather than add an unexercised, locally-unverifiable
+   project, the relay is verified by the server `docker build` (compile) and the
+   parallel-container end-to-end test below. If a test project is reinstated
+   later, add: (a) the proxy handler is attached only when `Ibb.Proxy` is set,
+   (b) a transport failure routes through stale handling and does **not** call
+   `ReportRateLimited`.
 
 ## Deployment (host side)
 
@@ -221,12 +225,25 @@ Do not add more proxies or rotate IPs to widen the quota — one relay, one IP.
 - [x] Branch `feature/relayed-connection` created off `main`
 - [x] CI confirmed: no workflow fires on this branch (server image = `main` only; android = tags/manual)
 - [x] Design documented (this file)
-- [ ] `IbbOptions.Proxy` option added
-- [ ] `Program.cs` proxy handler on `IbbClient` + `MetroClient`
-- [ ] `IbbRelayState` + `/health` relay block
-- [ ] Stale-vs-rate-limit behaviour verified
-- [ ] Tests added
-- [ ] `docker build` compiles (no local .NET SDK on the dev laptop; build via Docker/CI)
-- [ ] `deploy/compose.yaml` `extra_hosts` (Option B) — optional, host side
-- [ ] Server parallel-container test passes
+- [x] `IbbOptions.Proxy` option added (+ `UsesProxy`), `appsettings.json` key `"Proxy": ""`
+- [x] `Program.cs` proxy handler (`IbbHandler`) on `IbbClient` + `MetroClient`; `OpenDataClient` left direct
+- [x] `IbbRelayState` added, wired through `OutboundGate`, surfaced as `/health` → `relay`
+- [x] Stale-vs-rate-limit behaviour verified by review: proxy failure = `HttpRequestException` → stale path, not `ReportRateLimited`
+- [x] `deploy/compose.yaml` `extra_hosts` (Option B) added
+- [ ] `docker build` compiles — **not run locally** (no .NET SDK or Docker on the dev laptop); run on the server
+- [ ] Server parallel-container test passes (see above)
 - [ ] (Separate, deliberate) merge to `main`
+
+### For the main chat / next session
+
+- All code is on `feature/relayed-connection`, committed. `main` is untouched.
+- Local laptop has **no .NET SDK and no Docker**, so nothing was compiled here.
+  First action on a machine with Docker: `docker build .` from the repo root to
+  confirm it compiles (warnings are errors in `Directory.Build.props`).
+- Then run the parallel-container test with the real tunnel before any merge.
+- Files changed: `src/BusTracker.Api/Configuration/BusTrackerOptions.cs`,
+  `src/BusTracker.Api/Ibb/IbbRelayState.cs` (new),
+  `src/BusTracker.Api/Ibb/OutboundGate.cs`,
+  `src/BusTracker.Api/Program.cs`,
+  `src/BusTracker.Api/Endpoints/HealthEndpoints.cs`,
+  `src/BusTracker.Api/appsettings.json`, `deploy/compose.yaml`, this doc.

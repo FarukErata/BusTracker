@@ -15,8 +15,8 @@ public static class HealthEndpoints
     }
 
     private static async Task<HealthResponse> GetHealth(
-        IConfiguration configuration, FleetCallGate gate, OutboundGate outbound, FleetFeed fleet, BusLineMemory memory,
-        RouteShapeRepository shapes, CancellationToken ct)
+        IConfiguration configuration, FleetCallGate gate, OutboundGate outbound, IbbRelayState relay, FleetFeed fleet,
+        BusLineMemory memory, RouteShapeRepository shapes, CancellationToken ct)
     {
         var source = await shapes.GetSourceStateAsync(ct);
         var calls = gate.CallsInLastHour;
@@ -32,6 +32,7 @@ public static class HealthEndpoints
             KnownBuses: memory.Count,
             FleetBlockedUntil: gate.BlockedUntil,
             OutboundPausedUntil: outbound.PausedUntil,
+            Relay: relay.Snapshot(),
             RouteShapes: new RouteShapesHealth(
                 await shapes.CountAsync(ct), source?.ETag, source?.LastModified, source?.CheckedAt, source?.ImportedAt));
     }
@@ -52,6 +53,7 @@ public sealed record HealthResponse(
     int KnownBuses,
     DateTimeOffset? FleetBlockedUntil,
     DateTimeOffset? OutboundPausedUntil,
+    RelayHealth Relay,
     RouteShapesHealth RouteShapes);
 
 public sealed record IbbCallsHealth(int Total, int Fleet, int Roster);

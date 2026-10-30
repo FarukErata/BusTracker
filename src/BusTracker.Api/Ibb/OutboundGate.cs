@@ -1,6 +1,6 @@
 namespace BusTracker.Api.Ibb;
 
-public sealed class OutboundGate(TimeProvider clock, ILogger<OutboundGate> logger)
+public sealed class OutboundGate(TimeProvider clock, ILogger<OutboundGate> logger, IbbRelayState relay)
 {
     private const int FailuresBeforePause = 3;
     private static readonly TimeSpan SlowFailure = TimeSpan.FromSeconds(10);
@@ -30,11 +30,15 @@ public sealed class OutboundGate(TimeProvider clock, ILogger<OutboundGate> logge
         {
             var response = await send(ct);
             Succeeded();
+            relay.RecordSuccess();
             return response;
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException)
         {
             if (e is HttpRequestException || clock.GetUtcNow() - started >= SlowFailure) Failed();
+            // A transport failure means the relay/tunnel or network could not be reached. A rate-limit
+            // is not seen here (it is an HTTP 200 with a SOAP fault), so this stays distinct from backoff.
+            if (e is HttpRequestException) relay.RecordError(e.Message);
             throw;
         }
     }
