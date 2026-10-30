@@ -45,6 +45,16 @@ public sealed class IbbOptions
 
     [Required, Url]
     public string MetroBaseUrl { get; init; } = "https://api.ibb.gov.tr/MetroIstanbul/api/MetroMobile/V2/";
+
+    /// <summary>
+    /// Optional proxy for İBB calls only (fleet, roster, timetable, announcements and metro).
+    /// Empty or unset means a direct connection. Used on the VPS to route İBB traffic through
+    /// the Turkish home relay, e.g. <c>socks5://host.docker.internal:1080</c>. Local dev leaves
+    /// it empty. See docs/relayed-connection.md.
+    /// </summary>
+    public string? Proxy { get; init; }
+
+    public bool UsesProxy => !string.IsNullOrWhiteSpace(Proxy);
 }
 
 public sealed class PollingOptions

@@ -10,6 +10,11 @@ services:
     env_file: .env
     environment:
       TrustedProxyNetworks__0: "172.16.0.0/12"
+    # Lets the container reach the Turkey relay tunnel bound on the Docker bridge gateway.
+    # Set BusTracker__Ibb__Proxy=socks5://host.docker.internal:1080 in .env to use it; empty = direct.
+    # See docs/relayed-connection.md.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     mem_limit: 384m
     logging:
       driver: json-file

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Threading.RateLimiting;
 using BusTracker.Api.Configuration;
 using BusTracker.Api.Data;
@@ -35,6 +36,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<Database>();
 builder.Services.AddHostedService<DatabaseInitializer>();
 builder.Services.AddSingleton<FleetCallGate>();
+builder.Services.AddSingleton<IbbRelayState>();
 builder.Services.AddSingleton<OutboundGate>();
 builder.Services.AddTransient<OutboundGateHandler>();
 builder.Services.AddHostedService<IbbCallLog>();
@@ -64,17 +66,32 @@ builder.Services.AddHostedService<StaticDataSyncService>();
 builder.Services.AddSingleton<UserRepository>();
 builder.Services.AddSingleton<FavoriteRepository>();
 
+// İBB calls (bus SOAP and metro) share the same relay: when BusTracker:Ibb:Proxy is set they exit
+// through the Turkish home tunnel, otherwise they go direct. The route-shapes OpenDataClient below is
+// deliberately left direct (different host, 257 MB daily). See docs/relayed-connection.md.
+static SocketsHttpHandler IbbHandler(IServiceProvider services)
+{
+    var proxy = services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb.Proxy;
+    var handler = new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All };
+    if (!string.IsNullOrWhiteSpace(proxy))
+    {
+        handler.Proxy = new WebProxy(proxy);
+        handler.UseProxy = true;
+    }
+    return handler;
+}
+
 builder.Services.AddHttpClient<IbbClient>((services, http) =>
 {
     http.BaseAddress = new Uri(services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb.BaseUrl);
     http.Timeout = Timeout.InfiniteTimeSpan;
-}).AddHttpMessageHandler<OutboundGateHandler>();
+}).ConfigurePrimaryHttpMessageHandler(IbbHandler).AddHttpMessageHandler<OutboundGateHandler>();
 
 builder.Services.AddHttpClient<MetroClient>((services, http) =>
 {
     http.BaseAddress = new Uri(services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb.MetroBaseUrl);
     http.Timeout = TimeSpan.FromSeconds(15);
-}).AddHttpMessageHandler<OutboundGateHandler>();
+}).ConfigurePrimaryHttpMessageHandler(IbbHandler).AddHttpMessageHandler<OutboundGateHandler>();
 
 builder.Services.AddHttpClient<OpenDataClient>((services, http) =>
     http.Timeout = TimeSpan.FromMinutes(
