@@ -20,11 +20,13 @@ against "proxies to get around the limit" ([server-design.md](server-design.md),
 "İBB rate limit strategy") is about multiplying IPs to dodge the quota; this is
 the opposite — a single fixed Turkish exit so the calls work at all.
 
-## The relay (host side, not in this repo)
+## The relay (host side)
 
-An Android phone at home in Turkey (Termux + autossh) keeps an outbound SSH
-reverse tunnel to the VPS, exposing a **SOCKS5** proxy on the VPS. It may later
-be replaced by a Raspberry Pi with the same tunnel.
+A small always-on box at home in Turkey keeps an outbound SSH reverse tunnel to
+the VPS, exposing a **SOCKS5** proxy on the VPS. The chosen box is a **Raspberry
+Pi on ethernet**; the ready-to-run setup (systemd service, hardening, step by
+step) is in [../deploy/relay-pi/](../deploy/relay-pi/). An Android phone with
+Termux + autossh works too and was the original stop-gap.
 
 ```
 autossh -M 0 -N -R 127.0.0.1:1080 \

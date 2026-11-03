@@ -1,0 +1,28 @@
+[Unit]
+Description=BusTracker Turkey relay: reverse SOCKS tunnel to the VPS
+Documentation=https://github.com/FarukErata/BusTracker/blob/main/docs/relayed-connection.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=relay
+EnvironmentFile=/etc/relay-tunnel.env
+# Keep retrying from the first attempt (e.g. a boot before the network is fully up)
+# instead of autossh giving up when the very first connection fails quickly.
+Environment=AUTOSSH_GATETIME=0
+# -M 0            : no autossh monitoring port; rely on SSH keepalives below
+# -N              : no remote command, just forwarding
+# -R BIND:PORT    : remote dynamic (SOCKS5) forward listening on the VPS at BIND:PORT
+# ServerAlive*    : drop and let autossh reconnect if the link goes quiet for ~90s
+# ExitOnForwardFailure: fail fast if the remote port can't be bound, so autossh retries
+# accept-new      : trust the VPS host key on first connect, then pin it in known_hosts
+ExecStart=/usr/bin/autossh -M 0 -N -R ${BIND}:${PORT} -i ${SSH_KEY} -p ${VPS_PORT} \
+  -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
+  -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/home/relay/.ssh/known_hosts \
+  ${VPS_USER}@${VPS_HOST}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
