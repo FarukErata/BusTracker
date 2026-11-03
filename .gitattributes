@@ -1,1 +1,5 @@
 *.sh text eol=lf
+
+# The Pi relay files are consumed on Linux (systemd unit, env file, scripts).
+# Force LF so a Windows checkout + scp can't inject CRLF into them.
+deploy/relay-pi/** text eol=lf
