@@ -55,10 +55,25 @@ Pi's **public key** plus the exact next steps.
 ## 4. Authorize the Pi on the VPS
 
 The VPS needs the one-time tunnel setup from
-[../../docs/relayed-connection.md](../../docs/relayed-connection.md) (a `tunnel`
-user and `GatewayPorts clientspecified` in sshd). Then add the Pi's public key
-(printed by `setup.sh`) to `/home/tunnel/.ssh/authorized_keys` on the VPS, with
-the hardening prefix so this key can open **only** the one SOCKS port:
+[../../docs/relayed-connection.md](../../docs/relayed-connection.md). In
+`/etc/ssh/sshd_config.d/tunnel.conf` (then `sudo systemctl restart ssh`):
+
+```
+GatewayPorts clientspecified
+ClientAliveInterval 30
+ClientAliveCountMax 3
+```
+
+And allow the Docker bridge to reach the tunnel port (required if `ufw` is active,
+or the app container can't reach the proxy):
+
+```
+sudo ufw allow in on docker0 to any port 1080 proto tcp
+```
+
+Then add the Pi's public key (printed by `setup.sh`) to
+`/home/tunnel/.ssh/authorized_keys` on the VPS, with the hardening prefix so this
+key can open **only** the one SOCKS port:
 
 ```
 restrict,port-forwarding,permitlisten="172.17.0.1:1080" ssh-ed25519 AAAA... bustracker-relay-pi

@@ -136,7 +136,7 @@ The container runs on Docker's default bridge network with
 loopback, which is not the container's loopback, so a bridge is needed. Two
 options from the setup notes:
 
-### Option B — bridge gateway + `host.docker.internal` (recommended, least invasive)
+### Option B — bridge gateway + `host.docker.internal` (recommended, used in production)
 
 Repo change (this branch): add two lines to `deploy/compose.yaml`:
 ```yaml
@@ -147,8 +147,42 @@ Host config on the VPS (not in the repo):
 - sshd: `GatewayPorts clientspecified`
 - tunnel: `autossh … -R 172.17.0.1:1080` (bind to the bridge gateway)
 - `.env`: `BusTracker__Ibb__Proxy=socks5://host.docker.internal:1080`
+- **ufw: allow the Docker bridge to reach the tunnel port** — see the gotcha below.
 
 Ports mapping, nginx and `TrustedProxyNetworks` all stay unchanged.
+
+### Two host-config gotchas (both hit and fixed live on 2026-11-04)
+
+These are non-obvious and cost real debugging time. Both are on the VPS, not in code.
+
+1. **ufw blocks the container from reaching the tunnel.** With `ufw` active
+   (default `deny incoming`), traffic from a container (via `docker0`) to the
+   host's `172.17.0.1:1080` is **dropped** — even though the host itself reaches
+   it fine. The symptom is nasty: .NET silently falls back to a **direct** call,
+   which from Germany just hangs until the HttpClient timeout, with **no error**.
+   `curl -x socks5h://172.17.0.1:1080 …` works from the host but times out from
+   inside a container. Fix (persists across reboot):
+   ```bash
+   sudo ufw allow in on docker0 to any port 1080 proto tcp
+   ```
+
+2. **Stale reverse port after an ungraceful Pi disconnect.** If the Pi reboots or
+   drops without closing the SSH session, the VPS sshd keeps `172.17.0.1:1080`
+   bound to the dead session, and the Pi's new autossh loops on
+   `Error: remote port forwarding failed for listen port 1080`. Make sshd detect
+   and drop dead tunnel clients so the port frees itself (~90s). In
+   `/etc/ssh/sshd_config.d/tunnel.conf` (alongside `GatewayPorts clientspecified`):
+   ```
+   ClientAliveInterval 30
+   ClientAliveCountMax 3
+   ```
+   then `sudo systemctl restart ssh`. To clear a stuck one by hand:
+   `sudo pkill -u tunnel` (frees the port; autossh rebinds).
+
+A quick sanity check that proves the whole path before touching the app:
+`docker run --rm curlimages/curl -s -x socks5h://172.17.0.1:1080 https://ifconfig.me`
+from the VPS should print the **Turkish** relay IP. If that works from a
+container, .NET will too.
 
 ### Option A — `network_mode: host` (more invasive, not recommended)
 
@@ -232,9 +266,10 @@ Do not add more proxies or rotate IPs to widen the quota — one relay, one IP.
 - [x] `IbbRelayState` added, wired through `OutboundGate`, surfaced as `/health` → `relay`
 - [x] Stale-vs-rate-limit behaviour verified by review: proxy failure = `HttpRequestException` → stale path, not `ReportRateLimited`
 - [x] `deploy/compose.yaml` `extra_hosts` (Option B) added
-- [ ] `docker build` compiles — **not run locally** (no .NET SDK or Docker on the dev laptop); run on the server
-- [ ] Server parallel-container test passes (see above)
-- [ ] (Separate, deliberate) merge to `main`
+- [x] `docker build` compiles — built on the VPS (no .NET SDK/Docker on the dev laptop)
+- [x] Server parallel-container test passes — validated live 2026-11-04: Pi relay up, container reaches the proxy, app pulled real data through it (`Loaded 18 rail lines and 248 stations`), `/health` → `relay.lastOkAt` populated, `lastError` null
+- [x] Host gotchas found and fixed: ufw `docker0`→1080 rule, sshd `ClientAlive`
+- [ ] (Separate, deliberate) merge to `main` + set `BusTracker__Ibb__Proxy` in the production `.env`
 
 ### For the main chat / next session
 
