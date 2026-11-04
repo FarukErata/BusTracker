@@ -193,6 +193,8 @@ One API project + one test project. The engine stays free of I/O, so it can move
 
 One Docker image (`ghcr.io/farukerata/bustracker`) with the API and the built web app, built and smoke-tested by GitHub Actions on every push to `main` that touches the server or web app. On the server: `docker compose` with the container on `127.0.0.1:5080`, the SQLite file in a mounted `data/` folder, settings in a local `.env`, a 384 MB memory cap, and nginx in front for HTTPS. `/health` reports the commit the image was built from. Step by step: [deploy.md](deploy.md).
 
+İBB web services are only reachable from a Turkish IP, so when the server runs outside Turkey the İBB calls (bus and metro) are routed through an optional SOCKS5 relay — a small box in Turkey holding an outbound SSH tunnel. It is off by default (`BusTracker:Ibb:Proxy` empty = direct); `/health` shows the relay state. Design and setup: [relayed-connection.md](relayed-connection.md).
+
 ## Decisions so far
 
 - Server: Ubuntu + nginx, the app in Docker (2026-10-16; was a plain systemd service).
