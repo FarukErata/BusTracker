@@ -138,8 +138,9 @@ options from the setup notes:
 
 ### Option B — bridge gateway + `host.docker.internal` (recommended, used in production)
 
-Repo change (this branch): add two lines to `deploy/compose.yaml`:
+Repo change (this branch): on the `kackaldi` service in `deploy/compose.yaml`:
 ```yaml
+network_mode: bridge              # put the container on docker0 (see gotcha 0)
 extra_hosts:
   - "host.docker.internal:host-gateway"
 ```
@@ -151,9 +152,20 @@ Host config on the VPS (not in the repo):
 
 Ports mapping, nginx and `TrustedProxyNetworks` all stay unchanged.
 
-### Two host-config gotchas (both hit and fixed live on 2026-11-04)
+### Three deployment gotchas (all hit and fixed live on 2026-11-04)
 
-These are non-obvious and cost real debugging time. Both are on the VPS, not in code.
+These are non-obvious and cost real debugging time. None is in the app code.
+
+0. **The container must be on the default `docker0` bridge.** A compose service
+   gets its own project network (e.g. `kackaldi_default`, gateway `172.19.0.1`),
+   but the tunnel's SOCKS proxy is bound to `172.17.0.1` (docker0) and the ufw
+   rule below only allows docker0. On a project network, `host.docker.internal`
+   resolves to the wrong gateway where nothing listens, so the relay silently
+   falls back to a **direct** call that hangs. Fix: put the service on docker0 in
+   `compose.yaml` (already set on this branch):
+   ```yaml
+   network_mode: bridge
+   ```
 
 1. **ufw blocks the container from reaching the tunnel.** With `ufw` active
    (default `deny incoming`), traffic from a container (via `docker0`) to the
@@ -268,8 +280,8 @@ Do not add more proxies or rotate IPs to widen the quota — one relay, one IP.
 - [x] `deploy/compose.yaml` `extra_hosts` (Option B) added
 - [x] `docker build` compiles — built on the VPS (no .NET SDK/Docker on the dev laptop)
 - [x] Server parallel-container test passes — validated live 2026-11-04: Pi relay up, container reaches the proxy, app pulled real data through it (`Loaded 18 rail lines and 248 stations`), `/health` → `relay.lastOkAt` populated, `lastError` null
-- [x] Host gotchas found and fixed: ufw `docker0`→1080 rule, sshd `ClientAlive`
-- [ ] (Separate, deliberate) merge to `main` + set `BusTracker__Ibb__Proxy` in the production `.env`
+- [x] Deployment gotchas found and fixed: `network_mode: bridge`, ufw `docker0`→1080 rule, sshd `ClientAlive`
+- [x] Merged to `main`, production `.env` set, **live on 2026-11-04**: commit `c0437e2`, `relay.lastOkAt` populated, ~6,900 fleet vehicles tracked through the Pi relay
 
 ### For the main chat / next session
 

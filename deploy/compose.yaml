@@ -3,6 +3,11 @@ services:
     image: ghcr.io/farukerata/bustracker:latest
     container_name: kackaldi
     restart: unless-stopped
+    # Use the default docker0 bridge (gateway 172.17.0.1) so the container reaches the
+    # relay tunnel and the ufw docker0 rule applies. A compose project network gets a
+    # different gateway (e.g. 172.19.0.1) where the tunnel isn't listening, so the relay
+    # would silently fall back to a direct call. See docs/relayed-connection.md.
+    network_mode: bridge
     ports:
       - "127.0.0.1:5080:8080"
     volumes:
