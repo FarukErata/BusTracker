@@ -3,11 +3,12 @@ import L from 'leaflet'
 import { useNavigate } from 'react-router'
 import { AttributionControl, CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvent } from 'react-leaflet'
 import { useRailStations } from '@/api/hooks'
+import { useTheme } from '@/lib/theme'
 import type { LineStop, TrackedBusView } from '@/api/types'
 import type { TrackingView } from '@/lib/tracking'
 import { reportAge, secondsSince, titleCase } from '@/lib/format'
 
-const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 const ISTANBUL: [number, number] = [41.015, 28.979]
 const STOP_DOT_RADIUS = 5
 const STOP_PIN_RADIUS = 8
@@ -15,9 +16,18 @@ const RAIL_DOT_RADIUS = 6
 const RAIL_MIN_ZOOM = 13
 
 function ThemedTiles() {
+  const { theme } = useTheme()
+  const style = theme === 'dark' ? 'dark_all' : 'light_all'
   return (
     <>
-      <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" attribution={ATTRIBUTION} maxZoom={19} className="map-tiles" />
+      <TileLayer
+        url={`https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}.png`}
+        subdomains="abcd"
+        attribution={ATTRIBUTION}
+        maxZoom={19}
+        keepBuffer={4}
+        updateWhenZooming={false}
+      />
       <AttributionControl prefix={false} position="bottomright" />
     </>
   )

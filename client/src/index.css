@@ -269,9 +269,6 @@
     transform: translate(-50%, -50%) scale(1.2);
     background: var(--color-sky-700);
   }
-  .dark .map-tiles {
-    filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6);
-  }
   .marquee-clip {
     mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
   }
