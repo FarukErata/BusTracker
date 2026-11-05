@@ -66,9 +66,6 @@ builder.Services.AddHostedService<StaticDataSyncService>();
 builder.Services.AddSingleton<UserRepository>();
 builder.Services.AddSingleton<FavoriteRepository>();
 
-// İBB calls (bus SOAP and metro) share the same relay: when BusTracker:Ibb:Proxy is set they exit
-// through the Turkish home tunnel, otherwise they go direct. The route-shapes OpenDataClient below is
-// deliberately left direct (different host, 257 MB daily). See docs/relayed-connection.md.
 static SocketsHttpHandler IbbHandler(IServiceProvider services)
 {
     var proxy = services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.Ibb.Proxy;
@@ -95,7 +92,8 @@ builder.Services.AddHttpClient<MetroClient>((services, http) =>
 
 builder.Services.AddHttpClient<OpenDataClient>((services, http) =>
     http.Timeout = TimeSpan.FromMinutes(
-        services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.StaticData.DownloadTimeoutMinutes));
+        services.GetRequiredService<IOptions<BusTrackerOptions>>().Value.StaticData.DownloadTimeoutMinutes))
+    .ConfigurePrimaryHttpMessageHandler(IbbHandler);
 
 builder.Services
     .AddAuthentication(DeviceKeyAuthenticationHandler.SchemeName)

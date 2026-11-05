@@ -50,12 +50,12 @@ tunnel. See [Deployment](#deployment-host-side) below.
 |---|---|---|---|
 | `IbbClient` (bus SOAP calls) | `api.ibb.gov.tr/iett` | **Yes** | The whole point — fleet, roster, timetable, announcements |
 | `MetroClient` (rail) | `api.ibb.gov.tr/MetroIstanbul` | **Yes** | Same host as İETT; if İETT is geo-blocked from Germany, rail is too. Decided 2026-10-30 |
-| `OpenDataClient` (route-shapes GeoJSON, 257 MB) | `data.ibb.gov.tr` | **No (direct)** | Different host (open-data portal). Keep it off the home connection unless it turns out to be blocked too. Large daily download should not burden the home uplink |
+| `OpenDataClient` (route-shapes GeoJSON, 257 MB) | `data.ibb.gov.tr` | **Yes** | `data.ibb.gov.tr` is geo-blocked from Germany too (confirmed 2026-11-05: direct call times out). The daily check is a HEAD, so normal days cost almost nothing; the 257 MB download only runs when İBB changes the file (unchanged since 2026-03-18), and then it goes over the home uplink once |
 | Everything else (map tiles, etc.) | various | **No (direct)** | Unaffected |
 
-If `data.ibb.gov.tr` turns out to be blocked from Germany as well, revisit and
-route `OpenDataClient` through the relay too — but that is 257 MB over the home
-line, so prefer a direct path or a one-off manual seed.
+`data.ibb.gov.tr` was confirmed blocked from Germany on 2026-11-05, so
+`OpenDataClient` now routes through the relay as well. The daily HEAD check is
+cheap; the full 257 MB download only happens when the file actually changes.
 
 ## Configuration
 
@@ -95,7 +95,7 @@ empty proxy the behaviour is byte-for-byte the same as today.
            };
    ```
    Wired via `.ConfigurePrimaryHttpMessageHandler(...)` on both clients.
-   `OpenDataClient` is left exactly as-is (direct).
+   `OpenDataClient` also uses `IbbHandler` (data.ibb.gov.tr is blocked too).
 
 3. **Relay state (`Ibb/IbbRelayState.cs`, new, singleton)** — records, for
    `/health`:
@@ -274,7 +274,7 @@ Do not add more proxies or rotate IPs to widen the quota — one relay, one IP.
 - [x] CI confirmed: no workflow fires on this branch (server image = `main` only; android = tags/manual)
 - [x] Design documented (this file)
 - [x] `IbbOptions.Proxy` option added (+ `UsesProxy`), `appsettings.json` key `"Proxy": ""`
-- [x] `Program.cs` proxy handler (`IbbHandler`) on `IbbClient` + `MetroClient`; `OpenDataClient` left direct
+- [x] `Program.cs` proxy handler (`IbbHandler`) on `IbbClient` + `MetroClient` + `OpenDataClient` (data.ibb.gov.tr blocked too, 2026-11-05)
 - [x] `IbbRelayState` added, wired through `OutboundGate`, surfaced as `/health` → `relay`
 - [x] Stale-vs-rate-limit behaviour verified by review: proxy failure = `HttpRequestException` → stale path, not `ReportRateLimited`
 - [x] `deploy/compose.yaml` `extra_hosts` (Option B) added
