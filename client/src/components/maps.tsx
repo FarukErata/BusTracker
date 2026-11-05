@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
+import { setWorkerUrl } from 'maplibre-gl'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '@maplibre/maplibre-gl-leaflet'
 import { useNavigate } from 'react-router'
@@ -9,6 +11,11 @@ import { useTheme } from '@/lib/theme'
 import type { LineStop, TrackedBusView } from '@/api/types'
 import type { TrackingView } from '@/lib/tracking'
 import { reportAge, secondsSince, titleCase } from '@/lib/format'
+
+// MapLibre derives its worker URL from the main bundle's location, which Vite doesn't emit, so the
+// request falls through to index.html. Point it at a worker chunk Vite does emit (as .js — the
+// server doesn't map the .mjs extension). Must run before any map is created.
+setWorkerUrl(maplibreWorkerUrl)
 
 const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://www.openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://openfreemap.org">OpenFreeMap</a>'
 const MAP_STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/positron'

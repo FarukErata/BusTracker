@@ -15,6 +15,9 @@ export default defineConfig({
       '/health': 'http://localhost:5080',
     },
   },
+  worker: {
+    format: 'es',
+  },
   build: {
     outDir: '../src/BusTracker.Api/wwwroot',
     emptyOutDir: true,
