@@ -12,7 +12,16 @@ import kotlinx.serialization.json.Json
 private val Context.recentsData by preferencesDataStore(name = "recents")
 
 @Serializable
-data class Recent(val kind: String, val code: String, val title: String, val district: String = "", val direction: String? = null) {
+data class Recent(
+    val kind: String,
+    val code: String,
+    val title: String,
+    val district: String = "",
+    val direction: String? = null,
+    val line: String = "",
+    val color: String = "",
+    val lineId: Int = 0,
+) {
     val isStop: Boolean get() = kind == STOP
 
     fun sameAs(other: Recent): Boolean = kind == other.kind && code == other.code && (isStop || direction == other.direction)
@@ -20,6 +29,8 @@ data class Recent(val kind: String, val code: String, val title: String, val dis
     companion object {
         const val STOP = "stop"
         const val LINE = "line"
+        const val RAIL_LINE = "rail-line"
+        const val RAIL_STATION = "rail-station"
     }
 }
 

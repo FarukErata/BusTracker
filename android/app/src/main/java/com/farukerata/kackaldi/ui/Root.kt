@@ -145,6 +145,7 @@ private fun AppNavigation(app: KacKaldiApplication, dark: Boolean, onToggleTheme
             RailLineScreen(
                 viewModel = viewModel { RailLineViewModel(app.api, route.id, route.station) },
                 onBack = { nav.popBackStack() },
+                onRemember = { scope.launch { app.recents.remember(it) } },
             )
         }
         composable<RailRoute> { entry ->

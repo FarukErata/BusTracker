@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { directionLabel, titleCase } from '@/lib/format'
 import { useLang, useT } from '@/lib/i18n'
-import { clearRecents, useRecents, type Recent } from '@/lib/recents'
+import { clearRecents, recentKey, useRecents, type Recent } from '@/lib/recents'
 
 export function Home() {
   useLang()
@@ -90,20 +90,32 @@ function Recents({ items }: { items: Recent[] }) {
         <SectionTitle>{t.home.recent}</SectionTitle>
         <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={clearRecents}>{t.home.clear}</Button>
       </div>
-      <ItemGroup>{items.map(r => <RecentRow key={`${r.kind}-${r.code}-${r.kind === 'line' ? r.direction : ''}`} item={r} />)}</ItemGroup>
+      <ItemGroup>{items.map(r => <RecentRow key={recentKey(r)} item={r} />)}</ItemGroup>
     </div>
   )
 }
 
 function RecentRow({ item }: { item: Recent }) {
-  const target = item.kind === 'stop' ? `/stops/${item.code}` : `/lines/${item.code}?dir=${item.direction}`
+  const target =
+    item.kind === 'stop' ? `/stops/${item.code}`
+      : item.kind === 'line' ? `/lines/${item.code}?dir=${item.direction}`
+        : item.kind === 'rail-line' ? `/rail-lines/${item.id}`
+          : railStationLink(item.lineId, item.id)
   return (
     <Item className="pressable" render={<Link to={target} />}>
       {item.kind === 'stop'
         ? <ItemMedia variant="icon"><History className="text-muted-foreground" /></ItemMedia>
-        : <ItemMedia><LineBadge code={item.code} /></ItemMedia>}
+        : item.kind === 'line'
+          ? <ItemMedia><LineBadge code={item.code} /></ItemMedia>
+          : <ItemMedia><RailBadge line={item.kind === 'rail-line' ? item.name : item.line} color={item.color} /></ItemMedia>}
       <ItemContent>
-        <ItemTitle>{item.kind === 'stop' ? <StopName name={item.name} district={item.district} /> : item.title}</ItemTitle>
+        <ItemTitle>
+          {item.kind === 'stop'
+            ? <StopName name={item.name} district={item.district} />
+            : item.kind === 'line' ? item.title
+              : item.kind === 'rail-line' ? item.description
+                : item.name}
+        </ItemTitle>
       </ItemContent>
       <ItemActions><ChevronRight className="size-4 text-muted-foreground" /></ItemActions>
     </Item>

@@ -3,6 +3,8 @@ import { useSyncExternalStore } from 'react'
 export type Recent =
   | { kind: 'stop'; code: string; name: string; district?: string }
   | { kind: 'line'; code: string; direction: string; title: string }
+  | { kind: 'rail-line'; id: number; name: string; color: string; description: string }
+  | { kind: 'rail-station'; id: number; lineId: number; name: string; line: string; color: string }
 
 const KEY = 'recents'
 const MAX = 5
@@ -33,8 +35,16 @@ function write(next: Recent[]) {
   }
 }
 
-const sameItem = (a: Recent, b: Recent) =>
-  a.kind === b.kind && a.code === b.code && (a.kind === 'stop' || b.kind === 'stop' || a.direction === b.direction)
+export function recentKey(r: Recent): string {
+  switch (r.kind) {
+    case 'stop': return `stop:${r.code}`
+    case 'line': return `line:${r.code}:${r.direction}`
+    case 'rail-line': return `rail-line:${r.id}`
+    case 'rail-station': return `rail-station:${r.id}`
+  }
+}
+
+const sameItem = (a: Recent, b: Recent) => recentKey(a) === recentKey(b)
 
 export function rememberRecent(item: Recent) {
   const current = read()

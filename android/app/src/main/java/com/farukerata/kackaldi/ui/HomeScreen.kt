@@ -172,7 +172,7 @@ fun HomeScreen(
             val current = results
             val showRecents = searchFocused && query.isBlank() && recents.isNotEmpty()
             when {
-                showRecents -> recentsSection(recents, onClearRecents, { leaveSearch(); onStop(it) }, { code, dir -> leaveSearch(); onLine(code, dir) })
+                showRecents -> recentsSection(recents, onClearRecents, { leaveSearch(); onStop(it) }, { code, dir -> leaveSearch(); onLine(code, dir) }, { leaveSearch(); onRail(it) }, { leaveSearch(); onRailLine(it) })
                 query.isNotBlank() && current != null -> resultsSection(current, onStop, onLine, onRail, onRailLine)
                 else -> {
                     if (query.isBlank() && alerts.isNotEmpty()) {
@@ -189,6 +189,7 @@ fun HomeScreen(
 
 private fun LazyListScope.recentsSection(
     recents: List<Recent>, onClear: () -> Unit, onStop: (String) -> Unit, onLine: (String, String?) -> Unit,
+    onRail: (Int) -> Unit, onRailLine: (Int) -> Unit,
 ) {
     item {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -198,10 +199,20 @@ private fun LazyListScope.recentsSection(
     }
     items(recents, key = { "recent-${it.kind}-${it.code}-${it.direction}" }) { recent ->
         ItemRow(
-            onClick = { if (recent.isStop) onStop(recent.code) else onLine(recent.code, recent.direction) },
+            onClick = {
+                when (recent.kind) {
+                    Recent.STOP -> onStop(recent.code)
+                    Recent.LINE -> onLine(recent.code, recent.direction)
+                    Recent.RAIL_LINE -> recent.code.toIntOrNull()?.let(onRailLine)
+                    Recent.RAIL_STATION -> recent.code.toIntOrNull()?.let(onRail)
+                }
+            },
             leading = {
-                if (recent.isStop) Icon(Icons.Outlined.History, null, Modifier.size(18.dp), tint = Kit.colors.mutedForeground)
-                else LineBadge(recent.code)
+                when (recent.kind) {
+                    Recent.STOP -> Icon(Icons.Outlined.History, null, Modifier.size(18.dp), tint = Kit.colors.mutedForeground)
+                    Recent.LINE -> LineBadge(recent.code)
+                    else -> RailBadge(recent.line, recent.color)
+                }
             },
             trailing = { Chevron() },
         ) {

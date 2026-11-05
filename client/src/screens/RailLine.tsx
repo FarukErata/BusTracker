@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { useRailLine, useRailStation } from '@/api/hooks'
 import type { AnnouncementView } from '@/api/types'
@@ -7,6 +8,7 @@ import { Announcements } from '@/components/planned'
 import { Item, ItemContent, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLang, useT } from '@/lib/i18n'
+import { rememberRecent } from '@/lib/recents'
 import { cn } from '@/lib/utils'
 import { FavoriteStationButton, StationBody } from '@/screens/RailStation'
 
@@ -24,6 +26,16 @@ export function RailLine() {
     setParams(stationId ? new URLSearchParams({ station: String(stationId) }) : new URLSearchParams(), { replace: true })
     if (stationId) window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+  useEffect(() => {
+    if (!data) return
+    if (picked) {
+      const s = data.stations.find(st => st.id === picked)
+      if (s) rememberRecent({ kind: 'rail-station', id: s.id, lineId: s.lineId, name: s.name, line: s.line, color: s.color })
+    } else {
+      rememberRecent({ kind: 'rail-line', id: data.line.id, name: data.line.name, color: data.line.color, description: data.line.description })
+    }
+  }, [data, picked])
+
   const notices: AnnouncementView[] = (data?.notices ?? []).map(n => ({
     line: n.line, kind: 'notice', message: n.text, postedAt: '', direction: null, fromStop: null, departure: null, reason: null,
   }))

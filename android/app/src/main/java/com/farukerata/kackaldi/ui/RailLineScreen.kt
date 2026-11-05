@@ -48,6 +48,7 @@ import com.farukerata.kackaldi.data.AnnouncementView
 import com.farukerata.kackaldi.data.KacKaldiApi
 import com.farukerata.kackaldi.data.RailLineResponse
 import com.farukerata.kackaldi.data.RailStationResponse
+import com.farukerata.kackaldi.data.Recent
 import com.farukerata.kackaldi.i18n.S
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -104,7 +105,7 @@ class RailLineViewModel(private val api: KacKaldiApi, val id: Int, initialStatio
 }
 
 @Composable
-fun RailLineScreen(viewModel: RailLineViewModel, onBack: () -> Unit) {
+fun RailLineScreen(viewModel: RailLineViewModel, onBack: () -> Unit, onRemember: (Recent) -> Unit) {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(viewModel.id) {
         viewModel.load()
@@ -120,6 +121,12 @@ fun RailLineScreen(viewModel: RailLineViewModel, onBack: () -> Unit) {
     val data = viewModel.line.valueOrNull
     val picked = viewModel.picked
     val pickedStation = data?.stations?.firstOrNull { it.id == picked }
+    LaunchedEffect(data, picked) {
+        val d = data ?: return@LaunchedEffect
+        val s = picked?.let { p -> d.stations.firstOrNull { it.id == p } }
+        if (s != null) onRemember(Recent(Recent.RAIL_STATION, s.id.toString(), s.name, line = s.line, color = s.color, lineId = s.lineId))
+        else onRemember(Recent(Recent.RAIL_LINE, d.line.id.toString(), d.line.description, line = d.line.name, color = d.line.color))
+    }
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val pick = { id: Int? ->
