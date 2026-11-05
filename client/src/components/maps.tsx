@@ -1,36 +1,45 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
+import 'maplibre-gl/dist/maplibre-gl.css'
+import '@maplibre/maplibre-gl-leaflet'
 import { useNavigate } from 'react-router'
-import { AttributionControl, CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, useMapEvent } from 'react-leaflet'
+import { CircleMarker, MapContainer, Marker, Polyline, Tooltip, useMap, useMapEvent } from 'react-leaflet'
 import { useRailStations } from '@/api/hooks'
 import { useTheme } from '@/lib/theme'
 import type { LineStop, TrackedBusView } from '@/api/types'
 import type { TrackingView } from '@/lib/tracking'
 import { reportAge, secondsSince, titleCase } from '@/lib/format'
 
-const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://www.openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://openfreemap.org">OpenFreeMap</a>'
+const MAP_STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/positron'
+const MAP_STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark'
+const MAX_ZOOM = 20
 const ISTANBUL: [number, number] = [41.015, 28.979]
 const STOP_DOT_RADIUS = 5
 const STOP_PIN_RADIUS = 8
 const RAIL_DOT_RADIUS = 6
 const RAIL_MIN_ZOOM = 13
 
+// OpenFreeMap vector tiles (free, keyless — the same provider the Android app uses), rendered
+// into Leaflet with MapLibre GL. Positron/dark are the light/dark styles. The layer is recreated
+// on a theme change (rare); removeLayer disposes the old WebGL map, so no GL context leaks.
 function ThemedTiles() {
   const { theme } = useTheme()
-  const style = theme === 'dark' ? 'dark_all' : 'light_all'
-  return (
-    <>
-      <TileLayer
-        url={`https://{s}.basemaps.cartocdn.com/${style}/{z}/{x}/{y}.png`}
-        subdomains="abcd"
-        attribution={ATTRIBUTION}
-        maxZoom={19}
-        keepBuffer={4}
-        updateWhenZooming={false}
-      />
-      <AttributionControl prefix={false} position="bottomright" />
-    </>
-  )
+  const map = useMap()
+  useEffect(() => {
+    map.setMaxZoom(MAX_ZOOM)
+    const tiles = L.maplibreGL({
+      style: theme === 'dark' ? MAP_STYLE_DARK : MAP_STYLE_LIGHT,
+      attributionControl: false,
+    }).addTo(map)
+    const attribution = L.control.attribution({ prefix: false, position: 'bottomright' }).addTo(map)
+    attribution.addAttribution(ATTRIBUTION)
+    return () => {
+      map.removeControl(attribution)
+      map.removeLayer(tiles)
+    }
+  }, [map, theme])
+  return null
 }
 
 function FitOnce({ points, fitId, bottomInset }: { points: [number, number][]; fitId: string; bottomInset: number }) {
